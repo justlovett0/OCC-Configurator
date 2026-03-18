@@ -1,0 +1,19 @@
+OCC-CONFIGURATOR.EXE Known & Prominent Bugs:
+Serial debug console commands are sometimes buggy, occasionally giving weird errors
+Closing the serial debug console will commonly put the controller in a lost config state where it must be unplugged and plugged back in
+Starting the OCC-configurator.exe app with a controller already in config mode can break the easy configurator menu.
+Saving controller name sometimes does not work properly
+ADXL tilt is untested. LIS3DH tilt is working
+When loading a controller, the tilt sensor configured pin fields load blank every time. User has to set these pins EVERY TIME in configurator or it saves blank
+If you set LED color loop out of range (say 9 when you have LED 0-8), color loop doesn't work
+Firmware screen doesn’t ACTUALLY grab USB storage device name
+Sometimes the entire configurator will be stuck as an always in foreground application, typically when moving from main_menu to firmware screen
+Doing things in easyconfig too fast can make program crash
+Factory Reset popup from main menu appears at top left of screen, should appear in center of screen
+End of EasyConfigurator screen doesn't show if you hold a button down on the guitar diagram. Only button presses
+
+Firmware Known & Prominent Bugs:
+4 channel dongle firmware is not tested
+Wireless guitar in bluetooth mode sometimes does not connect to a windows/android machine properly
+Drum kit firmware is technically untested but prob works
+LED breathe mode prevents reactive LED brightness on key press from working

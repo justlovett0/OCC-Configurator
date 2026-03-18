@@ -1,0 +1,201 @@
+@echo off
+setlocal enabledelayedexpansion
+echo ==========================================
+echo  OCC - Open Controller Configurator
+echo  Build Script
+echo ==========================================
+echo.
+
+REM FIX: pushd now covers entire script, not just cleanup.
+REM Previously the working directory reset after popd, so PyInstaller
+REM couldn't resolve --add-data paths relative to the script folder.
+pushd "%~dp0"
+
+if exist build (
+    echo Deleting build folder...
+    rmdir /s /q build
+)
+if exist dist (
+    echo Deleting dist folder...
+    rmdir /s /q dist
+)
+
+echo Deleting old .spec files...
+for %%S in (*.spec) do (
+    echo   Removing %%S
+    del /f /q "%%S"
+)
+echo Cleanup complete.
+echo.
+
+pip install pyserial pyinstaller Pillow
+
+echo.
+echo Scanning for .uf2 firmware files...
+dir /b *.uf2 >nul 2>&1
+if errorlevel 1 (
+    echo   No .uf2 files found.
+) else (
+    for %%F in (*.uf2) do echo   - %%F
+)
+
+REM Build --add-data args, separating nuke from regular firmware
+set "UF2_ARGS="
+set "NUKE_ARG="
+set "NUKE_FOUND="
+for /f "usebackq delims=" %%A in (`dir /b *.uf2 2^>nul`) do call :check_and_append "%%A"
+
+if not defined NUKE_FOUND (
+    echo.
+    echo   WARNING: nuke.uf2 not found - Factory Reset will not work in the exe.
+    echo   Place nuke.uf2 next to this script and rebuild.
+) else (
+    echo   Bundling nuke: !NUKE_FOUND!
+    set "NUKE_ARG=--add-data="!NUKE_FOUND!;.""
+)
+
+REM Scan for .gif files matching any bundled .uf2 firmware name and embed them
+echo.
+echo Scanning for matching .gif files...
+set "GIF_ARGS="
+for /f "usebackq delims=" %%A in (`dir /b *.uf2 2^>nul`) do (
+    if /i not "%%A"=="nuke.uf2" (
+        REM Strip .uf2 extension and look for matching .gif
+        for /f "delims=" %%B in ("%%~nA.gif") do (
+            if exist "%%B" (
+                echo   Found GIF: %%B  ^(matches %%A^)
+                set "GIF_ARGS=!GIF_ARGS! --add-data="%%B;.""
+            ) else (
+                echo   No GIF found for %%A  ^(expected %%B^)
+            )
+        )
+    )
+)
+if not defined GIF_ARGS (
+    echo   No matching .gif files bundled.
+)
+
+REM ── Generate fw_dates.json ──────────────────────────────────────
+REM Requires _gen_fw_dates.py alongside this script (shipped together).
+REM For each non-nuke .uf2, reads the matching .uf2.date sidecar.
+REM Falls back to file last-modified date if no sidecar exists.
+echo.
+echo Generating fw_dates.json...
+if exist "_gen_fw_dates.py" (
+    py _gen_fw_dates.py
+) else (
+    echo   ERROR: _gen_fw_dates.py not found next to build_exe.bat
+    echo   Place it alongside this script and rebuild.
+)
+
+set "FW_DATES_ARG="
+if exist "fw_dates.json" (
+    set "FW_DATES_ARG=--add-data=fw_dates.json;."
+    echo   fw_dates.json will be bundled.
+) else (
+    echo   WARNING: fw_dates.json could not be generated.
+)
+
+REM Font folder — bundle every .ttf / .otf found in font\
+set "FONT_ARGS="
+if exist "font\" (
+    echo.
+    echo Scanning for font files in font\...
+    for %%F in (font\*.ttf font\*.otf font\*.TTF font\*.OTF) do (
+        if exist "%%F" (
+            echo   Bundling font: %%F
+            set "FONT_ARGS=!FONT_ARGS! --add-data="%%F;font""
+        )
+    )
+    if not defined FONT_ARGS (
+        echo   font\ folder exists but contains no .ttf/.otf files.
+    )
+) else (
+    echo.
+    echo   WARNING: font\ folder not found - Helvetica will not be embedded.
+    echo   Create a font\ folder next to this script with the .ttf files and rebuild.
+)
+
+REM Buttons folder — bundle every .gif found in buttons\
+REM These land in a "buttons" subfolder inside the EXE bundle so
+REM _resource_path("buttons", "strumbar_normal.gif") resolves correctly.
+set "BUTTONS_ARGS="
+if exist "buttons\" (
+    echo.
+    echo Scanning for GIF files in buttons\...
+    for %%G in (buttons\*.gif buttons\*.GIF) do (
+        if exist "%%G" (
+            echo   Bundling button GIF: %%G
+            set "BUTTONS_ARGS=!BUTTONS_ARGS! --add-data="%%G;buttons""
+        )
+    )
+    if not defined BUTTONS_ARGS (
+        echo   buttons\ folder exists but contains no .gif files.
+    )
+) else (
+    echo.
+    echo   WARNING: buttons\ folder not found - button animations will not work.
+    echo   Place the buttons\ folder next to this script and rebuild.
+)
+
+REM Splash image
+set "SPLASH_ARG="
+for %%S in (splash.png splash.PNG splash.jpg splash.JPG) do (
+    if not defined SPLASH_ARG (
+        if exist "%%S" set "SPLASH_ARG=--add-data=%%S;."
+    )
+)
+
+REM Startup sound
+set "SOUND_ARG="
+for %%A in (startup.wav startup.mp3 startup.ogg startup.flac startup.aac startup.wma) do (
+    if not defined SOUND_ARG (
+        if exist "%%A" set "SOUND_ARG=--add-data=%%A;."
+    )
+)
+
+REM Icon
+set "ICON_ARG="
+set "ICON_DATA_ARG="
+for %%I in (*.ico) do (
+    if not defined ICON_ARG (
+        set "ICON_ARG=--icon=%%I"
+        set "ICON_DATA_ARG=--add-data=%%I;."
+    )
+)
+
+echo.
+echo Running PyInstaller...
+pyinstaller --clean --onefile --windowed ^
+    --name "OCC - Configurator" ^
+    %ICON_ARG% %ICON_DATA_ARG% ^
+    %SPLASH_ARG% %SOUND_ARG% ^
+    %FONT_ARGS% ^
+    !BUTTONS_ARGS! ^
+    %UF2_ARGS% !NUKE_ARG! ^
+    !GIF_ARGS! ^
+    !FW_DATES_ARG! ^
+    --exclude-module numpy --exclude-module matplotlib ^
+    configurator.py
+
+echo.
+echo ==========================================
+if exist "dist\OCC - Configurator.exe" (
+    echo  SUCCESS!  dist\OCC - Configurator.exe
+) else (
+    echo  BUILD FAILED - check output above
+)
+echo ==========================================
+popd
+pause
+exit /b 0
+
+:check_and_append
+REM /i flag makes this case-insensitive: nuke.uf2, Nuke.UF2, NUKE.UF2 all match
+if /i "%~1"=="nuke.uf2" (
+    set "NUKE_FOUND=%~1"
+    exit /b 0
+)
+REM Regular firmware file — add to UF2_ARGS
+set "UF2_ARGS=!UF2_ARGS! --add-data="%~1;.""
+exit /b 0
