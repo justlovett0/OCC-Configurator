@@ -553,8 +553,13 @@ static void build_bt_hid_report(bt_hid_report_t *report) {
     memset(report, 0, sizeof(bt_hid_report_t));
     report->report_id      = 0x01;
     report->buttons        = inp.buttons;
-    report->right_stick_x  = inp.right_stick_x;
-    report->right_stick_y  = inp.right_stick_y;
+    // BT HID axis mapping differs from XInput/dongle:
+    // Whammy → Left Stick X  (separates it from tilt on right stick)
+    // Tilt   → Right Stick Y (unchanged)
+    // Keeping whammy on right stick X alongside tilt on right stick Y caused
+    // software to treat both as the same right-stick input, making them interfere.
+    report->left_stick_x   = inp.right_stick_x;  // Whammy
+    report->right_stick_y  = inp.right_stick_y;  // Tilt
 }
 
 //--------------------------------------------------------------------

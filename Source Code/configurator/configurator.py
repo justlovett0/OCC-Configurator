@@ -4151,7 +4151,7 @@ class EasyConfigScreen:
         # ── LEFT: wave effect row ─────────────────────────────────────
         wave_row = tk.Frame(left_col, bg=BG_CARD)
         wave_row.pack(anchor="w", pady=(3, 0))
-        ttk.Checkbutton(wave_row, text="Wave",
+        ttk.Checkbutton(wave_row, text="Ripple",
                          variable=led_wave_var, command=_on_wave).pack(side="left", padx=(0, 8))
         tk.Label(wave_row, text="Origin:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 2))
@@ -9381,7 +9381,7 @@ class App:
         wave_row.pack(fill="x", pady=(4, 2))
         self._led_widgets.append(wave_row)
 
-        wave_cb = ttk.Checkbutton(wave_row, text="Enable LED Wave",
+        wave_cb = ttk.Checkbutton(wave_row, text="Enable LED Ripple",
                                   variable=self.led_wave_enabled,
                                   command=lambda: self.led_breathe_enabled.set(False) if self.led_wave_enabled.get() else None)
         wave_cb.pack(side="left", padx=(0, 12))
@@ -12699,7 +12699,7 @@ class DrumApp:
         wave_row.pack(fill="x", pady=(4, 2))
         self._led_widgets.append(wave_row)
 
-        wave_cb = ttk.Checkbutton(wave_row, text="Enable LED Wave",
+        wave_cb = ttk.Checkbutton(wave_row, text="Enable LED Ripple",
                                   variable=self.led_wave_enabled,
                                   command=lambda: self.led_breathe_enabled.set(False) if self.led_wave_enabled.get() else None)
         wave_cb.pack(side="left", padx=(0, 12))

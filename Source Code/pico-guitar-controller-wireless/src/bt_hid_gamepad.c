@@ -34,7 +34,8 @@
  *   Byte  3:     Right trigger (0–255)
  *   Bytes 4–5:   Left stick X  (−32768 to +32767)
  *   Bytes 6–7:   Left stick Y  (−32768 to +32767)
- *   Bytes 8–9:   Right stick X (−32768 to +32767) — Whammy
+ *   Bytes 4–5:   Left  stick X (−32768 to +32767) — Whammy
+ *   Bytes 8–9:   Right stick X (−32768 to +32767) — unused
  *   Bytes 10–11: Right stick Y (−32768 to +32767) — Tilt
  */
 
@@ -204,10 +205,10 @@ static const uint8_t profile_data[] =
 //   Bytes 0–1:   16 buttons (bit-packed, XInput-compatible masks)
 //   Byte  2:     Left trigger  (0–255)
 //   Byte  3:     Right trigger (0–255)
-//   Bytes 4–5:   Left stick X  (signed 16-bit)
+//   Bytes 4–5:   Left stick X  (signed 16-bit) — Whammy
 //   Bytes 6–7:   Left stick Y  (signed 16-bit)
-//   Bytes 8–9:   Right stick X / Whammy (signed 16-bit)
-//   Bytes 10–11: Right stick Y / Tilt   (signed 16-bit)
+//   Bytes 8–9:   Right stick X (signed 16-bit) — unused
+//   Bytes 10–11: Right stick Y (signed 16-bit) — Tilt
 // ────────────────────────────────────────────────────────────────────────
 
 static const uint8_t hid_report_descriptor[] = {
@@ -239,9 +240,9 @@ static const uint8_t hid_report_descriptor[] = {
 
     // ── Analog Sticks (4 × 16-bit signed) ──
     0x05, 0x01,        //   Usage Page (Generic Desktop)
-    0x09, 0x30,        //   Usage (X)  — Left Stick X
+    0x09, 0x30,        //   Usage (X)  — Left Stick X / Whammy
     0x09, 0x31,        //   Usage (Y)  — Left Stick Y
-    0x09, 0x33,        //   Usage (Rx) — Right Stick X / Whammy
+    0x09, 0x33,        //   Usage (Rx) — Right Stick X (unused)
     0x09, 0x34,        //   Usage (Ry) — Right Stick Y / Tilt
     0x16, 0x00, 0x80,  //   Logical Minimum (−32768)
     0x26, 0xFF, 0x7F,  //   Logical Maximum (+32767)

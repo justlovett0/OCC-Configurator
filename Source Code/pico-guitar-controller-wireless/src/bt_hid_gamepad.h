@@ -34,9 +34,9 @@ typedef struct __attribute__((packed)) {
     uint16_t buttons;        // 16 buttons (same bit layout as XInput)
     uint8_t  left_trigger;   // Left trigger  (0-255)
     uint8_t  right_trigger;  // Right trigger (0-255)
-    int16_t  left_stick_x;   // Left  stick X axis
+    int16_t  left_stick_x;   // Left  stick X axis / Whammy (BT mode only)
     int16_t  left_stick_y;   // Left  stick Y axis
-    int16_t  right_stick_x;  // Right stick X / Whammy
+    int16_t  right_stick_x;  // Right stick X (unused in BT mode)
     int16_t  right_stick_y;  // Right stick Y / Tilt
 } bt_hid_report_t;
 
