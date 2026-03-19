@@ -1,14 +1,18 @@
 <p align="center">
-  <img alt="OCC" src="https://raw.githubusercontent.com/justlovett0/OCC-Configurator/master/Source%20Code/configurator/occ_logo.png" />
+  <img alt="OCC" src="https://raw.githubusercontent.com/justlovett0/OCC-Configurator/master/Source%20Code/configurator/OCCLogo.png" />
 </p>
 
 <p align="center">
-  Pico Guitar &amp; Drum Controller Firmware with Windows Configurator
+  Pico Music &amp; Conventional Controller Firmware with Windows Configurator
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/github/license/justlovett0/OCC-Configurator" />
   <img src="https://img.shields.io/github/v/release/justlovett0/OCC-Configurator" />
+</p>
+
+<p align="center">
+  I am NOT a good coder. Claude is "good enough". This project uses AI/LLM for a lot of the coding efforts. I am proud of this project for what I could guide ClaudeCode to create. It actually works.
 </p>
 
 <p>
