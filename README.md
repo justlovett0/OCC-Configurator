@@ -11,13 +11,13 @@
   <img src="https://img.shields.io/github/v/release/justlovett0/OCC-Configurator" />
 </p>
 
-**<p align="center">
-  I am NOT a good coder. Claude is "good enough".
-</p>**
+<p align="center">
+  __I am NOT a good coder. Claude is "good enough".__
+</p>
 
-**<p align="center">
+<p align="center">
   __This project uses AI/LLM for a lot of the coding efforts. I am proud of this project for what I could guide ClaudeCode to create. It actually works.__
-</p>**
+</p>
 
 <p>
   OCC (Open Controller Configurator) is a collection of XInput controller firmware variants for the Raspberry Pi Pico (RP2040) and Pico W (RP2040 + CYW43), paired with a Windows configurator application. Originally created for guitar and drum kit peripherals for use with games like Clone Hero and Rock Band, I am also working to expand scope to other controller and input devices, supporting wired XInput, wireless Bluetooth HID, and wireless dongle operation.
