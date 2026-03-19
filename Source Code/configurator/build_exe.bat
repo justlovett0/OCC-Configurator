@@ -182,6 +182,13 @@ echo.
 echo ==========================================
 if exist "dist\OCC - Configurator.exe" (
     echo  SUCCESS!  dist\OCC - Configurator.exe
+    echo  Moving to OCC root folder...
+    move /y "dist\OCC - Configurator.exe" "..\..\OCC - Configurator.exe"
+    if exist "..\..\OCC - Configurator.exe" (
+        echo  Moved to OCC - Configurator.exe
+    ) else (
+        echo  WARNING: Move failed - exe remains in dist\
+    )
 ) else (
     echo  BUILD FAILED - check output above
 )

@@ -220,12 +220,18 @@ static bool handle_set(pedal_config_t *config, const char *param) {
     }
 
     // ── Device name ──
+    // Device name — accept only alphanumeric and space chars
     if (key_len == 11 && strncmp(param, "device_name", 11) == 0) {
-        size_t vlen = strlen(val_str);
-        if (vlen > DEVICE_NAME_MAX) vlen = DEVICE_NAME_MAX;
         memset(config->device_name, 0, sizeof(config->device_name));
-        memcpy(config->device_name, val_str, vlen);
-        config->device_name[DEVICE_NAME_MAX] = '\0';
+        size_t out = 0;
+        for (size_t i = 0; val_str[i] && out < 20; i++) {
+            unsigned char c = (unsigned char)val_str[i];
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                (c >= '0' && c <= '9') || c == ' ')
+                config->device_name[out++] = (char)c;
+        }
+        while (out > 0 && config->device_name[out - 1] == ' ') out--;
+        config->device_name[out] = '\0';
         serial_writeln("OK");
         return true;
     }

@@ -258,9 +258,18 @@ static void handle_set(drum_config_t *config, const char *kv) {
         return;
     }
 
+    // Device name — accept only alphanumeric and space chars
     if (strcmp(key, "device_name") == 0) {
-        strncpy(config->device_name, val, DEVICE_NAME_MAX);
-        config->device_name[DEVICE_NAME_MAX] = '\0';
+        memset(config->device_name, 0, sizeof(config->device_name));
+        size_t out = 0;
+        for (size_t i = 0; val[i] && out < 20; i++) {
+            unsigned char c = (unsigned char)val[i];
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                (c >= '0' && c <= '9') || c == ' ')
+                config->device_name[out++] = (char)c;
+        }
+        while (out > 0 && config->device_name[out - 1] == ' ') out--;
+        config->device_name[out] = '\0';
         serial_writeln("OK");
         return;
     }

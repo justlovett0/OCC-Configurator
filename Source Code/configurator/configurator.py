@@ -930,6 +930,8 @@ I2C_MODEL_VALUES  = [val   for val, _   in I2C_MODEL_OPTIONS]
 MAX_LEDS = 16
 LED_INPUT_COUNT = 16   # 14 buttons + tilt + whammy
 
+VALID_NAME_CHARS = set(string.ascii_letters + string.digits + ' ')
+
 LED_INPUT_NAMES = [
     "green", "red", "yellow", "blue", "orange",
     "strum_up", "strum_down", "start", "select",
@@ -1333,9 +1335,18 @@ class PicoSerial:
 
     def connect(self, port):
         self.disconnect()
-        self.ser = serial.Serial(port, BAUD_RATE, timeout=TIMEOUT)
-        time.sleep(0.2)
-        self.ser.reset_input_buffer()
+        last_exc = None
+        for attempt in range(5):
+            try:
+                self.ser = serial.Serial(port, BAUD_RATE, timeout=TIMEOUT)
+                time.sleep(0.2)
+                self.ser.reset_input_buffer()
+                return
+            except (serial.SerialException, OSError) as exc:
+                last_exc = exc
+                if attempt < 4:
+                    time.sleep(0.4)
+        raise last_exc
 
     def flush_input(self):
         """Discard any bytes sitting in the OS receive buffer.
@@ -3822,7 +3833,9 @@ class EasyConfigScreen:
 
         def _sync(*_):
             self.detected["led_enabled"]      = led_enabled_var.get()
-            self.detected["led_count"]        = led_count_var.get()
+            count = max(1, min(MAX_LEDS, led_count_var.get()))
+            led_count_var.set(count)
+            self.detected["led_count"]        = count
             self.detected["led_brightness"]   = led_brightness_var.get()
             self.detected["led_loop_enabled"] = led_loop_var.get()
             self.detected["led_loop_start"]   = led_loop_start_var.get() - 1
@@ -4016,6 +4029,8 @@ class EasyConfigScreen:
         cnt_sp.pack(fill="both", expand=True)
         cnt_sp.bind("<Return>",   lambda _e: [_sync(), _rebuild_colors(), _rebuild_map()])
         cnt_sp.bind("<FocusOut>", lambda _e: [_sync(), _rebuild_colors(), _rebuild_map()])
+        tk.Label(ctrl_row, text=f"(max {MAX_LEDS})", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7)).pack(side="left", padx=(0, 8))
         tk.Label(ctrl_row, text="Brightness:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0,3))
         br_w = tk.Frame(ctrl_row, bg=BG_CARD, width=52, height=24)
@@ -8100,8 +8115,15 @@ class MainMenu:
         # Same reset for GP2040-CE detection.
         self._gp2040ce_popup_shown = False
         self._gp2040ce_detected = False
+        # Clear cached device state so cards always re-render from scratch on show.
+        # Without this, returning from a config screen leaves stale "Config mode"
+        # state visible for up to POLL_MS even after the device has rebooted to XInput.
+        self._last_fw_state = None
+        self._pending_port = None
         self.frame.pack(fill="both", expand=True)
-        self._poll_job = self.root.after(self.POLL_MS, self._poll)
+        # First poll fires quickly so cards are up-to-date immediately on show,
+        # then settles into the normal POLL_MS cadence.
+        self._poll_job = self.root.after(50, self._poll)
 
     def hide(self):
         if self._poll_job:
@@ -9087,9 +9109,17 @@ class App:
         whammy_frame.pack(fill="x", pady=(0, 4))
         tk.Label(whammy_frame, text="Whammy axis:", bg=BG_CARD, fg=TEXT,
                  font=(FONT_UI, 9)).pack(side="left", padx=(0, 10))
+
+        def _on_whammy_changed():
+            axis = self.joy_whammy_axis.get()
+            if axis == 1:
+                self.joy_dpad_x.set(False)
+            elif axis == 2:
+                self.joy_dpad_y.set(False)
+
         for val, lbl in [(0, "None"), (1, "X axis"), (2, "Y axis")]:
             rb = ttk.Radiobutton(whammy_frame, text=lbl, variable=self.joy_whammy_axis,
-                                  value=val)
+                                  value=val, command=_on_whammy_changed)
             rb.pack(side="left", padx=(0, 12))
             self._all_widgets.append(rb)
         tk.Label(whammy_frame,
@@ -9102,11 +9132,20 @@ class App:
         tk.Label(dpad_frame, text="DPad mapping:", bg=BG_CARD, fg=TEXT,
                  font=(FONT_UI, 9)).pack(side="left", padx=(0, 10))
 
+        def _on_dpad_x_changed():
+            if self.joy_dpad_x.get() and self.joy_whammy_axis.get() == 1:
+                self.joy_whammy_axis.set(0)
+
+        def _on_dpad_y_changed():
+            if self.joy_dpad_y.get() and self.joy_whammy_axis.get() == 2:
+                self.joy_whammy_axis.set(0)
+
         # X axis column — checkbox + invert sub-checkbox stacked vertically
         dx_col = tk.Frame(dpad_frame, bg=BG_CARD)
         dx_col.pack(side="left", padx=(0, 20))
         dx_cb = ttk.Checkbutton(dx_col, text="X axis → DPad Left/Right",
-                                  variable=self.joy_dpad_x)
+                                  variable=self.joy_dpad_x,
+                                  command=_on_dpad_x_changed)
         dx_cb.pack(anchor="w")
         self._all_widgets.append(dx_cb)
         dx_inv_cb = ttk.Checkbutton(dx_col, text="    X Invert",
@@ -9118,7 +9157,8 @@ class App:
         dy_col = tk.Frame(dpad_frame, bg=BG_CARD)
         dy_col.pack(side="left")
         dy_cb = ttk.Checkbutton(dy_col, text="Y axis → DPad Up/Down",
-                                  variable=self.joy_dpad_y)
+                                  variable=self.joy_dpad_y,
+                                  command=_on_dpad_y_changed)
         dy_cb.pack(anchor="w")
         self._all_widgets.append(dy_cb)
         dy_inv_cb = ttk.Checkbutton(dy_col, text="    Y Invert",
@@ -9199,11 +9239,16 @@ class App:
         row.pack(fill="x")
         tk.Label(row, text="Name:", bg=BG_CARD, fg=TEXT,
                  font=(FONT_UI, 9)).pack(side="left", padx=(0, 6))
+        _vcmd = (self.root.register(
+            lambda P: len(P) <= 20 and all(c in VALID_NAME_CHARS for c in P)), '%P')
         self._name_entry = tk.Entry(row, textvariable=self.device_name,
                                      bg=BG_INPUT, fg=TEXT, insertbackground=TEXT,
-                                     font=(FONT_UI, 10), width=30, bd=1, relief="solid")
+                                     font=(FONT_UI, 10), width=30, bd=1, relief="solid",
+                                     validate="key", validatecommand=_vcmd)
         self._name_entry.pack(side="left")
         self._all_widgets.append(self._name_entry)
+        tk.Label(row, text="(letters, numbers, spaces only  ·  max 20 chars)",
+                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left", padx=(8, 0))
 
     def _make_led_section(self):
         _card, inner = self._make_collapsible_card(
@@ -9237,6 +9282,9 @@ class App:
         cnt_sp.bind("<FocusOut>", lambda _e: self._on_led_count_change())
         self._all_widgets.append(cnt_sp)
         self._led_widgets.append(cnt_sp)
+
+        tk.Label(top, text=f"(max {MAX_LEDS})", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7)).pack(side="left", padx=(0, 10))
 
         tk.Label(top, text="Base brightness:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
@@ -9423,6 +9471,11 @@ class App:
             self._rebuild_led_map_grid()
 
     def _on_led_count_change(self):
+        count = self.led_count.get()
+        if count > MAX_LEDS:
+            self.led_count.set(MAX_LEDS)
+        elif count < 1:
+            self.led_count.set(1)
         self._rebuild_led_color_grid()
         if self.led_reactive.get():
             self._rebuild_led_map_grid()
@@ -10234,14 +10287,15 @@ class App:
             port = PicoSerial.find_config_port()
             if port:
                 time.sleep(0.5)
-                return port
+                if PicoSerial.find_config_port() == port:
+                    return port
             time.sleep(0.3)
         return None
 
     def _connect_serial(self, port):
         try:
             self.pico.connect(port)
-            for _ in range(3):
+            for _ in range(5):
                 if self.pico.ping():
                     break
                 time.sleep(0.3)
@@ -10590,12 +10644,12 @@ class App:
         self.pico.set_value("joy_dpad_y_invert", "1" if self.joy_dpad_y_invert.get() else "0")
         self.pico.set_value("joy_deadzone", str(self.joy_deadzone.get()))
 
-        # Device name
-        name = self.device_name.get().strip()
+        # Device name — strip any invalid chars (belt-and-suspenders over the Entry vcmd)
+        name = ''.join(c for c in self.device_name.get() if c in VALID_NAME_CHARS).strip()
         if not name:
             name = "Guitar Controller"
         try:
-            self.pico.set_value("device_name", name[:31])
+            self.pico.set_value("device_name", name[:20])
         except ValueError:
             pass
 
@@ -12326,12 +12380,17 @@ class DrumApp:
         row.pack(fill="x")
         tk.Label(row, text="Name:", bg=BG_CARD, fg=TEXT,
                  font=(FONT_UI, 9)).pack(side="left", padx=(0, 6))
+        _vcmd = (self.root.register(
+            lambda P: len(P) <= 20 and all(c in VALID_NAME_CHARS for c in P)), '%P')
         self._name_entry = tk.Entry(
             row, textvariable=self.device_name,
             bg=BG_INPUT, fg=TEXT, insertbackground=TEXT,
-            font=(FONT_UI, 10), width=30, bd=1, relief="solid")
+            font=(FONT_UI, 10), width=30, bd=1, relief="solid",
+            validate="key", validatecommand=_vcmd)
         self._name_entry.pack(side="left")
         self._drum_all_widgets.append(self._name_entry)
+        tk.Label(row, text="(letters, numbers, spaces only  ·  max 20 chars)",
+                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left", padx=(8, 0))
 
     # ── Section: Drum Pin Mapping ─────────────────────────────────────
 
@@ -12544,6 +12603,9 @@ class DrumApp:
         self._drum_all_widgets.append(cnt_sp)
         self._led_widgets.append(cnt_sp)
 
+        tk.Label(top, text=f"(max {MAX_LEDS})", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7)).pack(side="left", padx=(0, 10))
+
         tk.Label(top, text="Base brightness:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
         br_wrap = tk.Frame(top, bg=BG_CARD, width=52, height=22)
@@ -12725,6 +12787,11 @@ class DrumApp:
             self._rebuild_drum_led_map_grid()
 
     def _on_drum_led_count_change(self):
+        count = self.led_count.get()
+        if count > MAX_LEDS:
+            self.led_count.set(MAX_LEDS)
+        elif count < 1:
+            self.led_count.set(1)
         self._rebuild_drum_led_color_grid()
         if self.led_reactive.get():
             self._rebuild_drum_led_map_grid()
@@ -13161,8 +13228,8 @@ class DrumApp:
 
         self.pico.set_value("debounce", str(self.debounce_var.get()))
 
-        name = self.device_name.get().strip() or "Drum Controller"
-        self.pico.set_value("device_name", name[:31])
+        name = ''.join(c for c in self.device_name.get() if c in VALID_NAME_CHARS).strip() or "Drum Controller"
+        self.pico.set_value("device_name", name[:20])
 
         self.pico.set_value("led_enabled", "1" if self.led_enabled.get() else "0")
         self.pico.set_value("led_count", str(self.led_count.get()))
@@ -13321,7 +13388,7 @@ class DrumApp:
         """Called when device is already in config mode."""
         try:
             self.pico.connect(port)
-            for _ in range(3):
+            for _ in range(5):
                 if self.pico.ping():
                     break
                 time.sleep(0.3)
@@ -13380,7 +13447,8 @@ class DrumApp:
             port = PicoSerial.find_config_port()
             if port:
                 time.sleep(0.5)
-                return port
+                if PicoSerial.find_config_port() == port:
+                    return port
             time.sleep(0.2)
         return None
 
@@ -14172,12 +14240,17 @@ class PedalApp:
         row.pack(fill="x")
         tk.Label(row, text="Name:", bg=BG_CARD, fg=TEXT,
                  font=(FONT_UI, 9)).pack(side="left", padx=(0, 6))
+        _vcmd = (self.root.register(
+            lambda P: len(P) <= 20 and all(c in VALID_NAME_CHARS for c in P)), '%P')
         self._name_entry = tk.Entry(
             row, textvariable=self.device_name,
             bg=BG_INPUT, fg=TEXT, insertbackground=TEXT,
-            font=(FONT_UI, 10), width=30, bd=1, relief="solid")
+            font=(FONT_UI, 10), width=30, bd=1, relief="solid",
+            validate="key", validatecommand=_vcmd)
         self._name_entry.pack(side="left")
         self._all_widgets.append(self._name_entry)
+        tk.Label(row, text="(letters, numbers, spaces only  ·  max 20 chars)",
+                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left", padx=(8, 0))
 
     # ── Section: Pedal Button Mapping ────────────────────────────────
 
@@ -14813,8 +14886,8 @@ class PedalApp:
             self.pico.set_value(f"adc{i}_min", str(self._adc_min_vars[i].get()))
             self.pico.set_value(f"adc{i}_max", str(self._adc_max_vars[i].get()))
         self.pico.set_value("debounce", str(self.debounce_var.get()))
-        name = self.device_name.get().strip() or "Pedal Controller"
-        self.pico.set_value("device_name", name[:31])
+        name = ''.join(c for c in self.device_name.get() if c in VALID_NAME_CHARS).strip() or "Pedal Controller"
+        self.pico.set_value("device_name", name[:20])
 
     # ── Save & Play Mode ──────────────────────────────────────────────
 
@@ -14934,7 +15007,7 @@ class PedalApp:
         """Called when device is already in config mode."""
         try:
             self.pico.connect(port)
-            for _ in range(3):
+            for _ in range(5):
                 if self.pico.ping():
                     break
                 time.sleep(0.3)
@@ -14993,7 +15066,8 @@ class PedalApp:
             port = PicoSerial.find_config_port()
             if port:
                 time.sleep(0.5)
-                return port
+                if PicoSerial.find_config_port() == port:
+                    return port
             time.sleep(0.2)
         return None
 

@@ -588,12 +588,18 @@ static bool handle_set(guitar_config_t *config, const char *kv_str) {
         serial_writeln("OK"); return true;
     }
 
-    // Device name
+    // Device name — accept only alphanumeric and space chars
     if (strcmp(key, "device_name") == 0) {
-        size_t vlen = strlen(val);
-        if (vlen > DEVICE_NAME_MAX) vlen = DEVICE_NAME_MAX;
         memset(config->device_name, 0, sizeof(config->device_name));
-        memcpy(config->device_name, val, vlen);
+        size_t out = 0;
+        for (size_t i = 0; val[i] && out < 20; i++) {
+            unsigned char c = (unsigned char)val[i];
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                (c >= '0' && c <= '9') || c == ' ')
+                config->device_name[out++] = (char)c;
+        }
+        while (out > 0 && config->device_name[out - 1] == ' ') out--;
+        config->device_name[out] = '\0';
         serial_writeln("OK"); return true;
     }
 

@@ -104,6 +104,19 @@ static bool     g_i2c_tilt_ready = false;
 
 static bool g_cyw43_initialized = false;
 
+// Returns true if every char in s is alphanumeric or a space.
+// Used to validate device_name before passing it to the BLE stack —
+// invalid characters (symbols etc.) can prevent BLE from broadcasting.
+static bool bt_name_is_valid(const char *s) {
+    for (const char *p = s; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+              (c >= '0' && c <= '9') || c == ' '))
+            return false;
+    }
+    return true;
+}
+
 static void picow_led_set(bool on) {
     if (g_cyw43_initialized) {
         cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, on ? 1 : 0);
@@ -786,7 +799,10 @@ int main(void) {
         else
             use_bt_hid = (g_config.wireless_default_mode == WIRELESS_DEFAULT_BLUETOOTH);
 
-        const char *bt_name = (g_config.device_name[0] != '\0')
+        // Use stored name only if non-empty and contains only alphanumeric/space chars.
+        // Invalid chars (e.g. symbols) can prevent BLE from broadcasting.
+        const char *bt_name = (g_config.device_name[0] != '\0' &&
+                               bt_name_is_valid(g_config.device_name))
                               ? g_config.device_name
                               : "Guitar Controller";
 
