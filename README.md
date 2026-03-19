@@ -12,11 +12,11 @@
 </p>
 
 <p align="center">
-  I am NOT a good coder. Claude is "good enough".
+  **I am NOT a good coder. Claude is "good enough".**
 </p>
 
 <p align="center">
-  This project uses AI/LLM for a lot of the coding efforts. I am proud of this project for what I could guide ClaudeCode to create. It actually works.
+  **This project uses AI/LLM for a lot of the coding efforts. I am proud of this project for what I could guide ClaudeCode to create. It actually works.**
 </p>
 
 <p>
