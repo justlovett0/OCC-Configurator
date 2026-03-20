@@ -11,9 +11,9 @@
 - [x] **FW-02**: Dual-mode USB boot — Normal start = XInput gamepad mode; watchdog scratch trigger = CDC serial config mode
 - [ ] **FW-03**: 13-button input set — DPad (4-way), A/B/X/Y buttons, Start, Select, Guide, LB, RB
 - [ ] **FW-04**: Analog triggers (LT/RT) — Configurable per-trigger as analog (0-255) or digital (on/off)
-- [ ] **FW-05**: GPIO pin assignment — All 13 buttons + 2 triggers have fully configurable GPIO pins (set at build time via config)
+- [x] **FW-05**: GPIO pin assignment — All 13 buttons + 2 triggers have fully configurable GPIO pins (set at build time via config)
 - [x] **FW-06**: Configuration storage — Packed `retro_config_t` struct in flash sector with magic number and CRC checksum
-- [ ] **FW-07**: Serial config protocol — Implement config mode serial loop supporting PING, GET_CONFIG, SET:key=value, SAVE, DEFAULTS, REBOOT commands (115200 baud)
+- [x] **FW-07**: Serial config protocol — Implement config mode serial loop supporting PING, GET_CONFIG, SET:key=value, SAVE, DEFAULTS, REBOOT commands (115200 baud)
 - [x] **FW-08**: USB descriptor — Standard gamepad identification (XInput subtype 0x01 XINPUT_DEVSUBTYPE_GAMEPAD) so Windows Device Manager displays as "gamepad"
 - [ ] **FW-09**: Analog trigger smoothing — EMA exponential moving average for analog trigger noise reduction with user-configurable alpha
 - [ ] **FW-10**: Trigger min/max calibration — Store per-trigger calibration points; scale raw ADC to 0-255 output range
@@ -70,9 +70,9 @@
 | FW-02 | Phase 1 | Complete |
 | FW-03 | Phase 1 | Pending |
 | FW-04 | Phase 1 | Pending |
-| FW-05 | Phase 1 | Pending |
+| FW-05 | Phase 1 | Complete |
 | FW-06 | Phase 1 | Complete |
-| FW-07 | Phase 1 | Pending |
+| FW-07 | Phase 1 | Complete |
 | FW-08 | Phase 1 | Complete |
 | FW-09 | Phase 1 | Pending |
 | FW-10 | Phase 1 | Pending |
