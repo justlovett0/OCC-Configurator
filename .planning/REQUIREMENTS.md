@@ -14,7 +14,7 @@
 - [ ] **FW-05**: GPIO pin assignment — All 13 buttons + 2 triggers have fully configurable GPIO pins (set at build time via config)
 - [ ] **FW-06**: Configuration storage — Packed `retro_config_t` struct in flash sector with magic number and CRC checksum
 - [ ] **FW-07**: Serial config protocol — Implement config mode serial loop supporting PING, GET_CONFIG, SET:key=value, SAVE, DEFAULTS, REBOOT commands (115200 baud)
-- [ ] **FW-08**: USB descriptor — Standard gamepad identification (XInput subtype 0x01 XINPUT_DEVSUBTYPE_GAMEPAD) so Windows Device Manager displays as "gamepad"
+- [x] **FW-08**: USB descriptor — Standard gamepad identification (XInput subtype 0x01 XINPUT_DEVSUBTYPE_GAMEPAD) so Windows Device Manager displays as "gamepad"
 - [ ] **FW-09**: Analog trigger smoothing — EMA exponential moving average for analog trigger noise reduction with user-configurable alpha
 - [ ] **FW-10**: Trigger min/max calibration — Store per-trigger calibration points; scale raw ADC to 0-255 output range
 
@@ -73,7 +73,7 @@
 | FW-05 | Phase 1 | Pending |
 | FW-06 | Phase 1 | Pending |
 | FW-07 | Phase 1 | Pending |
-| FW-08 | Phase 1 | Pending |
+| FW-08 | Phase 1 | Complete |
 | FW-09 | Phase 1 | Pending |
 | FW-10 | Phase 1 | Pending |
 | CFG-02 | Phase 2 | Pending |
