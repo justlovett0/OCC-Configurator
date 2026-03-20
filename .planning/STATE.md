@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 01-01-PLAN.md (pico-retro firmware scaffold and config struct)
-last_updated: "2026-03-20T05:00:12.152Z"
+stopped_at: Completed 01-02-PLAN.md (USB descriptor layer for pico-retro)
+last_updated: "2026-03-20T05:04:40.990Z"
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 4
   percent: 20
 ---
 
@@ -50,6 +50,8 @@ Progress: [██░░░░░░░░] 20% (1/5 plans complete)
 
 *Updated after each plan completion*
 | Phase 01-firmware-foundation P01 | 15 | 2 tasks | 7 files |
+| Phase 01-firmware-foundation P02 | 2 | 2 tasks | 2 files |
+| Phase 01-firmware-foundation P03 | 5 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -64,6 +66,8 @@ Recent decisions affecting current work:
 - [Phase 01-firmware-foundation]: XInput subtype 0x01 chosen for pico-retro; config-mode PID 0xF00F inserted sequentially; DEVICE_SCREEN_CLASSES deferred to Phase 2 when RetroApp class is created
 - [Phase 01-firmware-foundation]: Single cmake target pico_retro_controller; Pico W build via PICO_RETRO_WIRELESS=ON; OUTPUT_NAME Retro_Controller / Retro_Controller_W
 - [Phase 01-firmware-foundation]: tusb_config.h device-mode only (no PIO-USB host); retro_config_t with int8_t pin fields (-1 disabled), EMA alpha 0-100, full-range calibration defaults
+- [Phase 01-firmware-foundation]: XInput subtype 0x01 (XINPUT_SUBTYPE_GAMEPAD) chosen for pico-retro; CDC config-mode PID 0xF00F inserted sequentially
+- [Phase 01-firmware-foundation]: config_serial_loop name chosen over config_mode_main for retro serial handler; device_name validates all chars before writing; SCAN/STOP intentionally omitted; debounce upper bound 255 (full uint8_t)
 
 ### Pending Todos
 
@@ -77,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T05:00:12.150Z
-Stopped at: Completed 01-01-PLAN.md (pico-retro firmware scaffold and config struct)
+Last session: 2026-03-20T05:04:24.289Z
+Stopped at: Completed 01-02-PLAN.md (USB descriptor layer for pico-retro)
 Resume file: None

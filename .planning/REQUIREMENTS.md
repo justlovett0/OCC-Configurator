@@ -8,7 +8,7 @@
 ### Firmware - pico-retro
 
 - [x] **FW-01**: Pico/Pico W target support — Single `.uf2` file builds for both Pico and Pico W; at boot detects USB connection to determine wired vs wireless mode (wireless mode not implemented v1, but architecture supports it)
-- [ ] **FW-02**: Dual-mode USB boot — Normal start = XInput gamepad mode; watchdog scratch trigger = CDC serial config mode
+- [x] **FW-02**: Dual-mode USB boot — Normal start = XInput gamepad mode; watchdog scratch trigger = CDC serial config mode
 - [ ] **FW-03**: 13-button input set — DPad (4-way), A/B/X/Y buttons, Start, Select, Guide, LB, RB
 - [ ] **FW-04**: Analog triggers (LT/RT) — Configurable per-trigger as analog (0-255) or digital (on/off)
 - [ ] **FW-05**: GPIO pin assignment — All 13 buttons + 2 triggers have fully configurable GPIO pins (set at build time via config)
@@ -34,7 +34,7 @@
 ### USB & Device Identity
 
 - [ ] **USB-01**: Config mode PID — Unique USB PID for config mode (0xF00F), distinct from guitar (0xF00D) and drums (0xF00E)
-- [ ] **USB-02**: XInput mode VID/PID — Standard XInput (0x045E / 0x028E) recognized by Windows as gamepad controller
+- [x] **USB-02**: XInput mode VID/PID — Standard XInput (0x045E / 0x028E) recognized by Windows as gamepad controller
 
 ## v2 Requirements
 
@@ -67,7 +67,7 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FW-01 | Phase 1 | Complete |
-| FW-02 | Phase 1 | Pending |
+| FW-02 | Phase 1 | Complete |
 | FW-03 | Phase 1 | Pending |
 | FW-04 | Phase 1 | Pending |
 | FW-05 | Phase 1 | Pending |
@@ -87,7 +87,7 @@
 | CFG-10 | Phase 2 | Pending |
 | CFG-11 | Phase 2 | Pending |
 | USB-01 | Phase 2 | Pending |
-| USB-02 | Phase 1 | Pending |
+| USB-02 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 22 total

@@ -27,7 +27,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. LT and RT triggers work in both analog mode (0-255 ADC-scaled output) and digital mode (0 or 255) with per-trigger calibration min/max and EMA smoothing stored in flash
   4. Magic vibration sequence from the configurator causes the device to reboot into CDC serial config mode, where PING, GET_CONFIG, SET, SAVE, DEFAULTS, and REBOOT commands all respond correctly
   5. Config survives power cycle: settings written via SET/SAVE are read back correctly after unplug/replug
-**Plans:** 2/5 plans executed
+**Plans:** 4/5 plans executed
 Plans:
 - [ ] 01-01-PLAN.md — Project scaffold, config struct, flash storage
 - [ ] 01-02-PLAN.md — USB descriptors (XInput subtype 0x01 + CDC PID 0xF00F)
@@ -53,5 +53,5 @@ Phases execute in numeric order: 1 → 2
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Firmware Foundation | 2/5 | In Progress|  |
+| 1. Firmware Foundation | 4/5 | In Progress|  |
 | 2. Configurator Integration | 0/TBD | Not started | - |
