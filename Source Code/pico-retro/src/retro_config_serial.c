@@ -2,16 +2,16 @@
  * retro_config_serial.c - CDC serial command handler for retro controller
  *
  * Handles the config-mode serial protocol at 115200 baud over TinyUSB CDC:
- *   PING        → PONG
- *   GET_CONFIG  → DEVTYPE:pico_retro + CFG:key=value,...
- *   SET:key=val → update in-memory config field with validation
- *   SAVE        → persist config to flash
- *   DEFAULTS    → reset config to factory defaults
- *   REBOOT      → watchdog reboot (returns to play mode)
- *   BOOTSEL     → enter USB bootloader
- *
- * pico-retro has no LEDs and no SCAN/STOP commands — those are guitar/pedal-
- * specific features. Do not add them here.
+ *   PING             → PONG
+ *   GET_CONFIG       → DEVTYPE:pico_retro + CFG:key=value,...
+ *   SET:key=val      → update in-memory config field with validation
+ *   SAVE             → persist config to flash
+ *   DEFAULTS         → reset config to factory defaults
+ *   REBOOT           → watchdog reboot (returns to play mode)
+ *   BOOTSEL          → enter USB bootloader
+ *   SCAN             → poll GPIO 0-28 for button presses, send PIN:<n> lines
+ *   STOP             → stop SCAN or MONITOR_ADC streaming, send OK
+ *   MONITOR_ADC:<pin>→ stream live ADC readings at ~20Hz as MVAL:<val> lines
  */
 
 #include "retro_config_serial.h"
@@ -20,10 +20,13 @@
 #include "pico/stdlib.h"
 #include "pico/bootrom.h"
 #include "hardware/watchdog.h"
+#include "hardware/adc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+
+#define MONITOR_INTERVAL_MS  50   // ~20 Hz ADC streaming rate
 
 //--------------------------------------------------------------------
 // Serial I/O helpers
@@ -318,6 +321,119 @@ static bool handle_set(retro_config_t *config, const char *param) {
 }
 
 //--------------------------------------------------------------------
+// SCAN — poll all GPIO pins for button presses, report transitions
+//--------------------------------------------------------------------
+
+static void run_scan(retro_config_t *config) {
+    (void)config;
+    bool pin_inited[29] = {false};
+    for (int pin = 0; pin <= 28; pin++) {
+        if (pin == 23 || pin == 24 || pin == 25) continue; // reserved
+        gpio_init(pin);
+        gpio_set_dir(pin, GPIO_IN);
+        gpio_pull_up(pin);
+        pin_inited[pin] = true;
+    }
+    sleep_ms(10);
+
+    bool prev_state[29] = {false};
+    for (int pin = 0; pin <= 28; pin++) {
+        if (pin_inited[pin])
+            prev_state[pin] = !gpio_get(pin);
+    }
+
+    serial_writeln("SCAN:started");
+
+    char line[64];
+    char out[32];
+    int line_pos = 0;
+
+    while (true) {
+        tud_task();
+
+        if (tud_cdc_available()) {
+            int c = tud_cdc_read_char();
+            if (c == '\r' || c == '\n') {
+                if (line_pos > 0) {
+                    line[line_pos] = '\0';
+                    if (strcmp(line, "STOP") == 0) {
+                        serial_writeln("OK");
+                        return;
+                    }
+                    line_pos = 0;
+                }
+            } else if (line_pos < (int)sizeof(line) - 1) {
+                line[line_pos++] = (char)c;
+            }
+        }
+
+        for (int pin = 0; pin <= 28; pin++) {
+            if (!pin_inited[pin]) continue;
+            bool pressed = !gpio_get(pin);
+            if (pressed && !prev_state[pin]) {
+                snprintf(out, sizeof(out), "PIN:%d", pin);
+                serial_writeln(out);
+            }
+            prev_state[pin] = pressed;
+        }
+
+        sleep_ms(5);
+    }
+}
+
+//--------------------------------------------------------------------
+// MONITOR_ADC — stream live ADC readings for the configurator bar graph
+//--------------------------------------------------------------------
+
+static void run_monitor_adc(int pin) {
+    if (pin < 26 || pin > 28) {
+        serial_writeln("ERR:adc pin must be 26, 27, or 28");
+        return;
+    }
+
+    int ch = pin - 26;
+    adc_init();
+    adc_gpio_init((uint)pin);
+    sleep_ms(10);
+
+    serial_writeln("OK");
+
+    char cmd_buf[32];
+    int cmd_pos = 0;
+    uint32_t last_send_ms = 0;
+
+    while (true) {
+        tud_task();
+
+        while (tud_cdc_available()) {
+            char c = (char)tud_cdc_read_char();
+            if (c == '\n' || c == '\r') {
+                cmd_buf[cmd_pos] = '\0';
+                if (strcmp(cmd_buf, "STOP") == 0) {
+                    serial_writeln("OK");
+                    return;
+                }
+                cmd_pos = 0;
+            } else if (cmd_pos < (int)sizeof(cmd_buf) - 1) {
+                cmd_buf[cmd_pos++] = c;
+            }
+        }
+
+        uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+        if ((now_ms - last_send_ms) >= MONITOR_INTERVAL_MS) {
+            last_send_ms = now_ms;
+            adc_select_input((uint)ch);
+            uint16_t val = adc_read();
+            char buf[20];
+            snprintf(buf, sizeof(buf), "MVAL:%u", val);
+            serial_writeln(buf);
+        }
+
+        sleep_ms(1);
+    }
+}
+
+//--------------------------------------------------------------------
 // Config mode main loop
 //--------------------------------------------------------------------
 
@@ -409,6 +525,15 @@ void config_serial_loop(retro_config_t *config) {
                 serial_writeln("OK");
                 sleep_ms(50);
                 reset_usb_boot(0, 0);
+            }
+            // ── SCAN ──
+            else if (strcmp(line, "SCAN") == 0) {
+                run_scan(config);
+            }
+            // ── MONITOR_ADC:<pin> ──
+            else if (strncmp(line, "MONITOR_ADC:", 12) == 0) {
+                int adc_pin = atoi(line + 12);
+                run_monitor_adc(adc_pin);
             }
             // ── Unknown command ──
             else {
