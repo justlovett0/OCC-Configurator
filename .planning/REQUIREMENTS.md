@@ -28,8 +28,8 @@
 - [ ] **CFG-07**: Min/max calibration UI — Sliders to set trigger min/max values; live output bar updates as user adjusts
 - [x] **CFG-08**: Smoothing control — EMA alpha slider for trigger smoothing (0-100%)
 - [x] **CFG-09**: Invert toggle — Per-trigger invert option (reverse calibration direction)
-- [ ] **CFG-10**: Config backup/restore — Automatic backup before firmware flash, config restoration via SET commands after flash
-- [ ] **CFG-11**: Firmware update integration — Add pico-retro to existing firmware update pipeline (backup config, flash Retro_Controller.uf2, restore config after reboot)
+- [x] **CFG-10**: Config backup/restore — Automatic backup before firmware flash, config restoration via SET commands after flash
+- [x] **CFG-11**: Firmware update integration — Add pico-retro to existing firmware update pipeline (backup config, flash Retro_Controller.uf2, restore config after reboot)
 
 ### USB & Device Identity
 
@@ -84,8 +84,8 @@
 | CFG-07 | Phase 2 | Pending |
 | CFG-08 | Phase 2 | Complete |
 | CFG-09 | Phase 2 | Complete |
-| CFG-10 | Phase 2 | Pending |
-| CFG-11 | Phase 2 | Pending |
+| CFG-10 | Phase 2 | Complete |
+| CFG-11 | Phase 2 | Complete |
 | USB-01 | Phase 2 | Pending |
 | USB-02 | Phase 1 | Complete |
 

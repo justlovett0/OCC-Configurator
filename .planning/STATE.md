@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-03-20T14:55:10.282Z"
+stopped_at: Completed 02-03-PLAN.md (gap closure — device routing fix)
+last_updated: "2026-03-20T15:03:01.335Z"
 progress:
   total_phases: 2
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 8
+  completed_plans: 8
 ---
 
 # Project State
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 
 ## Current Position
 
-Phase: 02 (configurator-integration) — EXECUTING
-Plan: 2 of 2
+Phase: 02 (configurator-integration) — COMPLETE
+Plan: 3 of 3 (gap closure 02-03 complete)
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Plan: 2 of 2
 | Phase 01-firmware-foundation P04 | 3 | 1 tasks | 1 files |
 | Phase 02-configurator-integration P01 | 2 | 1 tasks | 1 files |
 | Phase 02-configurator-integration P02 | 15 | 1 tasks | 1 files |
+| Phase 02-configurator-integration P03 | 1 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -71,7 +72,9 @@ Recent decisions affecting current work:
 - [Phase 01-firmware-foundation]: g_config_mode set BEFORE tusb_init() to ensure correct descriptor set is loaded at USB init time
 - [Phase 01-firmware-foundation]: Digital trigger outputs 0/255 axis byte (not button press) per CONTEXT.md locked decision
 - [Phase 02-configurator-integration]: run_scan() scans from GPIO 0 (not 2 like pedal) — retro has no PIO-USB on GP0/GP1; pins 23/24/25 skipped (reserved); MONITOR_INTERVAL_MS=50ms for ~20Hz
-- [Phase 02-configurator-integration]: RetroApp uses GPIO_OPTIONS -1..27 for buttons, ADC_OPTIONS -1/26/27/28 for trigger analog pin; EMA alpha is 0-100 int percent; retro_gamepad registered in DEVICE_SCREEN_CLASSES
+- [Phase 02-configurator-integration]: RetroApp uses GPIO_OPTIONS -1..27 for buttons, ADC_OPTIONS -1/26/27/28 for trigger analog pin; EMA alpha is 0-100 int percent; pico_retro registered in DEVICE_SCREEN_CLASSES (was retro_gamepad placeholder, corrected in 02-03)
+- [Phase 02-configurator-integration 02-03]: pico_retro key replaces retro_gamepad in DEVICE_SCREEN_MAP and DEVICE_SCREEN_CLASSES; device routing now matches firmware RETRO_DEVTYPE_STR exactly
+- [Phase 02-configurator-integration]: pico_retro key replaces retro_gamepad placeholder in DEVICE_SCREEN_MAP and DEVICE_SCREEN_CLASSES to match firmware RETRO_DEVTYPE_STR
 
 ### Pending Todos
 
@@ -85,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T14:55:10.280Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-03-20T15:03:01.332Z
+Stopped at: Completed 02-03-PLAN.md (gap closure — device routing fix)
 Resume file: None
