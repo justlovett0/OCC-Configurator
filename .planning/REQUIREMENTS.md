@@ -20,7 +20,6 @@
 
 ### Configurator - RetroApp Screen
 
-- [ ] **CFG-01**: Device detection — Configurator detects pico-retro firmware via DEVTYPE="retro_gamepad" and routes to RetroApp
 - [ ] **CFG-02**: Device naming — User can set/change device name (alphanumeric, max 20 chars, validated in configurator + firmware)
 - [ ] **CFG-03**: GPIO button mapping — Interactive DETECT function for each button (press button, configurator records GPIO pin)
 - [ ] **CFG-04**: Analog trigger detection — DETECT function for LT/RT triggers (pull/press, configurator records ADC pin)
@@ -30,8 +29,7 @@
 - [ ] **CFG-08**: Smoothing control — EMA alpha slider for trigger smoothing (0-100%)
 - [ ] **CFG-09**: Invert toggle — Per-trigger invert option (reverse calibration direction)
 - [ ] **CFG-10**: Config backup/restore — Automatic backup before firmware flash, config restoration via SET commands after flash
-- [ ] **CFG-11**: Firmware flashing — Detect Retro_Controller.uf2, initiate flash, restore config after reboot
-- [ ] **CFG-12**: Button monitoring — Display which buttons are pressed in real-time on config screen
+- [ ] **CFG-11**: Firmware update integration — Add pico-retro to existing firmware update pipeline (backup config, flash Retro_Controller.uf2, restore config after reboot)
 
 ### USB & Device Identity
 
@@ -78,7 +76,6 @@
 | FW-08 | Phase 1 | Pending |
 | FW-09 | Phase 1 | Pending |
 | FW-10 | Phase 1 | Pending |
-| CFG-01 | Phase 2 | Pending |
 | CFG-02 | Phase 2 | Pending |
 | CFG-03 | Phase 2 | Pending |
 | CFG-04 | Phase 2 | Pending |
@@ -89,16 +86,15 @@
 | CFG-09 | Phase 2 | Pending |
 | CFG-10 | Phase 2 | Pending |
 | CFG-11 | Phase 2 | Pending |
-| CFG-12 | Phase 2 | Pending |
 | USB-01 | Phase 2 | Pending |
 | USB-02 | Phase 1 | Pending |
 
 **Coverage:**
-- v1 requirements: 24 total
-- Mapped to phases: 24
+- v1 requirements: 22 total
+- Mapped to phases: 22
 - Unmapped: 0 ✓
 
 ---
 
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 after initial definition*
+*Last updated: 2026-03-19 after roadmap creation — traceability confirmed
