@@ -842,6 +842,7 @@ CONFIG_MODE_VID = 0x2E8A
 CONFIG_MODE_PIDS = {
     0xF00D: "Guitar Config",
     0xF00E: "Drum Kit Config",
+    0xF00F: "Retro Gamepad Config",
     0xF010: "Pedal Config",
 }
 BAUD_RATE = 115200
@@ -880,6 +881,7 @@ DEVICE_TYPE_UF2_HINTS = {
     "drum_kit":                "drum",
     "dongle":                  "dongle",
     "pedal":                   "pedal",
+    "pico_retro":              "retro",
 }
 
 # Maps XInput subtype → DEVTYPE string (used before serial connection is open)
@@ -888,11 +890,12 @@ XINPUT_SUBTYPE_TO_DEVTYPE = {
     6: "guitar_alternate",
     7: "guitar_alternate",
     11: "dongle",           # Dongle uses subtype 0x0B=11 (XINPUT_DEVSUBTYPE_GUITAR_BASS)
+    1: "pico_retro",        # Retro Gamepad uses subtype 0x01 (XINPUT_DEVSUBTYPE_GAMEPAD)
 }
 
 # All XInput subtypes recognised as OCC devices.
 # Used when scanning for controllers without a serial connection.
-OCC_SUBTYPES = {8, 6, 7, 11}   # Drum Kit (8), Guitar (6/7), Dongle (11=0x0B)
+OCC_SUBTYPES = {8, 6, 7, 11, 1}   # Drum Kit (8), Guitar (6/7), Dongle (11=0x0B), Retro Gamepad (1)
 
 # Subtype(s) that identify a dongle — configurable separately, no serial config mode.
 DONGLE_XINPUT_SUBTYPES = {11}
