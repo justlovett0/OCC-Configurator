@@ -12,7 +12,7 @@ pico-retro is a new OCC platform variant — a retro-style gamepad firmware for 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Firmware Foundation** - Working pico-retro firmware with XInput gamepad output, 13 digital buttons (GPIO configurable), analog/digital LT/RT triggers with calibration, CDC config mode, and Pico W build target
+- [x] **Phase 1: Firmware Foundation** - Working pico-retro firmware with XInput gamepad output, 13 digital buttons (GPIO configurable), analog/digital LT/RT triggers with calibration, CDC config mode, and Pico W build target (completed 2026-03-20)
 - [ ] **Phase 2: Configurator Integration** - RetroApp advanced configurator screen with GPIO button mapping, trigger mode selection and calibration, live analog trigger monitoring, and firmware update pipeline integration
 
 ## Phase Details
@@ -27,7 +27,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. LT and RT triggers work in both analog mode (0-255 ADC-scaled output) and digital mode (0 or 255) with per-trigger calibration min/max and EMA smoothing stored in flash
   4. Magic vibration sequence from the configurator causes the device to reboot into CDC serial config mode, where PING, GET_CONFIG, SET, SAVE, DEFAULTS, and REBOOT commands all respond correctly
   5. Config survives power cycle: settings written via SET/SAVE are read back correctly after unplug/replug
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 Plans:
 - [ ] 01-01-PLAN.md — Project scaffold, config struct, flash storage
 - [ ] 01-02-PLAN.md — USB descriptors (XInput subtype 0x01 + CDC PID 0xF00F)
@@ -53,5 +53,5 @@ Phases execute in numeric order: 1 → 2
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Firmware Foundation | 4/5 | In Progress|  |
+| 1. Firmware Foundation | 5/5 | Complete   | 2026-03-20 |
 | 2. Configurator Integration | 0/TBD | Not started | - |

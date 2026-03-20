@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 01-03-PLAN.md (retro CDC serial config protocol)
-last_updated: "2026-03-20T05:04:46.717Z"
+stopped_at: Completed 01-04-PLAN.md (pico-retro main.c firmware entry point)
+last_updated: "2026-03-20T05:09:10.109Z"
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
   percent: 20
 ---
 
@@ -52,6 +52,7 @@ Progress: [██░░░░░░░░] 20% (1/5 plans complete)
 | Phase 01-firmware-foundation P01 | 15 | 2 tasks | 7 files |
 | Phase 01-firmware-foundation P02 | 2 | 2 tasks | 2 files |
 | Phase 01-firmware-foundation P03 | 5 | 1 tasks | 2 files |
+| Phase 01-firmware-foundation P04 | 3 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ Recent decisions affecting current work:
 - [Phase 01-firmware-foundation]: tusb_config.h device-mode only (no PIO-USB host); retro_config_t with int8_t pin fields (-1 disabled), EMA alpha 0-100, full-range calibration defaults
 - [Phase 01-firmware-foundation]: XInput subtype 0x01 (XINPUT_SUBTYPE_GAMEPAD) chosen for pico-retro; CDC config-mode PID 0xF00F inserted sequentially
 - [Phase 01-firmware-foundation]: config_serial_loop name chosen over config_mode_main for retro serial handler; device_name validates all chars before writing; SCAN/STOP intentionally omitted; debounce upper bound 255 (full uint8_t)
+- [Phase 01-firmware-foundation]: g_config_mode set BEFORE tusb_init() to ensure correct descriptor set is loaded at USB init time
+- [Phase 01-firmware-foundation]: Digital trigger outputs 0/255 axis byte (not button press) per CONTEXT.md locked decision
 
 ### Pending Todos
 
@@ -81,6 +84,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T05:04:46.715Z
-Stopped at: Completed 01-03-PLAN.md (retro CDC serial config protocol)
+Last session: 2026-03-20T05:09:10.107Z
+Stopped at: Completed 01-04-PLAN.md (pico-retro main.c firmware entry point)
 Resume file: None
