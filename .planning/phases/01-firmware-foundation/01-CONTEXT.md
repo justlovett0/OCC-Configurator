@@ -6,7 +6,14 @@
 <domain>
 ## Phase Boundary
 
-Implement working pico-retro firmware that enumerates as a standard XInput gamepad on Windows, handles all 13 digital button inputs with fully configurable GPIO pin assignments, supports 2 LT/RT triggers configurable per-trigger as analog (0-255 ADC-scaled) or digital (0 or 255), stores configuration in flash with magic number and CRC checksum, supports CDC serial config mode (115200 baud) with existing command protocol, and operates on both Pico and Pico W with USB detection at boot (wireless mode deferred to Phase 3+, but architecture ready).
+Implement TWO separate firmware variants for pico-retro (like guitar-wired vs guitar-wireless), each enumerated as a standard XInput gamepad on Windows:
+
+1. **pico-retro-wired** — Pico only, wired USB XInput mode
+2. **pico-retro-wireless** — Pico W only, wired USB mode (detects USB at boot) + wireless-ready architecture for Phase 3+ BLE implementation
+
+Both variants handle all 13 digital button inputs with fully configurable GPIO pin assignments, support 2 LT/RT triggers configurable per-trigger as analog (0-255 ADC-scaled) or digital (0 or 255), store configuration in flash with magic number and CRC checksum, and support CDC serial config mode (115200 baud) with existing command protocol.
+
+Configurator detects device type (via DEVTYPE response) and flashes the appropriate `.uf2` file. Both firmware targets are built from the same pico-retro source tree (separate CMake targets like guitar-wired/wireless).
 
 </domain>
 
@@ -64,12 +71,15 @@ Implement working pico-retro firmware that enumerates as a standard XInput gamep
   - `uint32_t checksum` — CRC over struct (like all other variants)
 - Store in flash sector (last sector, like guitar/drums/pedal)
 
-### USB Descriptor
-- VID/PID: 0x045E / 0x028E (standard XInput, Windows recognizes as "gamepad")
-- Device class: USB_CLASS_MISCELLANEOUS, protocol: 0x05 (XInput protocol)
-- XInput subtype: 0x01 (XINPUT_DEVSUBTYPE_GAMEPAD — standard gamepad, not guitar/drums)
-- String descriptor: "pico-retro" + device_name from config
-- CDC interface separate for config mode (VID/PID: 0x2E8A / 0xF00F) when in config mode
+### Firmware Variants & Device Identity
+- **DEVTYPE string**: Both variants respond with `DEVTYPE:pico_retro` in GET_CONFIG (used by configurator routing)
+- **XInput mode VID/PID**: 0x045E / 0x028E (standard XInput, Windows recognizes as "gamepad")
+- **XInput subtype**: 0x01 (XINPUT_DEVSUBTYPE_GAMEPAD — standard gamepad, not guitar/drums)
+  - NOTE: Requires adding `1: "pico_retro"` to `XINPUT_SUBTYPE_TO_DEVTYPE` dict in configurator.py (one-line change, part of Phase 1)
+  - NOTE: Also requires adding `1` to `OCC_SUBTYPES` list in configurator.py
+- **Config mode VID/PID**: 0x2E8A / 0xF00F (unique PID for pico-retro config mode, different from guitar/drums/pedal)
+- **String descriptor**: "Retro Gamepad" + device_name from config (so Windows Device Manager shows something user-friendly)
+- **CDC interface**: Separate for config mode (115200 baud, like all variants)
 
 ### Serial Config Protocol
 - Reuse existing protocol (115200 baud, CDC)
