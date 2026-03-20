@@ -21,10 +21,10 @@
 ### Configurator - RetroApp Screen
 
 - [ ] **CFG-02**: Device naming — User can set/change device name (alphanumeric, max 20 chars, validated in configurator + firmware)
-- [ ] **CFG-03**: GPIO button mapping — Interactive DETECT function for each button (press button, configurator records GPIO pin)
-- [ ] **CFG-04**: Analog trigger detection — DETECT function for LT/RT triggers (pull/press, configurator records ADC pin)
+- [x] **CFG-03**: GPIO button mapping — Interactive DETECT function for each button (press button, configurator records GPIO pin)
+- [x] **CFG-04**: Analog trigger detection — DETECT function for LT/RT triggers (pull/press, configurator records ADC pin)
 - [ ] **CFG-05**: Analog/digital mode toggle — User selects per-trigger: "Analog" or "Digital" mode
-- [ ] **CFG-06**: Analog trigger monitor — Real-time monitor screen showing raw ADC and calibrated output (0-255 bar graphs) for each analog trigger
+- [x] **CFG-06**: Analog trigger monitor — Real-time monitor screen showing raw ADC and calibrated output (0-255 bar graphs) for each analog trigger
 - [ ] **CFG-07**: Min/max calibration UI — Sliders to set trigger min/max values; live output bar updates as user adjusts
 - [ ] **CFG-08**: Smoothing control — EMA alpha slider for trigger smoothing (0-100%)
 - [ ] **CFG-09**: Invert toggle — Per-trigger invert option (reverse calibration direction)
@@ -77,10 +77,10 @@
 | FW-09 | Phase 1 | Complete |
 | FW-10 | Phase 1 | Complete |
 | CFG-02 | Phase 2 | Pending |
-| CFG-03 | Phase 2 | Pending |
-| CFG-04 | Phase 2 | Pending |
+| CFG-03 | Phase 2 | Complete |
+| CFG-04 | Phase 2 | Complete |
 | CFG-05 | Phase 2 | Pending |
-| CFG-06 | Phase 2 | Pending |
+| CFG-06 | Phase 2 | Complete |
 | CFG-07 | Phase 2 | Pending |
 | CFG-08 | Phase 2 | Pending |
 | CFG-09 | Phase 2 | Pending |

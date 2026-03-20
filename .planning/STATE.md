@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-20T05:25:04.207Z"
+stopped_at: Completed 02-configurator-integration-01-PLAN.md
+last_updated: "2026-03-20T14:43:46.237Z"
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 7
+  completed_plans: 6
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Community-friendly retro gamepad firmware with flexible GPIO configuration and consistent configurator experience
-**Current focus:** Phase 1 — firmware-foundation
+**Current focus:** Phase 02 — configurator-integration
 
 ## Current Position
 
-Phase: 1 (firmware-foundation) — EXECUTING
-Plan: 1 of 5
+Phase: 02 (configurator-integration) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Plan: 1 of 5
 | Phase 01-firmware-foundation P02 | 2 | 2 tasks | 2 files |
 | Phase 01-firmware-foundation P03 | 5 | 1 tasks | 2 files |
 | Phase 01-firmware-foundation P04 | 3 | 1 tasks | 1 files |
+| Phase 02-configurator-integration P01 | 2 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,7 @@ Recent decisions affecting current work:
 - [Phase 01-firmware-foundation]: config_serial_loop name chosen over config_mode_main for retro serial handler; device_name validates all chars before writing; SCAN/STOP intentionally omitted; debounce upper bound 255 (full uint8_t)
 - [Phase 01-firmware-foundation]: g_config_mode set BEFORE tusb_init() to ensure correct descriptor set is loaded at USB init time
 - [Phase 01-firmware-foundation]: Digital trigger outputs 0/255 axis byte (not button press) per CONTEXT.md locked decision
+- [Phase 02-configurator-integration]: run_scan() scans from GPIO 0 (not 2 like pedal) — retro has no PIO-USB on GP0/GP1; pins 23/24/25 skipped (reserved); MONITOR_INTERVAL_MS=50ms for ~20Hz
 
 ### Pending Todos
 
@@ -81,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T05:25:04.205Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-configurator-integration/02-CONTEXT.md
+Last session: 2026-03-20T14:43:46.235Z
+Stopped at: Completed 02-configurator-integration-01-PLAN.md
+Resume file: None
