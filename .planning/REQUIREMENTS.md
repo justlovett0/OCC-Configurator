@@ -7,7 +7,7 @@
 
 ### Firmware - pico-retro
 
-- [ ] **FW-01**: Pico/Pico W target support — Firmware builds for both Pico and Pico W with separate `.uf2` files
+- [ ] **FW-01**: Pico/Pico W target support — Single `.uf2` file builds for both Pico and Pico W; at boot detects USB connection to determine wired vs wireless mode (wireless mode not implemented v1, but architecture supports it)
 - [ ] **FW-02**: Dual-mode USB boot — Normal start = XInput gamepad mode; watchdog scratch trigger = CDC serial config mode
 - [ ] **FW-03**: 13-button input set — DPad (4-way), A/B/X/Y buttons, Start, Select, Guide, LB, RB
 - [ ] **FW-04**: Analog triggers (LT/RT) — Configurable per-trigger as analog (0-255) or digital (on/off)

@@ -22,7 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Depends on**: Nothing (first phase)
 **Requirements**: FW-01, FW-02, FW-03, FW-04, FW-05, FW-06, FW-07, FW-08, FW-09, FW-10, USB-02
 **Success Criteria** (what must be TRUE):
-  1. Pico and Pico W both produce a .uf2 that enumerates in Windows Device Manager as an XInput gamepad (not an unknown device, not a guitar)
+  1. Single .uf2 file works on both Pico and Pico W; at boot detects USB connection — if USB detected, enumerates as XInput gamepad in Windows Device Manager; if no USB detected, boots into wireless standby (ready for BLE implementation later); architecture supports adding wireless mode without major refactoring
   2. All 13 digital buttons register correct XInput button outputs when pressed, with fully configurable GPIO pin assignments (digital inputs only)
   3. LT and RT triggers work in both analog mode (0-255 ADC-scaled output) and digital mode (0 or 255) with per-trigger calibration min/max and EMA smoothing stored in flash
   4. Magic vibration sequence from the configurator causes the device to reboot into CDC serial config mode, where PING, GET_CONFIG, SET, SAVE, DEFAULTS, and REBOOT commands all respond correctly
