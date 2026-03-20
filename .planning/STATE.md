@@ -3,13 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 01-05-PLAN.md (pico-retro configurator routing tables)
-last_updated: "2026-03-20T04:57:49.805Z"
+stopped_at: Completed 01-01-PLAN.md (pico-retro firmware scaffold and config struct)
+last_updated: "2026-03-20T05:00:12.152Z"
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 2
+  percent: 20
 ---
 
 # Project State
@@ -48,6 +49,7 @@ Progress: [██░░░░░░░░] 20% (1/5 plans complete)
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01-firmware-foundation P01 | 15 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -60,6 +62,8 @@ Recent decisions affecting current work:
 - Pre-Phase 1: XInput subtype must be confirmed before firmware write — recommend 0x03 (ArcadeStick) to avoid false-positive collision with non-OCC standard gamepads; verify 0x03 is not already claimed
 - Pre-Phase 1: DEVTYPE string is "retro_gamepad", config struct magic is 0x52455452 ("RETR"), version 1
 - [Phase 01-firmware-foundation]: XInput subtype 0x01 chosen for pico-retro; config-mode PID 0xF00F inserted sequentially; DEVICE_SCREEN_CLASSES deferred to Phase 2 when RetroApp class is created
+- [Phase 01-firmware-foundation]: Single cmake target pico_retro_controller; Pico W build via PICO_RETRO_WIRELESS=ON; OUTPUT_NAME Retro_Controller / Retro_Controller_W
+- [Phase 01-firmware-foundation]: tusb_config.h device-mode only (no PIO-USB host); retro_config_t with int8_t pin fields (-1 disabled), EMA alpha 0-100, full-range calibration defaults
 
 ### Pending Todos
 
@@ -73,6 +77,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T04:57:49.803Z
-Stopped at: Completed 01-05-PLAN.md (pico-retro configurator routing tables)
+Last session: 2026-03-20T05:00:12.150Z
+Stopped at: Completed 01-01-PLAN.md (pico-retro firmware scaffold and config struct)
 Resume file: None
