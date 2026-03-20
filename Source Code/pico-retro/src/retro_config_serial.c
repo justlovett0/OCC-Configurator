@@ -324,6 +324,8 @@ static bool handle_set(retro_config_t *config, const char *param) {
 // SCAN — poll all GPIO pins for button presses, report transitions
 //--------------------------------------------------------------------
 
+#define SCAN_REPEAT_MS 300
+
 static void run_scan(retro_config_t *config) {
     (void)config;
     bool pin_inited[29] = {false};
@@ -336,13 +338,11 @@ static void run_scan(retro_config_t *config) {
     }
     sleep_ms(10);
 
-    bool prev_state[29] = {false};
-    for (int pin = 0; pin <= 28; pin++) {
-        if (pin_inited[pin])
-            prev_state[pin] = !gpio_get(pin);
-    }
+    serial_writeln("OK");
 
-    serial_writeln("SCAN:started");
+    // Level detection with rate-limiting: report PIN:n while held, every SCAN_REPEAT_MS.
+    uint32_t last_report_ms[29];
+    for (int i = 0; i < 29; i++) last_report_ms[i] = 0;
 
     char line[64];
     char out[32];
@@ -351,7 +351,7 @@ static void run_scan(retro_config_t *config) {
     while (true) {
         tud_task();
 
-        if (tud_cdc_available()) {
+        while (tud_cdc_available()) {
             int c = tud_cdc_read_char();
             if (c == '\r' || c == '\n') {
                 if (line_pos > 0) {
@@ -367,14 +367,16 @@ static void run_scan(retro_config_t *config) {
             }
         }
 
+        uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+
         for (int pin = 0; pin <= 28; pin++) {
             if (!pin_inited[pin]) continue;
             bool pressed = !gpio_get(pin);
-            if (pressed && !prev_state[pin]) {
+            if (pressed && (now_ms - last_report_ms[pin]) >= SCAN_REPEAT_MS) {
                 snprintf(out, sizeof(out), "PIN:%d", pin);
                 serial_writeln(out);
+                last_report_ms[pin] = now_ms;
             }
-            prev_state[pin] = pressed;
         }
 
         sleep_ms(5);
@@ -441,49 +443,48 @@ void config_serial_loop(retro_config_t *config) {
     char line[256];
     int  line_pos = 0;
 
-    // Reboot to play mode if no activity for 30 seconds
-    uint32_t last_activity_ms = to_ms_since_boot(get_absolute_time());
+    // Reboot to play mode if CDC never connects within 30 seconds of booting
+    // into config mode (matches guitar firmware pattern).
+    uint32_t start_time_ms = to_ms_since_boot(get_absolute_time());
     const uint32_t CONNECT_TIMEOUT_MS = 30000;
 
-    // Reboot to play mode if CDC disconnects for 5 seconds
-    uint32_t disconnect_start_ms = 0;
-    bool     was_connected = true;
+    // Reboot to play mode if CDC disconnects (after having been connected) for 5 seconds.
+    uint32_t disconnect_time_ms = 0;
+    bool     was_connected = false;  // false = not yet connected
     const uint32_t DISCONNECT_TIMEOUT_MS = 5000;
 
     while (true) {
         tud_task();
 
         uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+        bool connected = tud_cdc_connected();
 
-        // Handle CDC disconnect / reconnect
-        if (!tud_cdc_connected()) {
-            if (was_connected) {
-                disconnect_start_ms = now_ms;
-                was_connected = false;
-            } else if ((now_ms - disconnect_start_ms) >= DISCONNECT_TIMEOUT_MS) {
+        // Never connected: reboot if initial connect window expires
+        if (!was_connected && !connected) {
+            if ((now_ms - start_time_ms) > CONNECT_TIMEOUT_MS) {
                 watchdog_reboot(0, 0, 10);
                 while (1) { tight_loop_contents(); }
             }
-            sleep_ms(1);
-            continue;
-        }
-        was_connected = true;
-
-        // Activity timeout — reboot if idle too long
-        if ((now_ms - last_activity_ms) >= CONNECT_TIMEOUT_MS) {
-            watchdog_reboot(0, 0, 10);
-            while (1) { tight_loop_contents(); }
         }
 
-        if (!tud_cdc_available()) {
+        // Was connected, now disconnected: start disconnect timer
+        if (was_connected && !connected) {
+            if (disconnect_time_ms == 0) disconnect_time_ms = now_ms;
+            else if ((now_ms - disconnect_time_ms) > DISCONNECT_TIMEOUT_MS) {
+                watchdog_reboot(0, 0, 10);
+                while (1) { tight_loop_contents(); }
+            }
+        }
+
+        if (connected) { was_connected = true; disconnect_time_ms = 0; }
+
+        if (!connected || !tud_cdc_available()) {
             sleep_ms(1);
             continue;
         }
 
         int c = tud_cdc_read_char();
         if (c < 0) continue;
-
-        last_activity_ms = now_ms;
 
         if (c == '\r' || c == '\n') {
             if (line_pos == 0) continue;

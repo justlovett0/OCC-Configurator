@@ -931,7 +931,7 @@ I2C_MODEL_LABELS  = [label for _, label in I2C_MODEL_OPTIONS]
 I2C_MODEL_VALUES  = [val   for val, _   in I2C_MODEL_OPTIONS]
 
 MAX_LEDS = 16
-LED_INPUT_COUNT = 16   # 14 buttons + tilt + whammy
+LED_INPUT_COUNT = 14
 
 VALID_NAME_CHARS = set(string.ascii_letters + string.digits + ' ')
 
@@ -939,14 +939,14 @@ LED_INPUT_NAMES = [
     "green", "red", "yellow", "blue", "orange",
     "strum_up", "strum_down", "start", "select",
     "dpad_up", "dpad_down", "dpad_left", "dpad_right",
-    "guide", "tilt", "whammy",
+    "guide",
 ]
 
 LED_INPUT_LABELS = [
     "Green Fret", "Red Fret", "Yellow Fret", "Blue Fret", "Orange Fret",
     "Strum Up", "Strum Down", "Start", "Select",
     "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
-    "Guide", "Tilt", "Whammy",
+    "Guide",
 ]
 
 BUTTON_DEFS = [
@@ -4038,8 +4038,10 @@ class EasyConfigScreen:
                  font=(FONT_UI, 8)).pack(side="left", padx=(0,3))
         br_w = tk.Frame(ctrl_row, bg=BG_CARD, width=52, height=24)
         br_w.pack(side="left", padx=(0,4)); br_w.pack_propagate(False)
+        _bvcmd = (self.root.register(lambda P: P == "" or (P.isdigit() and 0 <= int(P) <= 9)), '%P')
         ttk.Spinbox(br_w, from_=0, to=9, width=4,
-                    textvariable=led_brightness_var, command=_sync).pack(fill="both", expand=True)
+                    textvariable=led_brightness_var, command=_sync,
+                    validate="key", validatecommand=_bvcmd).pack(fill="both", expand=True)
         tk.Label(ctrl_row, text="(0-9)", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 7)).pack(side="left", padx=(3,0))
 
@@ -4141,13 +4143,15 @@ class EasyConfigScreen:
         bminw = tk.Frame(breathe_row, bg=BG_CARD, width=48, height=22)
         bminw.pack(side="left", padx=(0, 6)); bminw.pack_propagate(False)
         ttk.Spinbox(bminw, from_=0, to=9, width=3,
-                    textvariable=led_breathe_min_var, command=_sync).pack(fill="both", expand=True)
+                    textvariable=led_breathe_min_var, command=_sync,
+                    validate="key", validatecommand=_bvcmd).pack(fill="both", expand=True)
         tk.Label(breathe_row, text="Max:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 2))
         bmaxw = tk.Frame(breathe_row, bg=BG_CARD, width=48, height=22)
         bmaxw.pack(side="left", padx=(0, 4)); bmaxw.pack_propagate(False)
         ttk.Spinbox(bmaxw, from_=0, to=9, width=3,
-                    textvariable=led_breathe_max_var, command=_sync).pack(fill="both", expand=True)
+                    textvariable=led_breathe_max_var, command=_sync,
+                    validate="key", validatecommand=_bvcmd).pack(fill="both", expand=True)
         tk.Label(breathe_row, text="(0–9)", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 7)).pack(side="left", padx=(3, 0))
 
@@ -4255,7 +4259,8 @@ class EasyConfigScreen:
                 bw.pack_propagate(False)
                 ttk.Spinbox(bw, from_=0, to=9, width=3,
                             textvariable=led_active_vars[inp_idx],
-                            command=_sync).pack(fill="both", expand=True)
+                            command=_sync,
+                            validate="key", validatecommand=_bvcmd).pack(fill="both", expand=True)
                 grid_row += 1
 
         _rebuild_map()
@@ -8168,6 +8173,10 @@ class App:
         self.tilt_invert   = tk.BooleanVar(value=False)
         self.whammy_invert = tk.BooleanVar(value=False)
 
+        # Raw ADC snapshots for guided whammy calibration (not persisted to flash)
+        self._whammy_rest_raw = None
+        self._whammy_act_raw  = None
+
         # I2C config
         self.i2c_sda_pin = tk.IntVar(value=4)
         self.i2c_scl_pin = tk.IntVar(value=5)
@@ -8938,100 +8947,218 @@ class App:
             self.smooth_level_var.trace_add("write", _update_readout)
             _update_readout()   # initialise on build
 
-        # ── Sensitivity (min/max ADC range) — only shown for analog/I2C modes ──
-        # (sens_min_var / sens_max_var already set above)
+        # ── Sensitivity / calibration controls — only shown for analog/I2C modes ──
+        if prefix == "tilt":
+            # Tilt keeps manual min/max sliders, Set Min/Max, Invert
+            min_str = tk.StringVar(value=str(sens_min_var.get()))
+            max_str = tk.StringVar(value=str(sens_max_var.get()))
 
-        # StringVars mirror the IntVars and drive the Entry boxes
-        min_str = tk.StringVar(value=str(sens_min_var.get()))
-        max_str = tk.StringVar(value=str(sens_max_var.get()))
+            sens_min_var.trace_add("write", lambda *_: min_str.set(str(sens_min_var.get())))
+            sens_max_var.trace_add("write", lambda *_: max_str.set(str(sens_max_var.get())))
 
-        # Keep entry boxes in sync whenever the IntVar is set externally (e.g. load config)
-        sens_min_var.trace_add("write", lambda *_: min_str.set(str(sens_min_var.get())))
-        sens_max_var.trace_add("write", lambda *_: max_str.set(str(sens_max_var.get())))
+            sens_frame = tk.Frame(inner, bg=BG_CARD)
+            sens_frame.pack(fill="x", pady=(4, 0))
 
-        sens_frame = tk.Frame(inner, bg=BG_CARD)
-        sens_frame.pack(fill="x", pady=(4, 0))
+            tk.Label(sens_frame, text="Sensitivity:", bg=BG_CARD, fg=TEXT_DIM,
+                     font=(FONT_UI, 8), width=12, anchor="w").pack(side="left")
 
-        tk.Label(sens_frame, text="Sensitivity:", bg=BG_CARD, fg=TEXT_DIM,
-                 font=(FONT_UI, 8), width=12, anchor="w").pack(side="left")
+            tk.Label(sens_frame, text="Min", bg=BG_CARD, fg=TEXT_DIM,
+                     font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
 
-        tk.Label(sens_frame, text="Min", bg=BG_CARD, fg=TEXT_DIM,
-                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+            min_entry = tk.Entry(sens_frame, textvariable=min_str, width=5,
+                                 font=(FONT_UI, 8), fg="#000000", bg="#ffffff",
+                                 insertbackground="#000000", relief="flat")
+            min_entry.pack(side="left", padx=(0, 2))
+            self._all_widgets.append(min_entry)
 
-        min_entry = tk.Entry(sens_frame, textvariable=min_str, width=5,
-                             font=(FONT_UI, 8), fg="#000000", bg="#ffffff",
-                             insertbackground="#000000", relief="flat")
-        min_entry.pack(side="left", padx=(0, 2))
-        self._all_widgets.append(min_entry)
+            min_slider = tk.Scale(sens_frame, from_=0, to=4095, orient="horizontal",
+                                  variable=sens_min_var, showvalue=False,
+                                  bg=BG_CARD, fg=TEXT, troughcolor=BG_INPUT,
+                                  highlightthickness=0, length=110, sliderlength=12,
+                                  command=lambda v, sv=min_str, mx_var=sens_max_var,
+                                  mn_var=sens_min_var: self._on_sens_min_change(
+                                      v, sv, mn_var, mx_var))
+            min_slider.pack(side="left", padx=(0, 10))
+            self._all_widgets.append(min_slider)
 
-        min_slider = tk.Scale(sens_frame, from_=0, to=4095, orient="horizontal",
-                              variable=sens_min_var, showvalue=False,
-                              bg=BG_CARD, fg=TEXT, troughcolor=BG_INPUT,
-                              highlightthickness=0, length=110, sliderlength=12,
-                              command=lambda v, sv=min_str, mx_var=sens_max_var,
-                              mn_var=sens_min_var: self._on_sens_min_change(
-                                  v, sv, mn_var, mx_var))
-        min_slider.pack(side="left", padx=(0, 10))
-        self._all_widgets.append(min_slider)
+            tk.Label(sens_frame, text="Max", bg=BG_CARD, fg=TEXT_DIM,
+                     font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
 
-        tk.Label(sens_frame, text="Max", bg=BG_CARD, fg=TEXT_DIM,
-                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+            max_entry = tk.Entry(sens_frame, textvariable=max_str, width=5,
+                                 font=(FONT_UI, 8), fg="#000000", bg="#ffffff",
+                                 insertbackground="#000000", relief="flat")
+            max_entry.pack(side="left", padx=(0, 2))
+            self._all_widgets.append(max_entry)
 
-        max_entry = tk.Entry(sens_frame, textvariable=max_str, width=5,
-                             font=(FONT_UI, 8), fg="#000000", bg="#ffffff",
-                             insertbackground="#000000", relief="flat")
-        max_entry.pack(side="left", padx=(0, 2))
-        self._all_widgets.append(max_entry)
+            max_slider = tk.Scale(sens_frame, from_=0, to=4095, orient="horizontal",
+                                  variable=sens_max_var, showvalue=False,
+                                  bg=BG_CARD, fg=TEXT, troughcolor=BG_INPUT,
+                                  highlightthickness=0, length=110, sliderlength=12,
+                                  command=lambda v, sv=max_str, mx_var=sens_max_var,
+                                  mn_var=sens_min_var: self._on_sens_max_change(
+                                      v, sv, mn_var, mx_var))
+            max_slider.pack(side="left", padx=(0, 6))
+            self._all_widgets.append(max_slider)
 
-        max_slider = tk.Scale(sens_frame, from_=0, to=4095, orient="horizontal",
-                              variable=sens_max_var, showvalue=False,
-                              bg=BG_CARD, fg=TEXT, troughcolor=BG_INPUT,
-                              highlightthickness=0, length=110, sliderlength=12,
-                              command=lambda v, sv=max_str, mx_var=sens_max_var,
-                              mn_var=sens_min_var: self._on_sens_max_change(
-                                  v, sv, mn_var, mx_var))
-        max_slider.pack(side="left", padx=(0, 6))
-        self._all_widgets.append(max_slider)
+            min_entry.bind("<FocusOut>", lambda _e, sv=min_str, mn=sens_min_var,
+                           mx=sens_max_var: self._on_sens_entry(sv, mn, mx, "min"))
+            min_entry.bind("<Return>",   lambda _e, sv=min_str, mn=sens_min_var,
+                           mx=sens_max_var: self._on_sens_entry(sv, mn, mx, "min"))
+            max_entry.bind("<FocusOut>", lambda _e, sv=max_str, mn=sens_min_var,
+                           mx=sens_max_var: self._on_sens_entry(sv, mn, mx, "max"))
+            max_entry.bind("<Return>",   lambda _e, sv=max_str, mn=sens_min_var,
+                           mx=sens_max_var: self._on_sens_entry(sv, mn, mx, "max"))
 
-        # Typing in the entry box updates the IntVar and moves the slider
-        min_entry.bind("<FocusOut>", lambda _e, sv=min_str, mn=sens_min_var,
-                       mx=sens_max_var: self._on_sens_entry(sv, mn, mx, "min"))
-        min_entry.bind("<Return>",   lambda _e, sv=min_str, mn=sens_min_var,
-                       mx=sens_max_var: self._on_sens_entry(sv, mn, mx, "min"))
-        max_entry.bind("<FocusOut>", lambda _e, sv=max_str, mn=sens_min_var,
-                       mx=sens_max_var: self._on_sens_entry(sv, mn, mx, "max"))
-        max_entry.bind("<Return>",   lambda _e, sv=max_str, mn=sens_min_var,
-                       mx=sens_max_var: self._on_sens_entry(sv, mn, mx, "max"))
+            set_min_btn = RoundedButton(
+                sens_frame, text="Set Min", btn_width=58, btn_height=20,
+                bg_color="#555560", btn_font=(FONT_UI, 7, "bold"),
+                command=lambda p=prefix, mn=sens_min_var, sv=min_str,
+                mx=sens_max_var: self._set_sens_from_live(p, "min", mn, sv, mx))
+            set_min_btn.pack(side="left", padx=(0, 3))
+            self._all_widgets.append(set_min_btn)
 
-        set_min_btn = RoundedButton(
-            sens_frame, text="Set Min", btn_width=58, btn_height=20,
-            bg_color="#555560", btn_font=(FONT_UI, 7, "bold"),
-            command=lambda p=prefix, mn=sens_min_var, sv=min_str,
-            mx=sens_max_var: self._set_sens_from_live(p, "min", mn, sv, mx))
-        set_min_btn.pack(side="left", padx=(0, 3))
-        self._all_widgets.append(set_min_btn)
+            set_max_btn = RoundedButton(
+                sens_frame, text="Set Max", btn_width=58, btn_height=20,
+                bg_color="#555560", btn_font=(FONT_UI, 7, "bold"),
+                command=lambda p=prefix, mx=sens_max_var, sv=max_str,
+                mn=sens_min_var: self._set_sens_from_live(p, "max", mx, sv, mn))
+            set_max_btn.pack(side="left", padx=(0, 3))
+            self._all_widgets.append(set_max_btn)
 
-        set_max_btn = RoundedButton(
-            sens_frame, text="Set Max", btn_width=58, btn_height=20,
-            bg_color="#555560", btn_font=(FONT_UI, 7, "bold"),
-            command=lambda p=prefix, mx=sens_max_var, sv=max_str,
-            mn=sens_min_var: self._set_sens_from_live(p, "max", mx, sv, mn))
-        set_max_btn.pack(side="left", padx=(0, 3))
-        self._all_widgets.append(set_max_btn)
+            reset_btn = RoundedButton(
+                sens_frame, text="Reset", btn_width=48, btn_height=20,
+                bg_color="#555560", btn_font=(FONT_UI, 7, "bold"),
+                command=lambda mn=sens_min_var, mx=sens_max_var,
+                mn_sv=min_str, mx_sv=max_str: self._reset_sensitivity(
+                    mn, mx, mn_sv, mx_sv))
+            reset_btn.pack(side="left")
+            self._all_widgets.append(reset_btn)
 
-        reset_btn = RoundedButton(
-            sens_frame, text="Reset", btn_width=48, btn_height=20,
-            bg_color="#555560", btn_font=(FONT_UI, 7, "bold"),
-            command=lambda mn=sens_min_var, mx=sens_max_var,
-            mn_sv=min_str, mx_sv=max_str: self._reset_sensitivity(
-                mn, mx, mn_sv, mx_sv))
-        reset_btn.pack(side="left")
-        self._all_widgets.append(reset_btn)
+            invert_cb = ttk.Checkbutton(sens_frame, text="Invert",
+                                        variable=self.tilt_invert)
+            invert_cb.pack(side="left", padx=(10, 0))
+            self._all_widgets.append(invert_cb)
 
-        invert_var = self.tilt_invert if prefix == "tilt" else self.whammy_invert
-        invert_cb = ttk.Checkbutton(sens_frame, text="Invert", variable=invert_var)
-        invert_cb.pack(side="left", padx=(10, 0))
-        self._all_widgets.append(invert_cb)
+        else:
+            # Whammy uses guided 2-step calibration; auto-computes min/max/invert
+            sens_frame = tk.Frame(inner, bg=BG_CARD)
+            sens_frame.pack(fill="x", pady=(4, 0))
+
+            _rest_str = tk.StringVar(value="" if self._whammy_rest_raw is None
+                                     else str(self._whammy_rest_raw))
+            _act_str  = tk.StringVar(value="" if self._whammy_act_raw  is None
+                                     else str(self._whammy_act_raw))
+
+            def _apply_wh_calibration():
+                """20% deadzone guided calibration — mirrors EasyConfigScreen logic."""
+                rest = self._whammy_rest_raw
+                act  = self._whammy_act_raw
+                if rest is None or act is None or rest == act:
+                    return
+                raw_range = abs(act - rest)
+                deadzone  = int(0.20 * raw_range)
+                if rest <= act:
+                    new_min    = max(0, rest + deadzone)
+                    new_max    = min(4095, act)
+                    new_invert = False
+                else:
+                    new_min    = max(0, act)
+                    new_max    = min(4095, rest - deadzone)
+                    new_invert = True
+                if new_min >= new_max:
+                    new_min = max(0, new_max - 1)
+                self.whammy_min.set(new_min)
+                self.whammy_max.set(new_max)
+                self.whammy_invert.set(new_invert)
+
+            def _on_rest_entry(*_):
+                try:
+                    v = max(0, min(4095, int(_rest_str.get())))
+                except ValueError:
+                    return
+                self._whammy_rest_raw = v
+                _apply_wh_calibration()
+
+            def _on_act_entry(*_):
+                try:
+                    v = max(0, min(4095, int(_act_str.get())))
+                except ValueError:
+                    return
+                self._whammy_act_raw = v
+                _apply_wh_calibration()
+
+            def _snap_rest():
+                data = self._sp_combos.get("whammy")
+                if not data:
+                    return
+                v = data[10]._value   # LiveBarGraph
+                self._whammy_rest_raw = v
+                _rest_str.set(str(v))
+                _apply_wh_calibration()
+
+            def _snap_act():
+                data = self._sp_combos.get("whammy")
+                if not data:
+                    return
+                v = data[10]._value
+                self._whammy_act_raw = v
+                _act_str.set(str(v))
+                _apply_wh_calibration()
+
+            def _reset_wh():
+                self._whammy_rest_raw = None
+                self._whammy_act_raw  = None
+                _rest_str.set("")
+                _act_str.set("")
+                self.whammy_min.set(0)
+                self.whammy_max.set(4095)
+                self.whammy_invert.set(False)
+
+            # Row 1 — rest snapshot
+            rest_row = tk.Frame(sens_frame, bg=BG_CARD)
+            rest_row.pack(anchor="w", pady=(4, 2), fill="x")
+            tk.Label(rest_row, text="Put whammy at rest, then click:",
+                     bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8)).pack(side="left",
+                                                                        padx=(0, 6))
+            rest_entry = tk.Entry(rest_row, textvariable=_rest_str, width=6,
+                                  font=(FONT_UI, 8), fg="#000000", bg="#ffffff",
+                                  insertbackground="#000000", relief="flat")
+            rest_entry.pack(side="left", padx=(0, 6))
+            rest_entry.bind("<FocusOut>", _on_rest_entry)
+            rest_entry.bind("<Return>",   _on_rest_entry)
+            self._all_widgets.append(rest_entry)
+
+            rest_btn = RoundedButton(rest_row, text="Whammy at Rest",
+                                     bg_color=ACCENT_BLUE, btn_width=120, btn_height=20,
+                                     btn_font=(FONT_UI, 7, "bold"), command=_snap_rest)
+            rest_btn.pack(side="left", padx=(0, 6))
+            self._all_widgets.append(rest_btn)
+
+            reset_btn = RoundedButton(rest_row, text="Reset",
+                                      bg_color="#555560", btn_width=48, btn_height=20,
+                                      btn_font=(FONT_UI, 7, "bold"), command=_reset_wh)
+            reset_btn.pack(side="left")
+            self._all_widgets.append(reset_btn)
+
+            # Row 2 — actuated snapshot
+            act_row = tk.Frame(sens_frame, bg=BG_CARD)
+            act_row.pack(anchor="w", pady=(2, 4), fill="x")
+            tk.Label(act_row, text="Push whammy all the way in, then click:",
+                     bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8)).pack(side="left",
+                                                                        padx=(0, 6))
+            act_entry = tk.Entry(act_row, textvariable=_act_str, width=6,
+                                 font=(FONT_UI, 8), fg="#000000", bg="#ffffff",
+                                 insertbackground="#000000", relief="flat")
+            act_entry.pack(side="left", padx=(0, 6))
+            act_entry.bind("<FocusOut>", _on_act_entry)
+            act_entry.bind("<Return>",   _on_act_entry)
+            self._all_widgets.append(act_entry)
+
+            act_btn = RoundedButton(act_row, text="Whammy Actuated",
+                                    bg_color=ACCENT_BLUE, btn_width=120, btn_height=20,
+                                    btn_font=(FONT_UI, 7, "bold"), command=_snap_act)
+            act_btn.pack(side="left")
+            self._all_widgets.append(act_btn)
 
         self._sp_combos[prefix] = (combo, mode_var, pin_var, enable_var, rd, ra, det_btn,
                                     pin_row, i2c_row, ri, bar, monitor_btn, sens_frame, cal_bar)
@@ -9294,8 +9421,10 @@ class App:
         br_wrap = tk.Frame(top, bg=BG_CARD, width=52, height=22)
         br_wrap.pack(side="left", padx=(0, 0))
         br_wrap.pack_propagate(False)
+        _bvcmd = (self.root.register(lambda P: P == "" or (P.isdigit() and 0 <= int(P) <= 9)), '%P')
         br_sp = ttk.Spinbox(br_wrap, from_=0, to=9, width=4,
-                             textvariable=self.led_base_brightness)
+                             textvariable=self.led_base_brightness,
+                             validate="key", validatecommand=_bvcmd)
         br_sp.pack(fill="both", expand=True)
         self._all_widgets.append(br_sp)
         self._led_widgets.append(br_sp)
@@ -9364,14 +9493,16 @@ class App:
         tk.Label(breathe_row, text="Min:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
         breathe_min_sp = ttk.Spinbox(breathe_row, from_=0, to=9, width=4,
-                                     textvariable=self.led_breathe_min)
+                                     textvariable=self.led_breathe_min,
+                                     validate="key", validatecommand=_bvcmd)
         breathe_min_sp.pack(side="left", padx=(0, 8))
         self._all_widgets.append(breathe_min_sp)
 
         tk.Label(breathe_row, text="Max:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
         breathe_max_sp = ttk.Spinbox(breathe_row, from_=0, to=9, width=4,
-                                     textvariable=self.led_breathe_max)
+                                     textvariable=self.led_breathe_max,
+                                     validate="key", validatecommand=_bvcmd)
         breathe_max_sp.pack(side="left", padx=(0, 10))
         self._all_widgets.append(breathe_max_sp)
 
@@ -9723,6 +9854,7 @@ class App:
                  font=(FONT_UI, 7, "bold")).grid(
             row=0, column=bright_col, padx=(6, 0))
 
+        _bvcmd = (self.root.register(lambda P: P == "" or (P.isdigit() and 0 <= int(P) <= 9)), '%P')
         for inp_idx in range(LED_INPUT_COUNT):
             grid_row = inp_idx + 1
 
@@ -9758,7 +9890,8 @@ class App:
             self._led_map_cbs[inp_idx] = cb_vars
 
             br_sp = ttk.Spinbox(grid, from_=0, to=9, width=3,
-                                 textvariable=self.led_active_br[inp_idx])
+                                 textvariable=self.led_active_br[inp_idx],
+                                 validate="key", validatecommand=_bvcmd)
             br_sp.grid(row=grid_row, column=bright_col, padx=(6, 0), pady=1)
             self._all_widgets.append(br_sp)
 
@@ -12614,8 +12747,10 @@ class DrumApp:
         br_wrap = tk.Frame(top, bg=BG_CARD, width=52, height=22)
         br_wrap.pack(side="left")
         br_wrap.pack_propagate(False)
+        _bvcmd = (self.root.register(lambda P: P == "" or (P.isdigit() and 0 <= int(P) <= 9)), '%P')
         br_sp = ttk.Spinbox(br_wrap, from_=0, to=9, width=4,
-                             textvariable=self.led_base_brightness)
+                             textvariable=self.led_base_brightness,
+                             validate="key", validatecommand=_bvcmd)
         br_sp.pack(fill="both", expand=True)
         self._drum_all_widgets.append(br_sp)
         self._led_widgets.append(br_sp)
@@ -12683,14 +12818,16 @@ class DrumApp:
         tk.Label(breathe_row, text="Min:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
         breathe_min_sp = ttk.Spinbox(breathe_row, from_=0, to=9, width=4,
-                                     textvariable=self.led_breathe_min)
+                                     textvariable=self.led_breathe_min,
+                                     validate="key", validatecommand=_bvcmd)
         breathe_min_sp.pack(side="left", padx=(0, 8))
         self._drum_all_widgets.append(breathe_min_sp)
 
         tk.Label(breathe_row, text="Max:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
         breathe_max_sp = ttk.Spinbox(breathe_row, from_=0, to=9, width=4,
-                                     textvariable=self.led_breathe_max)
+                                     textvariable=self.led_breathe_max,
+                                     validate="key", validatecommand=_bvcmd)
         breathe_max_sp.pack(side="left", padx=(0, 10))
         self._drum_all_widgets.append(breathe_max_sp)
 
@@ -13027,6 +13164,7 @@ class DrumApp:
                  font=(FONT_UI, 7, "bold")).grid(
             row=0, column=bright_col, padx=(6, 0))
 
+        _bvcmd = (self.root.register(lambda P: P == "" or (P.isdigit() and 0 <= int(P) <= 9)), '%P')
         for inp_idx in range(self.DRUM_INPUT_COUNT):
             grid_row = inp_idx + 1
             key, lbl_text, dot_color = self.DRUM_BUTTON_DEFS[inp_idx]
@@ -13068,7 +13206,8 @@ class DrumApp:
             self._led_map_cbs[inp_idx] = cb_vars
 
             br_sp = ttk.Spinbox(grid, from_=0, to=9, width=3,
-                                 textvariable=self.led_active_br[inp_idx])
+                                 textvariable=self.led_active_br[inp_idx],
+                                 validate="key", validatecommand=_bvcmd)
             br_sp.grid(row=grid_row, column=bright_col, padx=(6, 0), pady=1)
             self._drum_all_widgets.append(br_sp)
 
@@ -15619,6 +15758,11 @@ class RetroApp:
         self._rt_pin_combo    = None
         self._lt_monitor_bar  = None
         self._rt_monitor_bar  = None
+        self._lt_detect_btn   = None
+        self._rt_detect_btn   = None
+
+        # ── Active scan tracking ──────────────────────────────────
+        self._scan_det_btn    = None   # detect button currently acting as cancel
 
         # ── Scroll state ──────────────────────────────────────────
         self._scroll_enabled   = True
@@ -15989,9 +16133,11 @@ class RetroApp:
         self._all_widgets.append(det_btn)
 
         if prefix == "lt":
-            self._lt_pin_combo = pin_combo
+            self._lt_pin_combo  = pin_combo
+            self._lt_detect_btn = det_btn
         else:
-            self._rt_pin_combo = pin_combo
+            self._rt_pin_combo  = pin_combo
+            self._rt_detect_btn = det_btn
 
         # ── Analog-only frame ────────────────────────────────────────
         analog_frame = tk.Frame(parent, bg=BG_CARD)
@@ -16352,15 +16498,181 @@ class RetroApp:
             self.root.update_idletasks()
         return None
 
-    # ── Detect placeholders (Plan 03 implements threading) ───────────
+    # ── Detect helpers ───────────────────────────────────────────────
+
+    def _set_det_btn_cancel(self, det_btn, cancel_fn):
+        """Convert a detect button to a cancel button in-place."""
+        det_btn._label     = "Cancel"
+        det_btn._bg        = ACCENT_ORANGE
+        det_btn._hover_bg  = det_btn._adjust(ACCENT_ORANGE, 25)
+        det_btn._press_bg  = det_btn._adjust(ACCENT_ORANGE, -25)
+        det_btn._command   = cancel_fn
+        det_btn._render(det_btn._bg)
+        self._scan_det_btn = det_btn
+
+    def _reset_det_btn(self, det_btn):
+        """Restore a cancel-mode button back to its normal detect appearance."""
+        det_btn._label     = "Detect"
+        det_btn._bg        = "#555560"
+        det_btn._hover_bg  = det_btn._adjust("#555560", 25)
+        det_btn._press_bg  = det_btn._adjust("#555560", -25)
+        det_btn._render(det_btn._bg)
+        self._scan_det_btn = None
+
+    # ── Button detect ────────────────────────────────────────────────
 
     def _start_btn_detect(self, key):
-        """Placeholder for DETECT threading — implemented in Plan 03."""
-        pass
+        """Start a SCAN to detect which GPIO pin a button press comes from."""
+        if not self.pico.connected:
+            self._status_var.set("\u26a0  Not connected to controller.")
+            return
+
+        det_btn = self._btn_detect_buttons.get(key)
+
+        # If already scanning, cancel
+        if self.scanning:
+            self.scanning = False
+            try:
+                self.pico.stop_scan()
+            except Exception:
+                pass
+            if self._scan_det_btn:
+                self._reset_det_btn(self._scan_det_btn)
+            self._status_var.set("Detection cancelled.")
+            return
+
+        label = dict(self.RETRO_BUTTON_DEFS).get(key, key)
+        self.scanning = True
+        self._status_var.set(f"Waiting for {label}\u2026  Press the button now.")
+        if det_btn:
+            self._set_det_btn_cancel(det_btn, lambda: self._start_btn_detect(key))
+
+        def _on_detected(pin):
+            self.scanning = False
+            if self._scan_det_btn:
+                self._reset_det_btn(self._scan_det_btn)
+            combo = self._btn_combos.get(key)
+            if combo:
+                pin_str = str(pin)
+                if pin_str in self.GPIO_OPTIONS:
+                    idx = self.GPIO_OPTIONS.index(pin_str)
+                    combo.current(idx)
+                    self._pin_vars[key].set(pin)
+            self._status_var.set(f"\u2713  {label} detected on GPIO {pin}.")
+
+        def _on_error(msg):
+            self.scanning = False
+            if self._scan_det_btn:
+                self._reset_det_btn(self._scan_det_btn)
+            self._status_var.set(f"\u26a0  Scan error: {msg}")
+
+        def _thread():
+            try:
+                self.pico.start_scan()
+                while self.scanning:
+                    line = self.pico.read_scan_line(0.1)
+                    if line and line.startswith("PIN:"):
+                        try:
+                            pin = int(line[4:])
+                        except ValueError:
+                            continue
+                        if 0 <= pin <= 28 and pin not in (23, 24, 25):
+                            self.pico.stop_scan()
+                            self.scanning = False
+                            self.root.after(0, lambda p=pin: _on_detected(p))
+                            return
+            except Exception as exc:
+                self.root.after(0, lambda e=str(exc): _on_error(e))
+
+        threading.Thread(target=_thread, daemon=True).start()
+
+    # ── Trigger detect ───────────────────────────────────────────────
 
     def _start_trigger_detect(self, prefix):
-        """Placeholder for trigger DETECT — implemented in Plan 03."""
-        pass
+        """Start a SCAN to detect which GPIO pin a trigger press comes from."""
+        if not self.pico.connected:
+            self._status_var.set("\u26a0  Not connected to controller.")
+            return
+
+        det_btn = self._lt_detect_btn if prefix == "lt" else self._rt_detect_btn
+        mode    = self._mode_lt.get() if prefix == "lt" else self._mode_rt.get()
+        label   = "LT" if prefix == "lt" else "RT"
+
+        # If already scanning, cancel
+        if self.scanning:
+            self.scanning = False
+            try:
+                self.pico.stop_scan()
+            except Exception:
+                pass
+            if self._scan_det_btn:
+                self._reset_det_btn(self._scan_det_btn)
+            self._status_var.set("Detection cancelled.")
+            return
+
+        self.scanning = True
+        hint = "Press the trigger." if mode == 0 else "Move the trigger (analog input)."
+        self._status_var.set(f"Waiting for {label} trigger\u2026  {hint}")
+        if det_btn:
+            self._set_det_btn_cancel(det_btn, lambda p=prefix: self._start_trigger_detect(p))
+
+        pin_var   = self._pin_lt  if prefix == "lt" else self._pin_rt
+        pin_combo = self._lt_pin_combo if prefix == "lt" else self._rt_pin_combo
+
+        def _on_detected(pin):
+            self.scanning = False
+            if self._scan_det_btn:
+                self._reset_det_btn(self._scan_det_btn)
+            # Update the combo — use ADC options list if analog mode
+            if pin_combo:
+                if mode == 1:  # analog
+                    pin_str = str(pin)
+                    if pin_str in self.ADC_OPTIONS:
+                        idx = self.ADC_OPTIONS.index(pin_str)
+                        pin_combo.current(idx)
+                        pin_var.set(pin)
+                else:  # digital
+                    pin_str = str(pin)
+                    if pin_str in self.GPIO_OPTIONS:
+                        idx = self.GPIO_OPTIONS.index(pin_str)
+                        pin_combo.current(idx)
+                        pin_var.set(pin)
+            mode_str = "analog" if mode == 1 else "digital"
+            self._status_var.set(
+                f"\u2713  {label} trigger detected on GPIO {pin} ({mode_str}).")
+
+        def _on_error(msg):
+            self.scanning = False
+            if self._scan_det_btn:
+                self._reset_det_btn(self._scan_det_btn)
+            self._status_var.set(f"\u26a0  Scan error: {msg}")
+
+        def _thread():
+            try:
+                self.pico.start_scan()
+                while self.scanning:
+                    line = self.pico.read_scan_line(0.1)
+                    if line and line.startswith("PIN:"):
+                        try:
+                            pin = int(line[4:])
+                        except ValueError:
+                            continue
+                        if mode == 1:  # analog — accept ADC pins only
+                            if pin in (26, 27, 28):
+                                self.pico.stop_scan()
+                                self.scanning = False
+                                self.root.after(0, lambda p=pin: _on_detected(p))
+                                return
+                        else:  # digital — accept any GPIO except reserved
+                            if 0 <= pin <= 28 and pin not in (23, 24, 25):
+                                self.pico.stop_scan()
+                                self.scanning = False
+                                self.root.after(0, lambda p=pin: _on_detected(p))
+                                return
+            except Exception as exc:
+                self.root.after(0, lambda e=str(exc): _on_error(e))
+
+        threading.Thread(target=_thread, daemon=True).start()
 
     def _stop_monitor(self):
         """Placeholder for monitor stop — implemented in Plan 03."""

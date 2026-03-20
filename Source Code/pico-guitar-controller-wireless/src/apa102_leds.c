@@ -294,8 +294,9 @@ void apa102_update_from_inputs(const led_config_t *cfg, uint16_t pressed_mask) {
 
     // ── 4. Wave: rising-edge trigger, then propagate outward ────────────────
     if (cfg->wave_enabled) {
-        uint16_t rising = pressed_mask & ~wave_prev_mask;
-        wave_prev_mask = pressed_mask;
+        uint16_t trigger = pressed_mask & ~((1u << LED_INPUT_TILT) | (1u << LED_INPUT_WHAMMY));
+        uint16_t rising = trigger & ~wave_prev_mask;
+        wave_prev_mask = trigger;
         if (rising) {
             uint32_t now = time_us_32();
             // Find a free slot; if all busy, overwrite the oldest
@@ -344,7 +345,7 @@ void apa102_update_from_inputs(const led_config_t *cfg, uint16_t pressed_mask) {
         }
     } else {
         // Wave disabled — keep prev_mask in sync so there's no stale rising-edge
-        wave_prev_mask = pressed_mask;
+        wave_prev_mask = pressed_mask & ~((1u << LED_INPUT_TILT) | (1u << LED_INPUT_WHAMMY));
         for (int i = 0; i < WAVE_MAX_ACTIVE; i++) waves[i].active = false;
     }
 

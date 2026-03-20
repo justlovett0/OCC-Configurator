@@ -13,7 +13,7 @@ echo.
 :: ------------------------------------------------------------
 :: 1. Wired Guitar Controller
 :: ------------------------------------------------------------
-echo [1/6] Building pico-guitar-controller-wired...
+echo [1/7] Building pico-guitar-controller-wired...
 cd /d "%SRC%pico-guitar-controller-wired"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -30,7 +30,7 @@ echo.
 :: ------------------------------------------------------------
 :: 2. Wired Drum Controller
 :: ------------------------------------------------------------
-echo [2/6] Building pico-drums-wired...
+echo [2/7] Building pico-drums-wired...
 cd /d "%SRC%pico-drums-wired"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -45,9 +45,26 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 3. Wireless Guitar Controller
+:: 3. Wired Retro Controller
 :: ------------------------------------------------------------
-echo [3/6] Building pico-guitar-controller-wireless...
+echo [3/7] Building pico-retro...
+cd /d "%SRC%pico-retro"
+%BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
+if errorlevel 1 (
+    echo ERROR: pico-retro build FAILED.
+    goto :error
+)
+
+echo Copying Wired Retro Controller firmware...
+copy /Y "build\pico_retro_controller.uf2" "%CONFIGURATOR%\Wired_Retro_Controller.uf2"
+copy /Y "build\pico_retro_controller.uf2.date" "%CONFIGURATOR%\Wired_Retro_Controller.uf2.date"
+echo   OK
+echo.
+
+:: ------------------------------------------------------------
+:: 4. Wireless Guitar Controller
+:: ------------------------------------------------------------
+echo [4/7] Building pico-guitar-controller-wireless...
 cd /d "%SRC%pico-guitar-controller-wireless"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -62,9 +79,9 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 4. Wireless Dongle
+:: 5. Wireless Dongle
 :: ------------------------------------------------------------
-echo [4/6] Building pico-dongle...
+echo [5/7] Building pico-dongle...
 cd /d "%SRC%pico-dongle"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -78,9 +95,9 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 5. Wireless Dongle 4-Channel
+:: 6. Wireless Dongle 4-Channel
 :: ------------------------------------------------------------
-echo [5/6] Building pico-dongle-4channel...
+echo [6/7] Building pico-dongle-4channel...
 cd /d "%SRC%pico-dongle-4channel"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -94,9 +111,9 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 6. Pedal Controller
+:: 7. Pedal Controller
 :: ------------------------------------------------------------
-echo [6/6] Building pico-pedal...
+echo [7/7] Building pico-pedal...
 cd /d "%SRC%pico-pedal"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -114,7 +131,7 @@ echo.
 :: Done
 :: ------------------------------------------------------------
 echo ============================================================
-echo  All firmware built and copied to configurator folder.
+echo  All 7 firmware projects built and copied to configurator folder.
 echo ============================================================
 goto :end
 
