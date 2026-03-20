@@ -16667,7 +16667,7 @@ class RetroApp:
 
         REF_LINES = [
             "PING                               → PONG  (connection check)",
-            "GET_CONFIG                         → DEVTYPE:retro_gamepad + CFG: line",
+            "GET_CONFIG                         → DEVTYPE:pico_retro + CFG: line",
             "SET:btn0=<pin>                     → assign GPIO to D-Pad Up (-1 = disabled)",
             "SET:mode_lt=<0|1>                  → 0=digital, 1=analog for LT",
             "SET:pin_lt=<pin>                   → LT trigger GPIO pin",
@@ -16837,7 +16837,7 @@ DEVICE_SCREEN_MAP = {
     "guitar_alternate_dongle": None,   # dongle guitar variant → same App screen
     "drum_kit":                None,   # filled in main() once DrumApp is instantiated
     "pedal":                   None,   # filled in main() once PedalApp is instantiated
-    "retro_gamepad":           None,   # filled in main() once RetroApp is instantiated
+    "pico_retro":              None,   # filled in main() once RetroApp is instantiated
 }
 
 # Map device_type → the constructor to call (used to build instances in main())
@@ -16847,7 +16847,7 @@ DEVICE_SCREEN_CLASSES = {
     "guitar_combined":         App,
     "drum_kit":                DrumApp,
     "pedal":                   PedalApp,
-    "retro_gamepad":           RetroApp,
+    "pico_retro":              RetroApp,
 }
 
 
