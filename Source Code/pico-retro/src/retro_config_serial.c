@@ -328,25 +328,26 @@ static bool handle_set(retro_config_t *config, const char *param) {
 
 static void run_scan(retro_config_t *config) {
     (void)config;
-    bool pin_inited[29] = {false};
+    bool last_state[29] = {false};
     for (int pin = 0; pin <= 28; pin++) {
         if (pin == 23 || pin == 24 || pin == 25) continue; // reserved
         gpio_init(pin);
         gpio_set_dir(pin, GPIO_IN);
         gpio_pull_up(pin);
-        pin_inited[pin] = true;
     }
     sleep_ms(10);
+    // snapshot initial state — prevents already-low pins firing on scan start
+    for (int pin = 0; pin <= 28; pin++) {
+        if (pin == 23 || pin == 24 || pin == 25) continue;
+        last_state[pin] = !gpio_get(pin);
+    }
 
     serial_writeln("OK");
-
-    // Level detection with rate-limiting: report PIN:n while held, every SCAN_REPEAT_MS.
-    uint32_t last_report_ms[29];
-    for (int i = 0; i < 29; i++) last_report_ms[i] = 0;
 
     char line[64];
     char out[32];
     int line_pos = 0;
+    uint32_t last_scan_ms = 0;
 
     while (true) {
         tud_task();
@@ -368,14 +369,16 @@ static void run_scan(retro_config_t *config) {
         }
 
         uint32_t now_ms = to_ms_since_boot(get_absolute_time());
-
-        for (int pin = 0; pin <= 28; pin++) {
-            if (!pin_inited[pin]) continue;
-            bool pressed = !gpio_get(pin);
-            if (pressed && (now_ms - last_report_ms[pin]) >= SCAN_REPEAT_MS) {
-                snprintf(out, sizeof(out), "PIN:%d", pin);
-                serial_writeln(out);
-                last_report_ms[pin] = now_ms;
+        if ((now_ms - last_scan_ms) >= SCAN_REPEAT_MS) {
+            last_scan_ms = now_ms;
+            for (int pin = 0; pin <= 28; pin++) {
+                if (pin == 23 || pin == 24 || pin == 25) continue;
+                bool cur = !gpio_get(pin);
+                if (cur && !last_state[pin]) {
+                    snprintf(out, sizeof(out), "PIN:%d", pin);
+                    serial_writeln(out);
+                }
+                last_state[pin] = cur;
             }
         }
 

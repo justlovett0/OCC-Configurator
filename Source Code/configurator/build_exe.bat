@@ -138,6 +138,24 @@ if exist "buttons\" (
     echo   Place the buttons\ folder next to this script and rebuild.
 )
 
+REM PresetConfigs folder — bundle all .json preset files
+set "PRESET_ARGS="
+if exist "PresetConfigs\" (
+    echo.
+    echo Scanning for preset config files in PresetConfigs\...
+    for %%P in (PresetConfigs\*.json) do (
+        if exist "%%P" (
+            echo   Bundling preset: %%P
+            set "PRESET_ARGS=!PRESET_ARGS! --add-data="%%P;PresetConfigs""
+        )
+    )
+    if not defined PRESET_ARGS (
+        echo   PresetConfigs\ folder exists but contains no .json files.
+    )
+) else (
+    echo   No PresetConfigs\ folder found - presets will not be bundled.
+)
+
 REM Splash image
 set "SPLASH_ARG="
 for %%S in (splash.png splash.PNG splash.jpg splash.JPG) do (
@@ -172,6 +190,7 @@ pyinstaller --clean --onefile --windowed ^
     %SPLASH_ARG% %SOUND_ARG% ^
     %FONT_ARGS% ^
     !BUTTONS_ARGS! ^
+    !PRESET_ARGS! ^
     %UF2_ARGS% !NUKE_ARG! ^
     !GIF_ARGS! ^
     !FW_DATES_ARG! ^

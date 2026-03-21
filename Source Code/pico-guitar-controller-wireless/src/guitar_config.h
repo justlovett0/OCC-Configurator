@@ -13,6 +13,7 @@
  * v13: MERGED firmware. Added wireless_default_mode to select whether the
  *      controller defaults to Dongle mode or Bluetooth HID mode when no USB
  *      host is detected. Changed DEVICE_TYPE to "guitar_combined".
+ * v14: Added per-effect LED speed fields (loop_speed_ms, breathe_speed_ms, wave_speed_ms).
  */
 
 #ifndef _GUITAR_CONFIG_H_
@@ -23,7 +24,7 @@
 #include "apa102_leds.h"
 
 #define CONFIG_MAGIC              0x47554954  // "GUIT"
-#define CONFIG_VERSION            13
+#define CONFIG_VERSION            14
 #define DEVICE_NAME_MAX           31          // + null terminator = 32 bytes
 
 // ── Device type identifier (sent as DEVTYPE: in GET_CONFIG response) ──

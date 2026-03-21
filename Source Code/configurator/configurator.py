@@ -68,6 +68,44 @@ def _resource_path(*parts):
     return os.path.join(base, *parts)
 
 
+def _find_preset_configs(device_types=None):
+    """Scan PresetConfigs/ for .json files matching the given device types.
+    device_types: set of strings e.g. {"guitar_alternate", "drum_kit"}, or None for all.
+    Returns list of (display_name, filepath) sorted by filename.
+    JSONs without a device_type field show on all screens."""
+    search_dirs = []
+    if getattr(sys, '_MEIPASS', None):
+        search_dirs.append(os.path.join(sys._MEIPASS, "PresetConfigs"))
+    exe_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    search_dirs.append(os.path.join(exe_dir, "PresetConfigs"))
+    src_dir = os.path.dirname(os.path.abspath(__file__))
+    candidate = os.path.join(src_dir, "PresetConfigs")
+    if candidate not in search_dirs:
+        search_dirs.append(candidate)
+
+    found_dir = next((d for d in search_dirs if os.path.isdir(d)), None)
+    if not found_dir:
+        return []
+
+    results = []
+    for fname in sorted(os.listdir(found_dir)):
+        if not fname.lower().endswith(".json"):
+            continue
+        fpath = os.path.join(found_dir, fname)
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        file_devtype = data.get("device_type")
+        # missing device_type = show on all screens
+        if device_types is not None and file_devtype is not None:
+            if file_devtype not in device_types:
+                continue
+        results.append((os.path.splitext(fname)[0], fpath))
+    return results
+
+
 def _load_fonts():
     """Register bundled Helvetica font files with the OS and Tkinter.
 
@@ -358,6 +396,116 @@ class RoundedButton(tk.Canvas):
         self._press_bg = self._adjust(new_bg, -25)
         self._render(self._bg if self._enabled else self._disabled_bg)
 
+
+
+class SpeedSlider(tk.Canvas):
+    """Speed slider with 5 named notches. Left=slow (high ms), right=fast (low ms)."""
+    _LABELS = ["uber slow", "slow", "normal", "fast", "sonic fast"]
+
+    def __init__(self, parent, variable, notch_ms, width=260, height=58):
+        try:
+            bg = parent.cget("bg")
+        except Exception:
+            bg = BG_CARD
+        super().__init__(parent, width=width, height=height,
+                         bg=bg, highlightthickness=0, bd=0)
+        self._var      = variable
+        self._notch_ms = notch_ms   # [uber_slow, slow, normal, fast, sonic_fast]
+        self._W        = width
+        self._H        = height
+        self._PAD      = 10         # left/right track padding
+        self._TY       = 26         # track y-center
+        self._enabled  = True
+
+        self._var.trace_add("write", lambda *_: self._redraw())
+        self.bind("<ButtonPress-1>",   self._on_press)
+        self.bind("<B1-Motion>",       self._on_drag)
+        self.bind("<ButtonRelease-1>", self._on_release)
+        self._redraw()
+
+    # ms <-> x conversion (piecewise linear across 4 segments)
+
+    def _ms_to_x(self, ms):
+        tw = self._W - 2 * self._PAD
+        n  = self._notch_ms
+        for i in range(4):
+            if ms >= n[i + 1]:
+                t = (n[i] - ms) / (n[i] - n[i + 1])   # 0=left notch, 1=right notch
+                t = max(0.0, min(1.0, t))
+                frac = (i + t) / 4.0
+                return self._PAD + frac * tw
+        return self._PAD + tw   # at sonic fast end
+
+    def _x_to_ms(self, x):
+        tw   = self._W - 2 * self._PAD
+        frac = max(0.0, min(1.0, (x - self._PAD) / tw))
+        seg  = min(int(frac * 4), 3)
+        t    = frac * 4 - seg
+        n    = self._notch_ms
+        return int(round(n[seg] - t * (n[seg] - n[seg + 1])))
+
+    def _zone(self, ms):
+        n = self._notch_ms
+        for i in range(4):
+            if ms >= (n[i] + n[i + 1]) / 2:
+                return self._LABELS[i]
+        return self._LABELS[4]
+
+    def _redraw(self):
+        self.delete("all")
+        W, H, PAD, TY = self._W, self._H, self._PAD, self._TY
+        tw = W - 2 * PAD
+        dim = self._enabled
+
+        track_col = "#555" if dim else "#333"
+        tick_col  = "#888" if dim else "#444"
+        lbl_col   = TEXT_DIM if dim else "#444"
+
+        self.create_line(PAD, TY, PAD + tw, TY, fill=track_col, width=2)
+
+        for i, (label, ms) in enumerate(zip(self._LABELS, self._notch_ms)):
+            x = PAD + i * tw / 4
+            self.create_line(x, TY - 6, x, TY + 6, fill=tick_col, width=1)
+            # anchor edge labels inward so they don't clip the canvas border
+            anc = "sw" if i == 0 else ("se" if i == 4 else "s")
+            self.create_text(x, TY - 8, text=label, fill=lbl_col,
+                             font=(FONT_UI, 7), anchor=anc)
+
+        ms  = max(self._notch_ms[-1], min(self._notch_ms[0], self._var.get()))
+        tx  = self._ms_to_x(ms)
+        col = ACCENT_BLUE if dim else "#2d4a6a"
+        self.create_rectangle(tx - 5, TY - 8, tx + 5, TY + 8,
+                              fill=col, outline="", tags="thumb")
+
+        zone = self._zone(ms)
+        by   = TY + 12
+        self.create_text(tx, by, text=zone, fill=TEXT if dim else "#444",
+                         font=(FONT_UI, 8), anchor="n", tags="badge")
+
+    def _on_press(self, e):
+        if self._enabled:
+            self._set_from_x(e.x)
+
+    def _on_drag(self, e):
+        if self._enabled:
+            self._set_from_x(e.x)
+
+    def _on_release(self, e):
+        pass
+
+    def _set_from_x(self, x):
+        ms = self._x_to_ms(x)
+        ms = max(self._notch_ms[-1], min(self._notch_ms[0], ms))
+        self._var.set(ms)
+
+    def config(self, **kwargs):
+        if "state" in kwargs:
+            self._enabled = kwargs.pop("state") != "disabled"
+            self._redraw()
+        if kwargs:
+            super().config(**kwargs)
+
+    configure = config
 
 
 #  CUSTOM DROPDOWN  (replaces ttk.Combobox throughout the UI)
@@ -1150,6 +1298,22 @@ def find_rpi_rp2_drive_info():
                     return (root, label)
                 if root.count(os.sep) - base.count(os.sep) > 2:
                     break
+    return None
+
+
+def get_bootsel_board_id(drive_path):
+    """Read Board-ID from INFO_UF2.TXT on a BOOTSEL drive. Returns string or None.
+    Pico = 'RPI-RP2', Pico W = 'RPI-RP2W'."""
+    try:
+        info_path = os.path.join(drive_path, "INFO_UF2.TXT")
+        with open(info_path) as f:
+            for line in f:
+                if line.lower().startswith("board-id"):
+                    parts = line.split(":", 1)
+                    if len(parts) == 2:
+                        return parts[1].strip()
+    except Exception:
+        pass
     return None
 
 
@@ -2203,8 +2367,25 @@ class FlashFirmwareScreen:
                     nl.config(bg="#222226")
                 def _click(e, p=path):
                     drive = find_rpi_rp2_drive()
-                    if drive:
-                        self._do_flash(p, drive)
+                    if not drive:
+                        return
+                    # Warn if wireless firmware is being flashed onto a non-Pico-W
+                    if "wireless" in os.path.basename(p).lower():
+                        board_id = get_bootsel_board_id(drive) or "RPI-RP2"
+                        is_pico_w = "RP2W" in board_id.upper()
+                        if not is_pico_w:
+                            ans = messagebox.askyesno(
+                                "Wrong Device?",
+                                f"This firmware is for the Raspberry Pi Pico W (wireless).\n\n"
+                                f"The connected device reports: {board_id}\n"
+                                f"This appears to be a standard Pico, not a Pico W.\n\n"
+                                f"Flashing wireless firmware onto a standard Pico will not work.\n\n"
+                                f"Flash anyway?",
+                                icon="warning"
+                            )
+                            if not ans:
+                                return
+                    self._do_flash(p, drive)
 
                 for widget in (img_area, lbl_area, img_label, name_lbl):
                     widget.bind("<Enter>",    _enter)
@@ -8220,6 +8401,9 @@ class App:
         self.led_breathe_max     = tk.IntVar(value=9)
         self.led_wave_enabled    = tk.BooleanVar(value=False)
         self.led_wave_origin     = tk.IntVar(value=1)
+        self.led_loop_speed      = tk.IntVar(value=3000)
+        self.led_breathe_speed   = tk.IntVar(value=3000)
+        self.led_wave_speed      = tk.IntVar(value=800)
 
         # Device name
         self.device_name = tk.StringVar(value="Guitar Controller")
@@ -8246,6 +8430,7 @@ class App:
         self._sp_combos = {}
         self._row_w = {}
         self._led_widgets = []
+        self._led_sub_cards = []
         self._led_color_btns = []
         self._led_map_cbs = {}
         self._led_map_widgets = []
@@ -8361,6 +8546,17 @@ class App:
         fw.add_separator()
         fw.add_command(label="Exit", command=self._on_close)
         mb.add_cascade(label="Advanced", menu=fw)
+
+        pm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
+                     activebackground=ACCENT_BLUE, activeforeground="#fff")
+        presets = _find_preset_configs({"guitar_alternate", "guitar_alternate_dongle", "guitar_combined"})
+        if presets:
+            for display_name, fpath in presets:
+                pm.add_command(label=display_name,
+                               command=lambda p=fpath: self._import_preset(p))
+        else:
+            pm.add_command(label="No preset configs found", state="disabled")
+        mb.add_cascade(label="Preset Config", menu=pm)
 
         hm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
                      activebackground=ACCENT_BLUE, activeforeground="#fff")
@@ -8492,35 +8688,50 @@ class App:
                                       bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9))
         self.status_label.pack(anchor="w", padx=14, pady=(8, 6))
 
-        # Scrollable area
+        # Tab bar
+        tab_bar = tk.Frame(outer, bg=BG_MAIN)
+        tab_bar.pack(fill="x")
+        _TAB_NAMES = ["Buttons", "Tilt & Whammy", "Joystick & Dpad", "Lighting"]
+        self._tab_labels = []
+        for _i, _name in enumerate(_TAB_NAMES):
+            _lbl = tk.Label(tab_bar, text=_name, bg=BG_MAIN, fg=TEXT_DIM,
+                            font=(FONT_UI, 10, "bold"), padx=18, pady=10,
+                            cursor="hand2")
+            _lbl.pack(side="left")
+            _lbl.bind("<Button-1>", lambda e, idx=_i: self._switch_tab(idx))
+            self._tab_labels.append(_lbl)
+        tk.Frame(outer, bg=BORDER, height=1).pack(fill="x")
+
+        # Scrollable area — one slot per tab
         scroll_outer = tk.Frame(outer, bg=BG_MAIN)
         scroll_outer.pack(fill="both", expand=True)
 
-        self._scroll_canvas = tk.Canvas(scroll_outer, bg=BG_MAIN, highlightthickness=0, bd=0)
-        self._scrollbar = ttk.Scrollbar(scroll_outer, orient="vertical",
-                                        command=self._on_yview)
-        self.content = tk.Frame(self._scroll_canvas, bg=BG_MAIN)
-        self._scroll_enabled   = True   # tracks whether scrollbar is currently shown
-        self._scroll_animating = False  # True while mousewheel ease animation is running
-        self._scroll_target    = None   # target yview fraction for the animation
+        self._tab_slots   = []
+        self._tab_widgets = []   # (canvas, scrollbar, content, window_id) per tab
+        for _ in range(4):
+            _slot    = tk.Frame(scroll_outer, bg=BG_MAIN)
+            _canvas  = tk.Canvas(_slot, bg=BG_MAIN, highlightthickness=0, bd=0)
+            _sb      = ttk.Scrollbar(_slot, orient="vertical", command=self._on_yview)
+            _content = tk.Frame(_canvas, bg=BG_MAIN)
+            _content.bind("<Configure>", self._on_content_configure)
+            _win = _canvas.create_window((0, 0), window=_content, anchor="nw")
+            _canvas.configure(yscrollcommand=_sb.set)
+            _canvas.pack(side="left", fill="both", expand=True)
+            _sb.pack(side="right", fill="y")
+            _canvas.bind("<Configure>", self._on_canvas_resize)
+            self._tab_slots.append(_slot)
+            self._tab_widgets.append((_canvas, _sb, _content, _win))
 
-        self.content.bind("<Configure>", self._on_content_configure)
-        self._content_window = self._scroll_canvas.create_window(
-            (0, 0), window=self.content, anchor="nw")
-        self._scroll_canvas.configure(yscrollcommand=self._scrollbar.set)
-        self._scroll_canvas.pack(side="left", fill="both", expand=True)
-        self._scrollbar.pack(side="right", fill="y")
-        self._scroll_canvas.bind("<Configure>", self._on_canvas_resize)
-
-        # Sections
+        # Build Tab 0: Buttons
+        self._set_active_tab_refs(0)
         self._make_device_name_section()
         self._make_section("FRET BUTTONS", ["frets"])
         self._make_section("STRUM", ["strum"])
-        self._make_section("D-PAD / DIRECTIONAL STICK", ["dpad"],
-                           hint="For controllers with a navigation stick. "
-                                "D-Pad Up/Down share XInput bits with Strum Up/Down.")
         self._make_section("NAVIGATION", ["nav", "nav2"])
+        self._make_debounce_section()
 
+        # Build Tab 1: Tilt & Whammy
+        self._set_active_tab_refs(1)
         self._make_analog_section(
             "TILT SENSOR", "tilt", self.tilt_mode, self.tilt_pin, self.tilt_enabled,
             hint="Digital: ball tilt switch.  Analog: accelerometer output on ADC pin.  "
@@ -8533,10 +8744,25 @@ class App:
             supports_i2c=False,
             on_open=lambda: self._refresh_analog_combo("whammy"))
 
+        # Build Tab 2: Joystick & Dpad
+        self._set_active_tab_refs(2)
+        self._make_section("D-PAD / DIRECTIONAL STICK", ["dpad"],
+                           hint="For controllers with a navigation stick. "
+                                "D-Pad Up/Down share XInput bits with Strum Up/Down.")
         self._make_joystick_section()
 
+        # Build Tab 3: Lighting
+        self._set_active_tab_refs(3)
         self._make_led_section()
-        self._make_debounce_section()
+
+        # Activate tab 0 as default
+        self._active_tab = 0
+        self._tab_slots[0].pack(fill="both", expand=True)
+        self._set_active_tab_refs(0)
+        self._scroll_enabled   = True
+        self._scroll_animating = False
+        self._scroll_target    = None
+        self._update_tab_styling()
 
         # Bottom action bar
         bottom = tk.Frame(outer, bg=BG_MAIN)
@@ -8582,18 +8808,51 @@ class App:
         self._scroll_canvas.configure(
             scrollregion=self._scroll_canvas.bbox("all"))
 
-    def _on_content_configure(self, _event):
-        self._update_scroll_state()
+    def _on_content_configure(self, event):
+        # Only update scroll for the active tab's content frame
+        if event.widget is self.content:
+            self._update_scroll_state()
 
     def _on_canvas_resize(self, event):
-        self._scroll_canvas.itemconfig(self._content_window, width=event.width)
-        self._update_scroll_state()
+        # Only update scroll for the active tab's canvas
+        if event.widget is self._scroll_canvas:
+            self._scroll_canvas.itemconfig(self._content_window, width=event.width)
+            self._update_scroll_state()
 
     def _on_yview(self, *args):
         """Direct scrollbar command — moves canvas and cancels any
         in-flight mousewheel animation so the bar always wins."""
         self._scroll_target = None
         self._scroll_canvas.yview(*args)
+
+    def _set_active_tab_refs(self, idx):
+        """Point self.content / canvas / scrollbar at the given tab slot."""
+        canvas, sb, content, win = self._tab_widgets[idx]
+        self._scroll_canvas  = canvas
+        self._scrollbar      = sb
+        self.content         = content
+        self._content_window = win
+
+    def _switch_tab(self, idx):
+        """Switch visible tab, update scroll refs and styling."""
+        if idx == self._active_tab:
+            return
+        self._tab_slots[self._active_tab].pack_forget()
+        self._tab_slots[idx].pack(fill="both", expand=True)
+        self._scroll_target    = None
+        self._scroll_animating = False
+        self._scroll_enabled   = True
+        self._active_tab = idx
+        self._set_active_tab_refs(idx)
+        self._update_tab_styling()
+        self._update_scroll_state()
+
+    def _update_tab_styling(self):
+        for i, lbl in enumerate(self._tab_labels):
+            if i == self._active_tab:
+                lbl.config(bg=BG_CARD, fg=TEXT)
+            else:
+                lbl.config(bg=BG_MAIN, fg=TEXT_DIM)
 
     def _on_mousewheel(self, event):
         """Eased mousewheel scroll — animates toward the target fraction
@@ -8686,6 +8945,50 @@ class App:
         else:
             sep.pack(fill="x", padx=12, pady=(4, 0))
             body.pack(fill="x", padx=12, pady=(6, 10))
+
+        for widget in (header, arrow_lbl, title_lbl):
+            widget.bind("<Button-1>", _toggle)
+
+        return card, body
+
+    def _make_sub_collapsible(self, parent, title, collapsed=True):
+        """Nested collapsible card — packed into `parent` instead of self.content."""
+        card = tk.Frame(parent, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
+        card.pack(fill="x", pady=(2, 2))
+
+        header = tk.Frame(card, bg=BG_CARD, cursor="hand2")
+        header.pack(fill="x", padx=10, pady=(6, 0))
+
+        arrow_var = tk.StringVar(value="\u25b6" if collapsed else "\u25bc")
+        arrow_lbl = tk.Label(header, textvariable=arrow_var,
+                             bg=BG_CARD, fg=ACCENT_BLUE, font=(FONT_UI, 8, "bold"))
+        arrow_lbl.pack(side="left", padx=(0, 5))
+
+        title_lbl = tk.Label(header, text=title,
+                             bg=BG_CARD, fg=ACCENT_BLUE,
+                             font=(FONT_UI, 8, "bold"), cursor="hand2")
+        title_lbl.pack(side="left")
+
+        sep = tk.Frame(card, bg=BORDER, height=1)
+        body = tk.Frame(card, bg=BG_CARD)
+
+        _open = [not collapsed]
+
+        def _toggle(_event=None):
+            if _open[0]:
+                body.pack_forget()
+                sep.pack_forget()
+                arrow_var.set("\u25b6")
+            else:
+                sep.pack(fill="x", padx=10, pady=(4, 0))
+                body.pack(fill="x", padx=10, pady=(6, 8))
+                arrow_var.set("\u25bc")
+            _open[0] = not _open[0]
+            self._update_scroll_state()
+
+        if not collapsed:
+            sep.pack(fill="x", padx=10, pady=(4, 0))
+            body.pack(fill="x", padx=10, pady=(6, 8))
 
         for widget in (header, arrow_lbl, title_lbl):
             widget.bind("<Button-1>", _toggle)
@@ -9091,7 +9394,12 @@ class App:
                 data = self._sp_combos.get("whammy")
                 if not data:
                     return
-                v = data[10]._value   # LiveBarGraph
+                if self._monitoring and self._monitor_prefix == "whammy":
+                    v = data[10]._value
+                else:
+                    v = self._one_shot_monitor_read("whammy")
+                    if v is None:
+                        return
                 self._whammy_rest_raw = v
                 _rest_str.set(str(v))
                 _apply_wh_calibration()
@@ -9100,7 +9408,12 @@ class App:
                 data = self._sp_combos.get("whammy")
                 if not data:
                     return
-                v = data[10]._value
+                if self._monitoring and self._monitor_prefix == "whammy":
+                    v = data[10]._value
+                else:
+                    v = self._one_shot_monitor_read("whammy")
+                    if v is None:
+                        return
                 self._whammy_act_raw = v
                 _act_str.set(str(v))
                 _apply_wh_calibration()
@@ -9436,133 +9749,184 @@ class App:
         self._led_widgets.append(self._led_colors_frame)
         self._rebuild_led_color_grid()
 
-        # ── LED Loop row ───────────────────────────────────────────────────
-        loop_row = tk.Frame(inner, bg=BG_CARD)
-        loop_row.pack(fill="x", pady=(6, 2))
-        self._led_widgets.append(loop_row)
+        # ── LED Color Loop sub-card ────────────────────────────────────────
+        loop_card, loop_body = self._make_sub_collapsible(inner, "LED COLOR LOOP", collapsed=True)
+        self._led_sub_cards.append(loop_card)
 
-        loop_cb = ttk.Checkbutton(loop_row, text="Enable LED Color Loop",
+        lc_left = tk.Frame(loop_body, bg=BG_CARD)
+        lc_left.pack(side="left", fill="y", padx=(0, 20))
+        lc_right = tk.Frame(loop_body, bg=BG_CARD)
+        lc_right.pack(side="left")
+
+        loop_cb = ttk.Checkbutton(lc_left, text="Enable LED Color Loop",
                                    variable=self.led_loop_enabled)
-        loop_cb.pack(side="left", padx=(0, 12))
+        loop_cb.pack(anchor="w", pady=(0, 4))
         self._all_widgets.append(loop_cb)
 
-        tk.Label(loop_row, text="From LED:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(lc_left, text="Effect Range", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="w").pack(anchor="w", pady=(4, 1))
+        loop_range_row = tk.Frame(lc_left, bg=BG_CARD)
+        loop_range_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(loop_range_row, text="From LED:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        loop_start_sp = ttk.Spinbox(loop_row, from_=1, to=MAX_LEDS, width=4,
+        loop_start_wrap = tk.Frame(loop_range_row, bg=BG_CARD, width=52, height=22)
+        loop_start_wrap.pack(side="left", padx=(0, 8))
+        loop_start_wrap.pack_propagate(False)
+        loop_start_sp = ttk.Spinbox(loop_start_wrap, from_=1, to=MAX_LEDS, width=4,
                                      textvariable=self.led_loop_start)
-        loop_start_sp.pack(side="left", padx=(0, 8))
+        loop_start_sp.pack(fill="both", expand=True)
         self._all_widgets.append(loop_start_sp)
-
-        tk.Label(loop_row, text="To LED:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(loop_range_row, text="To LED:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        loop_end_sp = ttk.Spinbox(loop_row, from_=1, to=MAX_LEDS, width=4,
+        loop_end_wrap = tk.Frame(loop_range_row, bg=BG_CARD, width=52, height=22)
+        loop_end_wrap.pack(side="left")
+        loop_end_wrap.pack_propagate(False)
+        loop_end_sp = ttk.Spinbox(loop_end_wrap, from_=1, to=MAX_LEDS, width=4,
                                    textvariable=self.led_loop_end)
-        loop_end_sp.pack(side="left", padx=(0, 10))
+        loop_end_sp.pack(fill="both", expand=True)
         self._all_widgets.append(loop_end_sp)
 
-        tk.Label(loop_row,
-                 text="Rotates colors through these LEDs once/sec with smooth crossfade",
-                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left")
-        # ── end LED Loop row ───────────────────────────────────────────────
+        tk.Label(lc_right, text="Effect Speed", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="center").pack(pady=(4, 1))
+        loop_speed_sl = SpeedSlider(lc_right, self.led_loop_speed,
+                                    notch_ms=[9999, 5000, 3000, 1000, 100])
+        loop_speed_sl.pack()
+        self._all_widgets.append(loop_speed_sl)
+        # ── end LED Color Loop sub-card ────────────────────────────────────
 
-        # ── LED Breathe row ────────────────────────────────────────────────
-        breathe_row = tk.Frame(inner, bg=BG_CARD)
-        breathe_row.pack(fill="x", pady=(4, 2))
-        self._led_widgets.append(breathe_row)
+        # ── LED Breathe sub-card ───────────────────────────────────────────
+        breathe_card, breathe_body = self._make_sub_collapsible(inner, "LED BREATHE", collapsed=True)
+        self._led_sub_cards.append(breathe_card)
 
-        breathe_cb = ttk.Checkbutton(breathe_row, text="Enable LED Breathe",
+        br_left = tk.Frame(breathe_body, bg=BG_CARD)
+        br_left.pack(side="left", fill="y", padx=(0, 20))
+        br_right = tk.Frame(breathe_body, bg=BG_CARD)
+        br_right.pack(side="left")
+
+        breathe_cb = ttk.Checkbutton(br_left, text="Enable LED Breathe",
                                      variable=self.led_breathe_enabled,
                                      command=lambda: self.led_wave_enabled.set(False) if self.led_breathe_enabled.get() else None)
-        breathe_cb.pack(side="left", padx=(0, 12))
+        breathe_cb.pack(anchor="w", pady=(0, 4))
         self._all_widgets.append(breathe_cb)
 
-        tk.Label(breathe_row, text="From LED:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(br_left, text="Effect Range", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="w").pack(anchor="w", pady=(4, 1))
+        breathe_range_row = tk.Frame(br_left, bg=BG_CARD)
+        breathe_range_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(breathe_range_row, text="From LED:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        breathe_start_sp = ttk.Spinbox(breathe_row, from_=1, to=MAX_LEDS, width=4,
+        breathe_start_wrap = tk.Frame(breathe_range_row, bg=BG_CARD, width=52, height=22)
+        breathe_start_wrap.pack(side="left", padx=(0, 8))
+        breathe_start_wrap.pack_propagate(False)
+        breathe_start_sp = ttk.Spinbox(breathe_start_wrap, from_=1, to=MAX_LEDS, width=4,
                                        textvariable=self.led_breathe_start)
-        breathe_start_sp.pack(side="left", padx=(0, 8))
+        breathe_start_sp.pack(fill="both", expand=True)
         self._all_widgets.append(breathe_start_sp)
-
-        tk.Label(breathe_row, text="To LED:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(breathe_range_row, text="To LED:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        breathe_end_sp = ttk.Spinbox(breathe_row, from_=1, to=MAX_LEDS, width=4,
+        breathe_end_wrap = tk.Frame(breathe_range_row, bg=BG_CARD, width=52, height=22)
+        breathe_end_wrap.pack(side="left")
+        breathe_end_wrap.pack_propagate(False)
+        breathe_end_sp = ttk.Spinbox(breathe_end_wrap, from_=1, to=MAX_LEDS, width=4,
                                      textvariable=self.led_breathe_end)
-        breathe_end_sp.pack(side="left", padx=(0, 12))
+        breathe_end_sp.pack(fill="both", expand=True)
         self._all_widgets.append(breathe_end_sp)
 
-        tk.Label(breathe_row, text="Min:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(br_left, text="Effect Brightness", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="w").pack(anchor="w", pady=(4, 1))
+        breathe_bright_row = tk.Frame(br_left, bg=BG_CARD)
+        breathe_bright_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(breathe_bright_row, text="Min:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        breathe_min_sp = ttk.Spinbox(breathe_row, from_=0, to=9, width=4,
+        breathe_min_wrap = tk.Frame(breathe_bright_row, bg=BG_CARD, width=52, height=22)
+        breathe_min_wrap.pack(side="left", padx=(0, 8))
+        breathe_min_wrap.pack_propagate(False)
+        breathe_min_sp = ttk.Spinbox(breathe_min_wrap, from_=0, to=9, width=4,
                                      textvariable=self.led_breathe_min,
                                      validate="key", validatecommand=_bvcmd)
-        breathe_min_sp.pack(side="left", padx=(0, 8))
+        breathe_min_sp.pack(fill="both", expand=True)
         self._all_widgets.append(breathe_min_sp)
-
-        tk.Label(breathe_row, text="Max:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(breathe_bright_row, text="Max:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        breathe_max_sp = ttk.Spinbox(breathe_row, from_=0, to=9, width=4,
+        breathe_max_wrap = tk.Frame(breathe_bright_row, bg=BG_CARD, width=52, height=22)
+        breathe_max_wrap.pack(side="left")
+        breathe_max_wrap.pack_propagate(False)
+        breathe_max_sp = ttk.Spinbox(breathe_max_wrap, from_=0, to=9, width=4,
                                      textvariable=self.led_breathe_max,
                                      validate="key", validatecommand=_bvcmd)
-        breathe_max_sp.pack(side="left", padx=(0, 10))
+        breathe_max_sp.pack(fill="both", expand=True)
         self._all_widgets.append(breathe_max_sp)
 
-        tk.Label(breathe_row, text="Fades brightness slowly between Min and Max (3 s cycle)",
-                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left")
-        # ── end LED Breathe row ────────────────────────────────────────────
+        tk.Label(br_right, text="Effect Speed", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="center").pack(pady=(4, 1))
+        breathe_speed_sl = SpeedSlider(br_right, self.led_breathe_speed,
+                                       notch_ms=[9999, 5000, 3000, 1000, 100])
+        breathe_speed_sl.pack()
+        self._all_widgets.append(breathe_speed_sl)
+        # ── end LED Breathe sub-card ───────────────────────────────────────
 
-        # ── LED Wave row ───────────────────────────────────────────────────
-        wave_row = tk.Frame(inner, bg=BG_CARD)
-        wave_row.pack(fill="x", pady=(4, 2))
-        self._led_widgets.append(wave_row)
+        # ── LED Ripple sub-card ────────────────────────────────────────────
+        wave_card, wave_body = self._make_sub_collapsible(inner, "LED RIPPLE", collapsed=True)
+        self._led_sub_cards.append(wave_card)
 
-        wave_cb = ttk.Checkbutton(wave_row, text="Enable LED Ripple",
+        wv_left = tk.Frame(wave_body, bg=BG_CARD)
+        wv_left.pack(side="left", fill="y", padx=(0, 20))
+        wv_right = tk.Frame(wave_body, bg=BG_CARD)
+        wv_right.pack(side="left")
+
+        wave_cb = ttk.Checkbutton(wv_left, text="Enable LED Ripple",
                                   variable=self.led_wave_enabled,
                                   command=lambda: self.led_breathe_enabled.set(False) if self.led_wave_enabled.get() else None)
-        wave_cb.pack(side="left", padx=(0, 12))
+        wave_cb.pack(anchor="w", pady=(0, 4))
         self._all_widgets.append(wave_cb)
 
-        tk.Label(wave_row, text="Origin LED:", bg=BG_CARD, fg=TEXT_DIM,
+        wave_origin_row = tk.Frame(wv_left, bg=BG_CARD)
+        wave_origin_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(wave_origin_row, text="Origin LED:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        wave_origin_sp = ttk.Spinbox(wave_row, from_=1, to=MAX_LEDS, width=4,
+        wave_origin_wrap = tk.Frame(wave_origin_row, bg=BG_CARD, width=52, height=22)
+        wave_origin_wrap.pack(side="left")
+        wave_origin_wrap.pack_propagate(False)
+        wave_origin_sp = ttk.Spinbox(wave_origin_wrap, from_=1, to=MAX_LEDS, width=4,
                                      textvariable=self.led_wave_origin)
-        wave_origin_sp.pack(side="left", padx=(0, 10))
+        wave_origin_sp.pack(fill="both", expand=True)
         self._all_widgets.append(wave_origin_sp)
 
-        tk.Label(wave_row,
-                 text="On keypress: brightness pulse radiates outward from origin LED",
-                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left")
-        # ── end LED Wave row ───────────────────────────────────────────────
+        tk.Label(wv_right, text="Effect Speed", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="center").pack(pady=(4, 1))
+        wave_speed_sl = SpeedSlider(wv_right, self.led_wave_speed,
+                                    notch_ms=[9999, 2500, 800, 250, 100])
+        wave_speed_sl.pack()
+        self._all_widgets.append(wave_speed_sl)
+        # ── end LED Ripple sub-card ────────────────────────────────────────
 
-        sep = tk.Frame(inner, bg=BORDER, height=1)
-        sep.pack(fill="x", pady=(8, 4))
-        self._led_widgets.append(sep)
+        # ── Reactive LED sub-card ──────────────────────────────────────────
+        react_card, react_body = self._make_sub_collapsible(
+            inner, "REACTIVE LED ON KEYPRESS", collapsed=False)
+        self._led_sub_cards.append(react_card)
 
-        react_row = tk.Frame(inner, bg=BG_CARD)
+        react_row = tk.Frame(react_body, bg=BG_CARD)
         react_row.pack(fill="x", pady=(0, 4))
-        self._led_widgets.append(react_row)
-
         react_cb = ttk.Checkbutton(react_row, text="Reactive LEDs on keypress",
                                     variable=self.led_reactive,
                                     command=self._on_reactive_toggle)
         react_cb.pack(side="left", padx=(0, 10))
         self._all_widgets.append(react_cb)
+        tk.Label(react_row,
+                 text="When enabled, LEDs light up when their mapped input is pressed",
+                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left")
 
-        react_hint = tk.Label(react_row,
-                              text="When enabled, LEDs light up when their mapped input is pressed",
-                              bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7))
-        react_hint.pack(side="left")
-
-        lbl = tk.Label(inner, text="Input → LED Mapping  (select which LEDs respond to each input)",
+        lbl = tk.Label(react_body,
+                       text="Input \u2192 LED Mapping  (select which LEDs respond to each input)",
                        bg=BG_CARD, fg=TEXT, font=(FONT_UI, 8, "bold"), anchor="w")
         lbl.pack(fill="x", pady=(0, 4))
-        self._led_widgets.append(lbl)
         self._led_map_widgets.append(lbl)
 
-        self._led_map_frame = tk.Frame(inner, bg=BG_CARD)
+        self._led_map_frame = tk.Frame(react_body, bg=BG_CARD)
         self._led_map_frame.pack(fill="x")
-        self._led_widgets.append(self._led_map_frame)
         self._led_map_widgets.append(self._led_map_frame)
         self._rebuild_led_map_grid()
+        # ── end Reactive LED sub-card ──────────────────────────────────────
 
         self._on_led_toggle()
 
@@ -9574,6 +9938,12 @@ class App:
                     w.pack(fill="x")
             else:
                 w.pack_forget()
+        for card in self._led_sub_cards:
+            if show:
+                if not card.winfo_ismapped():
+                    card.pack(fill="x", pady=(2, 2))
+            else:
+                card.pack_forget()
         if show:
             self._led_colors_frame.pack(fill="x", pady=(6, 0))
             self._rebuild_led_color_grid()
@@ -10255,6 +10625,14 @@ class App:
         except Exception:
             pass
 
+        # Wait for monitor thread to finish — prevents it racing on readline
+        # with the next serial command (e.g. SET:pin_green=...)
+        if self._monitor_thread and self._monitor_thread.is_alive():
+            self._monitor_thread.join(timeout=0.3)
+
+        # Discard any stale MVAL bytes still in the OS buffer
+        self.pico.flush_input()
+
         # Reset button appearance
         prefix = getattr(self, '_monitor_prefix', None)
         if prefix and prefix in self._sp_combos:
@@ -10314,13 +10692,64 @@ class App:
         min_sv.set("0")
         max_sv.set("4095")
 
+    def _one_shot_monitor_read(self, prefix):
+        """Start monitor for prefix, grab one live MVAL, stop. Returns int or None."""
+        if not self.pico.connected:
+            return None
+        data = self._sp_combos.get(prefix)
+        if not data:
+            return None
+
+        mode_var   = data[1]
+        pin_var    = data[2]
+        enable_var = data[3]
+
+        if not enable_var.get():
+            messagebox.showinfo("Monitor", f"{prefix.title()} is disabled — enable it first.")
+            return None
+
+        # Stop any other active monitor so we own the serial port
+        if self._monitoring:
+            self._stop_monitoring()
+
+        mode = mode_var.get()
+        try:
+            self._push_monitor_prereqs(prefix)
+            if mode == "i2c":
+                self.pico.start_monitor_i2c(axis=self.adxl345_axis.get())
+            elif mode == "analog":
+                self.pico.start_monitor_adc(pin_var.get())
+            else:
+                self.pico.start_monitor_digital(pin_var.get())
+
+            # 0.3s timeout — firmware streams at 50 Hz so first MVAL arrives in ~20ms
+            val, _ = self.pico.drain_monitor_latest(0.3)
+
+            self.pico.stop_monitor()
+            self.pico.flush_input()
+            return val
+        except Exception as exc:
+            messagebox.showerror("Monitor Error", f"Could not read {prefix}: {exc}")
+            try:
+                self.pico.stop_monitor()
+            except Exception:
+                pass
+            self.pico.flush_input()
+            return None
+
     def _set_sens_from_live(self, prefix, which, var, str_var, other_var):
         """Snap min or max to the current live monitor reading."""
         data = self._sp_combos.get(prefix)
         if not data:
             return
-        bar = data[10]
-        live_val = bar._value
+
+        if self._monitoring and self._monitor_prefix == prefix:
+            live_val = data[10]._value
+        else:
+            live_val = self._one_shot_monitor_read(prefix)
+            if live_val is None:
+                return
+
         if which == "min":
             clamped = max(0, min(live_val, other_var.get() - 1))
             var.set(clamped)
@@ -10698,6 +11127,12 @@ class App:
             self.led_wave_enabled.set(int(cfg["led_wave_enabled"]) != 0)
         if "led_wave_origin" in cfg:
             self.led_wave_origin.set(int(cfg["led_wave_origin"]) + 1)
+        if "led_loop_speed" in cfg:
+            self.led_loop_speed.set(max(100, min(9999, int(cfg["led_loop_speed"]))))
+        if "led_breathe_speed" in cfg:
+            self.led_breathe_speed.set(max(100, min(9999, int(cfg["led_breathe_speed"]))))
+        if "led_wave_speed" in cfg:
+            self.led_wave_speed.set(max(100, min(9999, int(cfg["led_wave_speed"]))))
 
         if "led_colors_raw" in cfg:
             colors = cfg["led_colors_raw"].split(",")
@@ -10818,6 +11253,13 @@ class App:
         self.pico.set_value("led_breathe_max",   str(round(self.led_breathe_max.get() * 31 / 9)))
         self.pico.set_value("led_wave_enabled", "1" if self.led_wave_enabled.get() else "0")
         self.pico.set_value("led_wave_origin",  str(self.led_wave_origin.get() - 1))
+        for _k, _v in [("led_loop_speed",    str(self.led_loop_speed.get())),
+                       ("led_breathe_speed", str(self.led_breathe_speed.get())),
+                       ("led_wave_speed",    str(self.led_wave_speed.get()))]:
+            try:
+                self.pico.set_value(_k, _v)
+            except ValueError:
+                pass  # old firmware — skip
 
     # ── Export / Import Configuration ──────────────────────────────
 
@@ -10906,6 +11348,8 @@ class App:
         raw = getattr(self, "_last_raw_cfg", {})
         cfg["sync_pin"]              = int(raw.get("sync_pin", 15))
         cfg["wireless_default_mode"] = int(raw.get("wireless_default_mode", 0))
+        # device_type makes exports self-describing (needed for preset filtering)
+        cfg["device_type"] = raw.get("device_type", "guitar_alternate")
 
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -10914,6 +11358,203 @@ class App:
                                 f"Configuration exported to:\n{path}")
         except Exception as exc:
             messagebox.showerror("Export Error", str(exc))
+
+    def _apply_config_dict(self, cfg):
+        """Apply a config dict to the UI. Raises on error — callers wrap in try/except."""
+        # Buttons
+        for key, _, _ in BUTTON_DEFS:
+            if key in cfg:
+                pin = int(cfg[key])
+                enabled = (pin != -1)
+                self.pin_vars[key].set(pin if enabled else DIGITAL_PINS[1])
+                self.enable_vars[key].set(enabled)
+                if key in self._pin_combos:
+                    actual = pin if enabled else DIGITAL_PINS[1]
+                    idx = DIGITAL_PINS.index(actual) if actual in DIGITAL_PINS else 0
+                    self._pin_combos[key].current(idx)
+                if key in self._row_w:
+                    combo, disable_cb = self._row_w[key]
+                    combo.config(state="readonly" if enabled else "disabled")
+                    disable_cb.config(state="normal")
+
+        # Tilt
+        if "tilt_mode" in cfg:
+            self.tilt_mode.set(cfg["tilt_mode"])
+        if "tilt_pin" in cfg:
+            tp = int(cfg["tilt_pin"])
+            self.tilt_pin.set(tp if tp >= 0 else 27)
+            # In I2C mode the pin is always -1 — tilt is still enabled.
+            if self.tilt_mode.get() == "i2c":
+                self.tilt_enabled.set(True)
+            else:
+                self.tilt_enabled.set(tp >= 0)
+        self._refresh_analog_combo("tilt")
+        self._on_toggle_analog("tilt")
+
+        # Whammy
+        if "whammy_mode" in cfg:
+            self.whammy_mode.set(cfg["whammy_mode"])
+        if "whammy_pin" in cfg:
+            wp = int(cfg["whammy_pin"])
+            self.whammy_pin.set(wp if wp >= 0 else 26)
+            self.whammy_enabled.set(wp >= 0)
+        self._refresh_analog_combo("whammy")
+        self._on_toggle_analog("whammy")
+
+        if "debounce" in cfg:
+            self.debounce_var.set(int(cfg["debounce"]))
+        # Smoothing: prefer smooth_level; fall back to reverse-lookup ema_alpha
+        if "smooth_level" in cfg:
+            level = max(0, min(9, int(cfg["smooth_level"])))
+            self.smooth_level_var.set(level)
+            self.ema_alpha_var.set(self.EMA_ALPHA_TABLE[level])
+        elif "ema_alpha" in cfg:
+            fw_alpha = max(5, min(255, int(cfg["ema_alpha"])))
+            best_level = min(range(len(self.EMA_ALPHA_TABLE)),
+                             key=lambda i: abs(self.EMA_ALPHA_TABLE[i] - fw_alpha))
+            self.smooth_level_var.set(best_level)
+            self.ema_alpha_var.set(self.EMA_ALPHA_TABLE[best_level])
+
+        # I2C
+        if "i2c_sda" in cfg:
+            self.i2c_sda_pin.set(int(cfg["i2c_sda"]))
+        if "i2c_scl" in cfg:
+            self.i2c_scl_pin.set(int(cfg["i2c_scl"]))
+        if "adxl345_axis" in cfg:
+            self.adxl345_axis.set(int(cfg["adxl345_axis"]))
+        if "i2c_model" in cfg:
+            self.i2c_model.set(int(cfg["i2c_model"]))
+        self._sync_i2c_combos()
+
+        # Sensitivity / invert
+        for attr in ("tilt_min", "tilt_max", "whammy_min", "whammy_max"):
+            if attr in cfg:
+                getattr(self, attr).set(int(cfg[attr]))
+        if "tilt_invert" in cfg:
+            self.tilt_invert.set(int(cfg["tilt_invert"]) != 0)
+        if "whammy_invert" in cfg:
+            self.whammy_invert.set(int(cfg["whammy_invert"]) != 0)
+
+        # Joystick
+        if "joy_pin_x" in cfg:
+            px = int(cfg["joy_pin_x"])
+            self.joy_pin_x.set(px if px >= 0 else ANALOG_PINS[0])
+            self.joy_x_enabled.set(px >= 0)
+            actual = px if px >= 0 else ANALOG_PINS[0]
+            if actual in ANALOG_PINS:
+                self._joy_x_combo.current(ANALOG_PINS.index(actual))
+                self.joy_pin_x.set(ANALOG_PINS[self._joy_x_combo.current()])
+        if "joy_pin_y" in cfg:
+            py = int(cfg["joy_pin_y"])
+            self.joy_pin_y.set(py if py >= 0 else ANALOG_PINS[0])
+            self.joy_y_enabled.set(py >= 0)
+            actual = py if py >= 0 else ANALOG_PINS[0]
+            if actual in ANALOG_PINS:
+                self._joy_y_combo.current(ANALOG_PINS.index(actual))
+                self.joy_pin_y.set(ANALOG_PINS[self._joy_y_combo.current()])
+        if "joy_pin_sw" in cfg:
+            ps = int(cfg["joy_pin_sw"])
+            self.joy_pin_sw.set(ps if ps >= 0 else DIGITAL_PINS[1])
+            self.joy_sw_enabled.set(ps >= 0)
+            actual = ps if ps >= 0 else DIGITAL_PINS[1]
+            if actual in DIGITAL_PINS:
+                self._joy_sw_combo.current(DIGITAL_PINS.index(actual))
+                self.joy_pin_sw.set(DIGITAL_PINS[self._joy_sw_combo.current()])
+        # Sync both guide combos to show the same pin (prefer guide if set, else joy_sw)
+        _g = self.pin_vars["guide"].get() if "guide" in self.pin_vars else -1
+        _sw = self.joy_pin_sw.get()
+        self._apply_guide_pin(_g if _g != -1 else _sw)
+        for attr in ("joy_whammy_axis", "joy_deadzone"):
+            if attr in cfg:
+                getattr(self, attr).set(int(cfg[attr]))
+        for attr in ("joy_dpad_x", "joy_dpad_y", "joy_dpad_x_invert", "joy_dpad_y_invert"):
+            if attr in cfg:
+                getattr(self, attr).set(int(cfg[attr]) != 0)
+        if hasattr(self, "_refresh_joy_combos"):
+            self._refresh_joy_combos(restore=True)
+
+        # Device name
+        if "device_name" in cfg:
+            self.device_name.set(cfg["device_name"])
+
+        # LEDs
+        if "led_enabled" in cfg:
+            self.led_enabled.set(int(cfg["led_enabled"]) != 0)
+        if "led_count" in cfg:
+            self.led_count.set(int(cfg["led_count"]))
+        if "led_brightness" in cfg:
+            self.led_base_brightness.set(
+                self._brightness_from_hw(int(cfg["led_brightness"])))
+        if "led_loop_enabled" in cfg:
+            self.led_loop_enabled.set(int(cfg["led_loop_enabled"]) != 0)
+        if "led_loop_start" in cfg:
+            self.led_loop_start.set(int(cfg["led_loop_start"]) + 1)
+        if "led_loop_end" in cfg:
+            self.led_loop_end.set(int(cfg["led_loop_end"]) + 1)
+        if "led_breathe_enabled" in cfg:
+            self.led_breathe_enabled.set(int(cfg["led_breathe_enabled"]) != 0)
+        if "led_breathe_start" in cfg:
+            self.led_breathe_start.set(int(cfg["led_breathe_start"]) + 1)
+        if "led_breathe_end" in cfg:
+            self.led_breathe_end.set(int(cfg["led_breathe_end"]) + 1)
+        if "led_breathe_min" in cfg:
+            self.led_breathe_min.set(int(cfg["led_breathe_min"]))
+        if "led_breathe_max" in cfg:
+            self.led_breathe_max.set(int(cfg["led_breathe_max"]))
+        if "led_wave_enabled" in cfg:
+            self.led_wave_enabled.set(int(cfg["led_wave_enabled"]) != 0)
+        if "led_wave_origin" in cfg:
+            self.led_wave_origin.set(int(cfg["led_wave_origin"]) + 1)
+        if "led_loop_speed" in cfg:
+            self.led_loop_speed.set(max(100, min(9999, int(cfg["led_loop_speed"]))))
+        if "led_breathe_speed" in cfg:
+            self.led_breathe_speed.set(max(100, min(9999, int(cfg["led_breathe_speed"]))))
+        if "led_wave_speed" in cfg:
+            self.led_wave_speed.set(max(100, min(9999, int(cfg["led_wave_speed"]))))
+        if "led_colors" in cfg:
+            for i, c in enumerate(cfg["led_colors"]):
+                if i < MAX_LEDS and len(str(c)) == 6:
+                    self.led_colors[i].set(str(c).upper())
+        if "led_maps" in cfg:
+            for i, m in enumerate(cfg["led_maps"]):
+                if i < LED_INPUT_COUNT:
+                    self.led_maps[i].set(int(m))
+        if "led_active_br" in cfg:
+            for i, b in enumerate(cfg["led_active_br"]):
+                if i < LED_INPUT_COUNT:
+                    self.led_active_br[i].set(self._brightness_from_hw(int(b)))
+
+        any_mapped = any(self.led_maps[i].get() != 0 for i in range(LED_INPUT_COUNT))
+        self.led_reactive.set(any_mapped)
+        for i in range(LED_INPUT_COUNT):
+            self._led_maps_backup[i] = self.led_maps[i].get()
+
+        self._on_led_toggle()
+        if self.led_enabled.get():
+            self._rebuild_led_color_grid()
+            if self.led_reactive.get():
+                self._rebuild_led_map_grid()
+
+        # sync_pin and wireless_default_mode have no UI widgets — push
+        # directly to the firmware now if connected, and update the cache
+        # so a subsequent export round-trips the imported values correctly.
+        raw_cache = getattr(self, "_last_raw_cfg", {})
+        if "sync_pin" in cfg:
+            raw_cache["sync_pin"] = str(int(cfg["sync_pin"]))
+            if self.pico.connected:
+                try:
+                    self.pico.set_value("sync_pin", raw_cache["sync_pin"])
+                except Exception:
+                    pass
+        if "wireless_default_mode" in cfg:
+            raw_cache["wireless_default_mode"] = str(int(cfg["wireless_default_mode"]))
+            if self.pico.connected:
+                try:
+                    self.pico.set_value("wireless_default_mode",
+                                        raw_cache["wireless_default_mode"])
+                except Exception:
+                    pass
+        self._last_raw_cfg = raw_cache
 
     def _import_config(self):
         """Load a JSON config file and apply it to the UI (does NOT auto-save)."""
@@ -10932,200 +11573,29 @@ class App:
             return
 
         try:
-            # Buttons
-            for key, _, _ in BUTTON_DEFS:
-                if key in cfg:
-                    pin = int(cfg[key])
-                    enabled = (pin != -1)
-                    self.pin_vars[key].set(pin if enabled else DIGITAL_PINS[1])
-                    self.enable_vars[key].set(enabled)
-                    if key in self._pin_combos:
-                        actual = pin if enabled else DIGITAL_PINS[1]
-                        idx = DIGITAL_PINS.index(actual) if actual in DIGITAL_PINS else 0
-                        self._pin_combos[key].current(idx)
-                    if key in self._row_w:
-                        combo, disable_cb = self._row_w[key]
-                        combo.config(state="readonly" if enabled else "disabled")
-                        disable_cb.config(state="normal")
-
-            # Tilt
-            if "tilt_mode" in cfg:
-                self.tilt_mode.set(cfg["tilt_mode"])
-            if "tilt_pin" in cfg:
-                tp = int(cfg["tilt_pin"])
-                self.tilt_pin.set(tp if tp >= 0 else 27)
-                # In I2C mode the pin is always -1 — tilt is still enabled.
-                if self.tilt_mode.get() == "i2c":
-                    self.tilt_enabled.set(True)
-                else:
-                    self.tilt_enabled.set(tp >= 0)
-            self._refresh_analog_combo("tilt")
-            self._on_toggle_analog("tilt")
-
-            # Whammy
-            if "whammy_mode" in cfg:
-                self.whammy_mode.set(cfg["whammy_mode"])
-            if "whammy_pin" in cfg:
-                wp = int(cfg["whammy_pin"])
-                self.whammy_pin.set(wp if wp >= 0 else 26)
-                self.whammy_enabled.set(wp >= 0)
-            self._refresh_analog_combo("whammy")
-            self._on_toggle_analog("whammy")
-
-            if "debounce" in cfg:
-                self.debounce_var.set(int(cfg["debounce"]))
-            # Smoothing: prefer smooth_level; fall back to reverse-lookup ema_alpha
-            if "smooth_level" in cfg:
-                level = max(0, min(9, int(cfg["smooth_level"])))
-                self.smooth_level_var.set(level)
-                self.ema_alpha_var.set(self.EMA_ALPHA_TABLE[level])
-            elif "ema_alpha" in cfg:
-                fw_alpha = max(5, min(255, int(cfg["ema_alpha"])))
-                best_level = min(range(len(self.EMA_ALPHA_TABLE)),
-                                 key=lambda i: abs(self.EMA_ALPHA_TABLE[i] - fw_alpha))
-                self.smooth_level_var.set(best_level)
-                self.ema_alpha_var.set(self.EMA_ALPHA_TABLE[best_level])
-
-            # I2C
-            if "i2c_sda" in cfg:
-                self.i2c_sda_pin.set(int(cfg["i2c_sda"]))
-            if "i2c_scl" in cfg:
-                self.i2c_scl_pin.set(int(cfg["i2c_scl"]))
-            if "adxl345_axis" in cfg:
-                self.adxl345_axis.set(int(cfg["adxl345_axis"]))
-            if "i2c_model" in cfg:
-                self.i2c_model.set(int(cfg["i2c_model"]))
-            self._sync_i2c_combos()
-
-            # Sensitivity / invert
-            for attr in ("tilt_min", "tilt_max", "whammy_min", "whammy_max"):
-                if attr in cfg:
-                    getattr(self, attr).set(int(cfg[attr]))
-            if "tilt_invert" in cfg:
-                self.tilt_invert.set(int(cfg["tilt_invert"]) != 0)
-            if "whammy_invert" in cfg:
-                self.whammy_invert.set(int(cfg["whammy_invert"]) != 0)
-
-            # Joystick
-            if "joy_pin_x" in cfg:
-                px = int(cfg["joy_pin_x"])
-                self.joy_pin_x.set(px if px >= 0 else ANALOG_PINS[0])
-                self.joy_x_enabled.set(px >= 0)
-                actual = px if px >= 0 else ANALOG_PINS[0]
-                if actual in ANALOG_PINS:
-                    self._joy_x_combo.current(ANALOG_PINS.index(actual))
-                    self.joy_pin_x.set(ANALOG_PINS[self._joy_x_combo.current()])
-            if "joy_pin_y" in cfg:
-                py = int(cfg["joy_pin_y"])
-                self.joy_pin_y.set(py if py >= 0 else ANALOG_PINS[0])
-                self.joy_y_enabled.set(py >= 0)
-                actual = py if py >= 0 else ANALOG_PINS[0]
-                if actual in ANALOG_PINS:
-                    self._joy_y_combo.current(ANALOG_PINS.index(actual))
-                    self.joy_pin_y.set(ANALOG_PINS[self._joy_y_combo.current()])
-            if "joy_pin_sw" in cfg:
-                ps = int(cfg["joy_pin_sw"])
-                self.joy_pin_sw.set(ps if ps >= 0 else DIGITAL_PINS[1])
-                self.joy_sw_enabled.set(ps >= 0)
-                actual = ps if ps >= 0 else DIGITAL_PINS[1]
-                if actual in DIGITAL_PINS:
-                    self._joy_sw_combo.current(DIGITAL_PINS.index(actual))
-                    self.joy_pin_sw.set(DIGITAL_PINS[self._joy_sw_combo.current()])
-            # Sync both guide combos to show the same pin (prefer guide if set, else joy_sw)
-            _g = self.pin_vars["guide"].get() if "guide" in self.pin_vars else -1
-            _sw = self.joy_pin_sw.get()
-            self._apply_guide_pin(_g if _g != -1 else _sw)
-            for attr in ("joy_whammy_axis", "joy_deadzone"):
-                if attr in cfg:
-                    getattr(self, attr).set(int(cfg[attr]))
-            for attr in ("joy_dpad_x", "joy_dpad_y", "joy_dpad_x_invert", "joy_dpad_y_invert"):
-                if attr in cfg:
-                    getattr(self, attr).set(int(cfg[attr]) != 0)
-            if hasattr(self, "_refresh_joy_combos"):
-                self._refresh_joy_combos(restore=True)
-
-            # Device name
-            if "device_name" in cfg:
-                self.device_name.set(cfg["device_name"])
-
-            # LEDs
-            if "led_enabled" in cfg:
-                self.led_enabled.set(int(cfg["led_enabled"]) != 0)
-            if "led_count" in cfg:
-                self.led_count.set(int(cfg["led_count"]))
-            if "led_brightness" in cfg:
-                self.led_base_brightness.set(
-                    self._brightness_from_hw(int(cfg["led_brightness"])))
-            if "led_loop_enabled" in cfg:
-                self.led_loop_enabled.set(int(cfg["led_loop_enabled"]) != 0)
-            if "led_loop_start" in cfg:
-                self.led_loop_start.set(int(cfg["led_loop_start"]) + 1)
-            if "led_loop_end" in cfg:
-                self.led_loop_end.set(int(cfg["led_loop_end"]) + 1)
-            if "led_breathe_enabled" in cfg:
-                self.led_breathe_enabled.set(int(cfg["led_breathe_enabled"]) != 0)
-            if "led_breathe_start" in cfg:
-                self.led_breathe_start.set(int(cfg["led_breathe_start"]) + 1)
-            if "led_breathe_end" in cfg:
-                self.led_breathe_end.set(int(cfg["led_breathe_end"]) + 1)
-            if "led_breathe_min" in cfg:
-                self.led_breathe_min.set(int(cfg["led_breathe_min"]))
-            if "led_breathe_max" in cfg:
-                self.led_breathe_max.set(int(cfg["led_breathe_max"]))
-            if "led_wave_enabled" in cfg:
-                self.led_wave_enabled.set(int(cfg["led_wave_enabled"]) != 0)
-            if "led_wave_origin" in cfg:
-                self.led_wave_origin.set(int(cfg["led_wave_origin"]) + 1)
-            if "led_colors" in cfg:
-                for i, c in enumerate(cfg["led_colors"]):
-                    if i < MAX_LEDS and len(str(c)) == 6:
-                        self.led_colors[i].set(str(c).upper())
-            if "led_maps" in cfg:
-                for i, m in enumerate(cfg["led_maps"]):
-                    if i < LED_INPUT_COUNT:
-                        self.led_maps[i].set(int(m))
-            if "led_active_br" in cfg:
-                for i, b in enumerate(cfg["led_active_br"]):
-                    if i < LED_INPUT_COUNT:
-                        self.led_active_br[i].set(self._brightness_from_hw(int(b)))
-
-            any_mapped = any(self.led_maps[i].get() != 0 for i in range(LED_INPUT_COUNT))
-            self.led_reactive.set(any_mapped)
-            for i in range(LED_INPUT_COUNT):
-                self._led_maps_backup[i] = self.led_maps[i].get()
-
-            self._on_led_toggle()
-            if self.led_enabled.get():
-                self._rebuild_led_color_grid()
-                if self.led_reactive.get():
-                    self._rebuild_led_map_grid()
-
-            # sync_pin and wireless_default_mode have no UI widgets — push
-            # directly to the firmware now if connected, and update the cache
-            # so a subsequent export round-trips the imported values correctly.
-            raw_cache = getattr(self, "_last_raw_cfg", {})
-            if "sync_pin" in cfg:
-                raw_cache["sync_pin"] = str(int(cfg["sync_pin"]))
-                if self.pico.connected:
-                    try:
-                        self.pico.set_value("sync_pin", raw_cache["sync_pin"])
-                    except Exception:
-                        pass
-            if "wireless_default_mode" in cfg:
-                raw_cache["wireless_default_mode"] = str(int(cfg["wireless_default_mode"]))
-                if self.pico.connected:
-                    try:
-                        self.pico.set_value("wireless_default_mode",
-                                            raw_cache["wireless_default_mode"])
-                    except Exception:
-                        pass
-            self._last_raw_cfg = raw_cache
-
+            self._apply_config_dict(cfg)
             messagebox.showinfo("Import Successful",
                                 "Configuration loaded into UI.\n"
                                 "Click Save or Save & Play to apply it to the controller.")
         except Exception as exc:
             messagebox.showerror("Import Error", f"Failed to apply config:\n{exc}")
+
+    def _import_preset(self, filepath):
+        """Load a preset JSON directly into the UI (same as import but no file dialog)."""
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception as exc:
+            messagebox.showerror("Preset Error", f"Could not read preset:\n{exc}")
+            return
+
+        try:
+            self._apply_config_dict(cfg)
+            messagebox.showinfo("Preset Loaded",
+                                "Preset applied to UI.\n"
+                                "Click Save or Save & Play to apply it to the controller.")
+        except Exception as exc:
+            messagebox.showerror("Preset Error", f"Failed to apply preset:\n{exc}")
 
     def _save_config(self):
         if not self.pico.connected:
@@ -12201,6 +12671,17 @@ class DrumApp:
         adv.add_command(label="Exit", command=self._on_close)
         mb.add_cascade(label="Advanced", menu=adv)
 
+        pm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
+                     activebackground=ACCENT_BLUE, activeforeground="#fff")
+        presets = _find_preset_configs({"drum_kit"})
+        if presets:
+            for display_name, fpath in presets:
+                pm.add_command(label=display_name,
+                               command=lambda p=fpath: self._import_preset(p))
+        else:
+            pm.add_command(label="No preset configs found", state="disabled")
+        mb.add_cascade(label="Preset Config", menu=pm)
+
         hm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
                      activebackground=ACCENT_BLUE, activeforeground="#fff")
         hm.add_command(label="About", command=self._show_about)
@@ -12296,8 +12777,12 @@ class DrumApp:
         self.led_breathe_max     = tk.IntVar(value=9)
         self.led_wave_enabled    = tk.BooleanVar(value=False)
         self.led_wave_origin     = tk.IntVar(value=1)
+        self.led_loop_speed      = tk.IntVar(value=3000)
+        self.led_breathe_speed   = tk.IntVar(value=3000)
+        self.led_wave_speed      = tk.IntVar(value=800)
 
         self._led_widgets      = []
+        self._led_sub_cards    = []
         self._led_color_btns   = []
         self._led_map_cbs      = {}
         self._led_map_widgets  = []
@@ -12496,6 +12981,50 @@ class DrumApp:
             body.pack(fill="x")
 
         return card, body_inner
+
+    def _make_sub_collapsible(self, parent, title, collapsed=True):
+        """Nested collapsible card — packed into `parent` instead of self.content."""
+        card = tk.Frame(parent, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
+        card.pack(fill="x", pady=(2, 2))
+
+        header = tk.Frame(card, bg=BG_CARD, cursor="hand2")
+        header.pack(fill="x", padx=10, pady=(6, 0))
+
+        arrow_var = tk.StringVar(value="\u25b6" if collapsed else "\u25bc")
+        arrow_lbl = tk.Label(header, textvariable=arrow_var,
+                             bg=BG_CARD, fg=ACCENT_BLUE, font=(FONT_UI, 8, "bold"))
+        arrow_lbl.pack(side="left", padx=(0, 5))
+
+        title_lbl = tk.Label(header, text=title,
+                             bg=BG_CARD, fg=ACCENT_BLUE,
+                             font=(FONT_UI, 8, "bold"), cursor="hand2")
+        title_lbl.pack(side="left")
+
+        sep = tk.Frame(card, bg=BORDER, height=1)
+        body = tk.Frame(card, bg=BG_CARD)
+
+        _open = [not collapsed]
+
+        def _toggle(_event=None):
+            if _open[0]:
+                body.pack_forget()
+                sep.pack_forget()
+                arrow_var.set("\u25b6")
+            else:
+                sep.pack(fill="x", padx=10, pady=(4, 0))
+                body.pack(fill="x", padx=10, pady=(6, 8))
+                arrow_var.set("\u25bc")
+            _open[0] = not _open[0]
+            self._update_scroll_state()
+
+        if not collapsed:
+            sep.pack(fill="x", padx=10, pady=(4, 0))
+            body.pack(fill="x", padx=10, pady=(6, 8))
+
+        for widget in (header, arrow_lbl, title_lbl):
+            widget.bind("<Button-1>", _toggle)
+
+        return card, body
 
     # ── Section: Device Name ─────────────────────────────────────────
 
@@ -12762,108 +13291,164 @@ class DrumApp:
         self._led_widgets.append(self._led_colors_frame)
         self._rebuild_drum_led_color_grid()
 
-        # LED Loop row
-        loop_row = tk.Frame(inner, bg=BG_CARD)
-        loop_row.pack(fill="x", pady=(6, 2))
-        self._led_widgets.append(loop_row)
+        # ── LED Color Loop sub-card ────────────────────────────────────────
+        loop_card, loop_body = self._make_sub_collapsible(inner, "LED COLOR LOOP", collapsed=True)
+        self._led_sub_cards.append(loop_card)
 
-        loop_cb = ttk.Checkbutton(loop_row, text="Enable LED Color Loop",
+        lc_left = tk.Frame(loop_body, bg=BG_CARD)
+        lc_left.pack(side="left", fill="y", padx=(0, 20))
+        lc_right = tk.Frame(loop_body, bg=BG_CARD)
+        lc_right.pack(side="left")
+
+        loop_cb = ttk.Checkbutton(lc_left, text="Enable LED Color Loop",
                                    variable=self.led_loop_enabled)
-        loop_cb.pack(side="left", padx=(0, 12))
+        loop_cb.pack(anchor="w", pady=(0, 4))
         self._drum_all_widgets.append(loop_cb)
 
-        tk.Label(loop_row, text="From LED:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(lc_left, text="Effect Range", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="w").pack(anchor="w", pady=(4, 1))
+        loop_range_row = tk.Frame(lc_left, bg=BG_CARD)
+        loop_range_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(loop_range_row, text="From LED:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        loop_start_sp = ttk.Spinbox(loop_row, from_=1, to=MAX_LEDS, width=4,
+        loop_start_wrap = tk.Frame(loop_range_row, bg=BG_CARD, width=52, height=22)
+        loop_start_wrap.pack(side="left", padx=(0, 8))
+        loop_start_wrap.pack_propagate(False)
+        loop_start_sp = ttk.Spinbox(loop_start_wrap, from_=1, to=MAX_LEDS, width=4,
                                      textvariable=self.led_loop_start)
-        loop_start_sp.pack(side="left", padx=(0, 8))
+        loop_start_sp.pack(fill="both", expand=True)
         self._drum_all_widgets.append(loop_start_sp)
-
-        tk.Label(loop_row, text="To LED:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(loop_range_row, text="To LED:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        loop_end_sp = ttk.Spinbox(loop_row, from_=1, to=MAX_LEDS, width=4,
+        loop_end_wrap = tk.Frame(loop_range_row, bg=BG_CARD, width=52, height=22)
+        loop_end_wrap.pack(side="left")
+        loop_end_wrap.pack_propagate(False)
+        loop_end_sp = ttk.Spinbox(loop_end_wrap, from_=1, to=MAX_LEDS, width=4,
                                    textvariable=self.led_loop_end)
-        loop_end_sp.pack(side="left", padx=(0, 10))
+        loop_end_sp.pack(fill="both", expand=True)
         self._drum_all_widgets.append(loop_end_sp)
 
-        tk.Label(loop_row,
-                 text="Rotates colors through these LEDs once/sec with smooth crossfade",
-                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left")
+        tk.Label(lc_right, text="Effect Speed", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="center").pack(pady=(4, 1))
+        loop_speed_sl = SpeedSlider(lc_right, self.led_loop_speed,
+                                    notch_ms=[9999, 5000, 3000, 1000, 100])
+        loop_speed_sl.pack()
+        self._drum_all_widgets.append(loop_speed_sl)
+        # ── end LED Color Loop sub-card ────────────────────────────────────
 
-        # LED Breathe row
-        breathe_row = tk.Frame(inner, bg=BG_CARD)
-        breathe_row.pack(fill="x", pady=(4, 2))
-        self._led_widgets.append(breathe_row)
+        # ── LED Breathe sub-card ───────────────────────────────────────────
+        breathe_card, breathe_body = self._make_sub_collapsible(inner, "LED BREATHE", collapsed=True)
+        self._led_sub_cards.append(breathe_card)
 
-        breathe_cb = ttk.Checkbutton(breathe_row, text="Enable LED Breathe",
+        br_left = tk.Frame(breathe_body, bg=BG_CARD)
+        br_left.pack(side="left", fill="y", padx=(0, 20))
+        br_right = tk.Frame(breathe_body, bg=BG_CARD)
+        br_right.pack(side="left")
+
+        breathe_cb = ttk.Checkbutton(br_left, text="Enable LED Breathe",
                                      variable=self.led_breathe_enabled,
                                      command=lambda: self.led_wave_enabled.set(False) if self.led_breathe_enabled.get() else None)
-        breathe_cb.pack(side="left", padx=(0, 12))
+        breathe_cb.pack(anchor="w", pady=(0, 4))
         self._drum_all_widgets.append(breathe_cb)
 
-        tk.Label(breathe_row, text="From LED:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(br_left, text="Effect Range", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="w").pack(anchor="w", pady=(4, 1))
+        breathe_range_row = tk.Frame(br_left, bg=BG_CARD)
+        breathe_range_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(breathe_range_row, text="From LED:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        breathe_start_sp = ttk.Spinbox(breathe_row, from_=1, to=MAX_LEDS, width=4,
+        breathe_start_wrap = tk.Frame(breathe_range_row, bg=BG_CARD, width=52, height=22)
+        breathe_start_wrap.pack(side="left", padx=(0, 8))
+        breathe_start_wrap.pack_propagate(False)
+        breathe_start_sp = ttk.Spinbox(breathe_start_wrap, from_=1, to=MAX_LEDS, width=4,
                                        textvariable=self.led_breathe_start)
-        breathe_start_sp.pack(side="left", padx=(0, 8))
+        breathe_start_sp.pack(fill="both", expand=True)
         self._drum_all_widgets.append(breathe_start_sp)
-
-        tk.Label(breathe_row, text="To LED:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(breathe_range_row, text="To LED:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        breathe_end_sp = ttk.Spinbox(breathe_row, from_=1, to=MAX_LEDS, width=4,
+        breathe_end_wrap = tk.Frame(breathe_range_row, bg=BG_CARD, width=52, height=22)
+        breathe_end_wrap.pack(side="left")
+        breathe_end_wrap.pack_propagate(False)
+        breathe_end_sp = ttk.Spinbox(breathe_end_wrap, from_=1, to=MAX_LEDS, width=4,
                                      textvariable=self.led_breathe_end)
-        breathe_end_sp.pack(side="left", padx=(0, 12))
+        breathe_end_sp.pack(fill="both", expand=True)
         self._drum_all_widgets.append(breathe_end_sp)
 
-        tk.Label(breathe_row, text="Min:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(br_left, text="Effect Brightness", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="w").pack(anchor="w", pady=(4, 1))
+        breathe_bright_row = tk.Frame(br_left, bg=BG_CARD)
+        breathe_bright_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(breathe_bright_row, text="Min:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        breathe_min_sp = ttk.Spinbox(breathe_row, from_=0, to=9, width=4,
+        breathe_min_wrap = tk.Frame(breathe_bright_row, bg=BG_CARD, width=52, height=22)
+        breathe_min_wrap.pack(side="left", padx=(0, 8))
+        breathe_min_wrap.pack_propagate(False)
+        breathe_min_sp = ttk.Spinbox(breathe_min_wrap, from_=0, to=9, width=4,
                                      textvariable=self.led_breathe_min,
                                      validate="key", validatecommand=_bvcmd)
-        breathe_min_sp.pack(side="left", padx=(0, 8))
+        breathe_min_sp.pack(fill="both", expand=True)
         self._drum_all_widgets.append(breathe_min_sp)
-
-        tk.Label(breathe_row, text="Max:", bg=BG_CARD, fg=TEXT_DIM,
+        tk.Label(breathe_bright_row, text="Max:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        breathe_max_sp = ttk.Spinbox(breathe_row, from_=0, to=9, width=4,
+        breathe_max_wrap = tk.Frame(breathe_bright_row, bg=BG_CARD, width=52, height=22)
+        breathe_max_wrap.pack(side="left")
+        breathe_max_wrap.pack_propagate(False)
+        breathe_max_sp = ttk.Spinbox(breathe_max_wrap, from_=0, to=9, width=4,
                                      textvariable=self.led_breathe_max,
                                      validate="key", validatecommand=_bvcmd)
-        breathe_max_sp.pack(side="left", padx=(0, 10))
+        breathe_max_sp.pack(fill="both", expand=True)
         self._drum_all_widgets.append(breathe_max_sp)
 
-        tk.Label(breathe_row, text="Fades brightness slowly between Min and Max (3 s cycle)",
-                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left")
+        tk.Label(br_right, text="Effect Speed", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="center").pack(pady=(4, 1))
+        breathe_speed_sl = SpeedSlider(br_right, self.led_breathe_speed,
+                                       notch_ms=[9999, 5000, 3000, 1000, 100])
+        breathe_speed_sl.pack()
+        self._drum_all_widgets.append(breathe_speed_sl)
+        # ── end LED Breathe sub-card ───────────────────────────────────────
 
-        # LED Wave row
-        wave_row = tk.Frame(inner, bg=BG_CARD)
-        wave_row.pack(fill="x", pady=(4, 2))
-        self._led_widgets.append(wave_row)
+        # ── LED Ripple sub-card ────────────────────────────────────────────
+        wave_card, wave_body = self._make_sub_collapsible(inner, "LED RIPPLE", collapsed=True)
+        self._led_sub_cards.append(wave_card)
 
-        wave_cb = ttk.Checkbutton(wave_row, text="Enable LED Ripple",
+        wv_left = tk.Frame(wave_body, bg=BG_CARD)
+        wv_left.pack(side="left", fill="y", padx=(0, 20))
+        wv_right = tk.Frame(wave_body, bg=BG_CARD)
+        wv_right.pack(side="left")
+
+        wave_cb = ttk.Checkbutton(wv_left, text="Enable LED Ripple",
                                   variable=self.led_wave_enabled,
                                   command=lambda: self.led_breathe_enabled.set(False) if self.led_wave_enabled.get() else None)
-        wave_cb.pack(side="left", padx=(0, 12))
+        wave_cb.pack(anchor="w", pady=(0, 4))
         self._drum_all_widgets.append(wave_cb)
 
-        tk.Label(wave_row, text="Origin LED:", bg=BG_CARD, fg=TEXT_DIM,
+        wave_origin_row = tk.Frame(wv_left, bg=BG_CARD)
+        wave_origin_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(wave_origin_row, text="Origin LED:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
-        wave_origin_sp = ttk.Spinbox(wave_row, from_=1, to=MAX_LEDS, width=4,
+        wave_origin_wrap = tk.Frame(wave_origin_row, bg=BG_CARD, width=52, height=22)
+        wave_origin_wrap.pack(side="left")
+        wave_origin_wrap.pack_propagate(False)
+        wave_origin_sp = ttk.Spinbox(wave_origin_wrap, from_=1, to=MAX_LEDS, width=4,
                                      textvariable=self.led_wave_origin)
-        wave_origin_sp.pack(side="left", padx=(0, 10))
+        wave_origin_sp.pack(fill="both", expand=True)
         self._drum_all_widgets.append(wave_origin_sp)
 
-        tk.Label(wave_row,
-                 text="On keypress: brightness pulse radiates outward from origin LED",
-                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left")
+        tk.Label(wv_right, text="Effect Speed", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="center").pack(pady=(4, 1))
+        wave_speed_sl = SpeedSlider(wv_right, self.led_wave_speed,
+                                    notch_ms=[9999, 2500, 800, 250, 100])
+        wave_speed_sl.pack()
+        self._drum_all_widgets.append(wave_speed_sl)
+        # ── end LED Ripple sub-card ────────────────────────────────────────
 
-        sep = tk.Frame(inner, bg=BORDER, height=1)
-        sep.pack(fill="x", pady=(8, 4))
-        self._led_widgets.append(sep)
+        # ── Reactive LED sub-card ──────────────────────────────────────────
+        react_card, react_body = self._make_sub_collapsible(
+            inner, "REACTIVE LED ON KEYPRESS", collapsed=False)
+        self._led_sub_cards.append(react_card)
 
-        react_row = tk.Frame(inner, bg=BG_CARD)
+        react_row = tk.Frame(react_body, bg=BG_CARD)
         react_row.pack(fill="x", pady=(0, 4))
-        self._led_widgets.append(react_row)
-
         react_cb = ttk.Checkbutton(react_row, text="Reactive LEDs on keypress",
                                     variable=self.led_reactive,
                                     command=self._on_drum_reactive_toggle)
@@ -12873,18 +13458,17 @@ class DrumApp:
                  text="When enabled, LEDs light up when their mapped input is pressed",
                  bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left")
 
-        lbl = tk.Label(inner,
-                       text="Input → LED Mapping  (select which LEDs respond to each input)",
+        lbl = tk.Label(react_body,
+                       text="Input \u2192 LED Mapping  (select which LEDs respond to each input)",
                        bg=BG_CARD, fg=TEXT, font=(FONT_UI, 8, "bold"), anchor="w")
         lbl.pack(fill="x", pady=(0, 4))
-        self._led_widgets.append(lbl)
         self._led_map_widgets.append(lbl)
 
-        self._led_map_frame = tk.Frame(inner, bg=BG_CARD)
+        self._led_map_frame = tk.Frame(react_body, bg=BG_CARD)
         self._led_map_frame.pack(fill="x")
-        self._led_widgets.append(self._led_map_frame)
         self._led_map_widgets.append(self._led_map_frame)
         self._rebuild_drum_led_map_grid()
+        # ── end Reactive LED sub-card ──────────────────────────────────────
 
         self._on_drum_led_toggle()
 
@@ -12896,6 +13480,12 @@ class DrumApp:
                     w.pack(fill="x")
             else:
                 w.pack_forget()
+        for card in self._led_sub_cards:
+            if show:
+                if not card.winfo_ismapped():
+                    card.pack(fill="x", pady=(2, 2))
+            else:
+                card.pack_forget()
         if show:
             self._led_colors_frame.pack(fill="x", pady=(6, 0))
             self._rebuild_drum_led_color_grid()
@@ -13325,6 +13915,12 @@ class DrumApp:
             self.led_wave_enabled.set(int(cfg["led_wave_enabled"]) != 0)
         if "led_wave_origin" in cfg:
             self.led_wave_origin.set(int(cfg["led_wave_origin"]) + 1)
+        if "led_loop_speed" in cfg:
+            self.led_loop_speed.set(max(100, min(9999, int(cfg["led_loop_speed"]))))
+        if "led_breathe_speed" in cfg:
+            self.led_breathe_speed.set(max(100, min(9999, int(cfg["led_breathe_speed"]))))
+        if "led_wave_speed" in cfg:
+            self.led_wave_speed.set(max(100, min(9999, int(cfg["led_wave_speed"]))))
 
         if "led_colors_raw" in cfg:
             colors = cfg["led_colors_raw"].split(",")
@@ -13401,6 +13997,13 @@ class DrumApp:
         self.pico.set_value("led_breathe_max",   str(round(self.led_breathe_max.get() * 31 / 9)))
         self.pico.set_value("led_wave_enabled", "1" if self.led_wave_enabled.get() else "0")
         self.pico.set_value("led_wave_origin",  str(self.led_wave_origin.get() - 1))
+        for _k, _v in [("led_loop_speed",    str(self.led_loop_speed.get())),
+                       ("led_breathe_speed", str(self.led_breathe_speed.get())),
+                       ("led_wave_speed",    str(self.led_wave_speed.get()))]:
+            try:
+                self.pico.set_value(_k, _v)
+            except ValueError:
+                pass  # old firmware — skip
 
     # ── Save & Play Mode ──────────────────────────────────────────────
 
@@ -13773,6 +14376,19 @@ class DrumApp:
         except Exception as exc:
             messagebox.showerror("Export Error", str(exc))
 
+    def _apply_config_dict(self, cfg):
+        """Push all SET-able keys from cfg to the firmware. Returns list of error strings."""
+        SKIP_KEYS = {"device_type", "led_colors_raw", "led_map_raw"}
+        errors = []
+        for key, val in cfg.items():
+            if key in SKIP_KEYS:
+                continue
+            try:
+                self.pico.set_value(key, val)
+            except Exception as exc:
+                errors.append(f"{key}: {exc}")
+        return errors
+
     def _import_config(self):
         if not self.pico.connected:
             messagebox.showwarning("Not Connected",
@@ -13791,24 +14407,39 @@ class DrumApp:
             messagebox.showerror("Import Error", f"Could not read file:\n{exc}")
             return
 
-        # Push all SET-able keys from the saved config back to the firmware.
-        # Skip meta keys that aren't firmware SET keys.
-        SKIP_KEYS = {"device_type", "led_colors_raw", "led_map_raw"}
-        errors = []
-        for key, val in cfg.items():
-            if key in SKIP_KEYS:
-                continue
-            try:
-                self.pico.set_value(key, val)
-            except Exception as exc:
-                errors.append(f"{key}: {exc}")
-
+        errors = self._apply_config_dict(cfg)
         if errors:
             messagebox.showwarning("Import Partial",
                 f"Some keys could not be set:\n" + "\n".join(errors[:10]))
         else:
             if messagebox.askyesno("Import Successful",
                     "Configuration imported.\n\nSave to flash now?"):
+                try:
+                    self.pico.save()
+                    self._set_status("   Config saved to flash", ACCENT_GREEN)
+                except Exception as exc:
+                    messagebox.showerror("Save Error", str(exc))
+
+    def _import_preset(self, filepath):
+        """Load a preset JSON directly and push to firmware (no file dialog)."""
+        if not self.pico.connected:
+            messagebox.showwarning("Not Connected",
+                "Connect to the drum kit before loading a preset.")
+            return
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception as exc:
+            messagebox.showerror("Preset Error", f"Could not read preset:\n{exc}")
+            return
+
+        errors = self._apply_config_dict(cfg)
+        if errors:
+            messagebox.showwarning("Preset Partial",
+                f"Some keys could not be set:\n" + "\n".join(errors[:10]))
+        else:
+            if messagebox.askyesno("Preset Loaded",
+                    "Preset applied.\n\nSave to flash now?"):
                 try:
                     self.pico.save()
                     self._set_status("   Config saved to flash", ACCENT_GREEN)
@@ -14168,6 +14799,17 @@ class PedalApp:
         adv.add_separator()
         adv.add_command(label="Exit", command=self._on_close)
         mb.add_cascade(label="Advanced", menu=adv)
+
+        pm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
+                     activebackground=ACCENT_BLUE, activeforeground="#fff")
+        presets = _find_preset_configs({"pedal"})
+        if presets:
+            for display_name, fpath in presets:
+                pm.add_command(label=display_name,
+                               command=lambda p=fpath: self._import_preset(p))
+        else:
+            pm.add_command(label="No preset configs found", state="disabled")
+        mb.add_cascade(label="Preset Config", menu=pm)
 
         hm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
                      activebackground=ACCENT_BLUE, activeforeground="#fff")
@@ -15383,6 +16025,19 @@ class PedalApp:
         except Exception as exc:
             messagebox.showerror("Export Error", str(exc))
 
+    def _apply_config_dict(self, cfg):
+        """Push all SET-able keys from cfg to the firmware. Returns list of error strings."""
+        SKIP_KEYS = {"device_type"}
+        errors = []
+        for key, val in cfg.items():
+            if key in SKIP_KEYS:
+                continue
+            try:
+                self.pico.set_value(key, val)
+            except Exception as exc:
+                errors.append(f"{key}: {exc}")
+        return errors
+
     def _import_config(self):
         if not self.pico.connected:
             messagebox.showwarning("Not Connected",
@@ -15401,22 +16056,39 @@ class PedalApp:
             messagebox.showerror("Import Error", f"Could not read file:\n{exc}")
             return
 
-        SKIP_KEYS = {"device_type"}
-        errors = []
-        for key, val in cfg.items():
-            if key in SKIP_KEYS:
-                continue
-            try:
-                self.pico.set_value(key, val)
-            except Exception as exc:
-                errors.append(f"{key}: {exc}")
-
+        errors = self._apply_config_dict(cfg)
         if errors:
             messagebox.showwarning("Import Partial",
                 f"Some keys could not be set:\n" + "\n".join(errors[:10]))
         else:
             if messagebox.askyesno("Import Successful",
                     "Configuration imported.\n\nSave to flash now?"):
+                try:
+                    self.pico.save()
+                    self._set_status("   Config saved to flash", ACCENT_GREEN)
+                except Exception as exc:
+                    messagebox.showerror("Save Error", str(exc))
+
+    def _import_preset(self, filepath):
+        """Load a preset JSON directly and push to firmware (no file dialog)."""
+        if not self.pico.connected:
+            messagebox.showwarning("Not Connected",
+                "Connect to the pedal controller before loading a preset.")
+            return
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception as exc:
+            messagebox.showerror("Preset Error", f"Could not read preset:\n{exc}")
+            return
+
+        errors = self._apply_config_dict(cfg)
+        if errors:
+            messagebox.showwarning("Preset Partial",
+                f"Some keys could not be set:\n" + "\n".join(errors[:10]))
+        else:
+            if messagebox.askyesno("Preset Loaded",
+                    "Preset applied.\n\nSave to flash now?"):
                 try:
                     self.pico.save()
                     self._set_status("   Config saved to flash", ACCENT_GREEN)
@@ -15806,6 +16478,17 @@ class RetroApp:
         adv.add_separator()
         adv.add_command(label="Exit", command=self._on_close)
         mb.add_cascade(label="Advanced", menu=adv)
+
+        pm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
+                     activebackground=ACCENT_BLUE, activeforeground="#fff")
+        presets = _find_preset_configs({"pico_retro"})
+        if presets:
+            for display_name, fpath in presets:
+                pm.add_command(label=display_name,
+                               command=lambda p=fpath: self._import_preset(p))
+        else:
+            pm.add_command(label="No preset configs found", state="disabled")
+        mb.add_cascade(label="Preset Config", menu=pm)
 
         hm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
                      activebackground=ACCENT_BLUE, activeforeground="#fff")
@@ -16838,6 +17521,19 @@ class RetroApp:
         except Exception as exc:
             messagebox.showerror("Export Error", str(exc))
 
+    def _apply_config_dict(self, cfg):
+        """Push all SET-able keys from cfg to the firmware. Returns list of error strings."""
+        SKIP_KEYS = {"device_type"}
+        errors = []
+        for key, val in cfg.items():
+            if key in SKIP_KEYS:
+                continue
+            try:
+                self.pico.set_value(key, val)
+            except Exception as exc:
+                errors.append(f"{key}: {exc}")
+        return errors
+
     def _import_config(self):
         if not self.pico.connected:
             messagebox.showwarning("Not Connected",
@@ -16856,22 +17552,39 @@ class RetroApp:
             messagebox.showerror("Import Error", f"Could not read file:\n{exc}")
             return
 
-        SKIP_KEYS = {"device_type"}
-        errors = []
-        for key, val in cfg.items():
-            if key in SKIP_KEYS:
-                continue
-            try:
-                self.pico.set_value(key, val)
-            except Exception as exc:
-                errors.append(f"{key}: {exc}")
-
+        errors = self._apply_config_dict(cfg)
         if errors:
             messagebox.showwarning("Import Partial",
                 f"Some keys could not be set:\n" + "\n".join(errors[:10]))
         else:
             if messagebox.askyesno("Import Successful",
                     "Configuration imported.\n\nSave to flash now?"):
+                try:
+                    self.pico.save()
+                    self._set_status("   Config saved to flash", ACCENT_GREEN)
+                except Exception as exc:
+                    messagebox.showerror("Save Error", str(exc))
+
+    def _import_preset(self, filepath):
+        """Load a preset JSON directly and push to firmware (no file dialog)."""
+        if not self.pico.connected:
+            messagebox.showwarning("Not Connected",
+                "Connect to the retro controller before loading a preset.")
+            return
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception as exc:
+            messagebox.showerror("Preset Error", f"Could not read preset:\n{exc}")
+            return
+
+        errors = self._apply_config_dict(cfg)
+        if errors:
+            messagebox.showwarning("Preset Partial",
+                f"Some keys could not be set:\n" + "\n".join(errors[:10]))
+        else:
+            if messagebox.askyesno("Preset Loaded",
+                    "Preset applied.\n\nSave to flash now?"):
                 try:
                     self.pico.save()
                     self._set_status("   Config saved to flash", ACCENT_GREEN)

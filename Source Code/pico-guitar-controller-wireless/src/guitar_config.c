@@ -113,6 +113,11 @@ void config_set_defaults(guitar_config_t *config) {
     config->leds.loop_start   = 0;
     config->leds.loop_end     = 0;
 
+    // Effect speeds
+    config->leds.loop_speed_ms    = 3000;
+    config->leds.breathe_speed_ms = 3000;
+    config->leds.wave_speed_ms    = 800;
+
     strncpy(config->device_name, "Guitar Controller", DEVICE_NAME_MAX);
     config->device_name[DEVICE_NAME_MAX] = '\0';
 

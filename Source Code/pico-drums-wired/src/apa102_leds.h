@@ -44,6 +44,22 @@ typedef struct __attribute__((packed)) {
     uint8_t  loop_enabled;   // 0 = off, 1 = on
     uint8_t  loop_start;     // First LED index in the loop (0-based)
     uint8_t  loop_end;       // Last LED index in the loop (0-based, inclusive)
+
+    // ── LED breathe ──
+    uint8_t  breathe_enabled;    // 0 = off, 1 = on
+    uint8_t  breathe_start;      // First LED index (0-based)
+    uint8_t  breathe_end;        // Last LED index (0-based, inclusive)
+    uint8_t  breathe_min_bright; // Minimum brightness (0-31)
+    uint8_t  breathe_max_bright; // Maximum brightness (0-31)
+
+    // ── LED wave ──
+    uint8_t  wave_enabled; // 0 = off, 1 = on
+    uint8_t  wave_origin;  // LED index the wave originates from (0-based)
+
+    // ── Effect speeds ──
+    uint16_t loop_speed_ms;    // Color loop full rotation time (ms), default 3000
+    uint16_t breathe_speed_ms; // Breathe full cycle time (ms), default 3000
+    uint16_t wave_speed_ms;    // Ripple transit time across full strip (ms), default 800
 } led_config_t;
 
 // Initialize SPI pins for LED output

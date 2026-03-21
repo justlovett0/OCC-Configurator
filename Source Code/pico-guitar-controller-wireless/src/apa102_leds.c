@@ -40,20 +40,13 @@ static bool     loop_seeded       = false;
 static uint8_t  loop_colors[MAX_LEDS][3];  // interpolated output
 
 // ── LED breathe state ────────────────────────────────────────────────────────
-// Triangle-wave oscillator between breathe_min_bright and breathe_max_bright.
-// Period: 3 seconds (1.5 s up, 1.5 s down).  Uses delta accumulation so
-// time_us_32() wrap-around is handled correctly.
-#define BREATHE_PERIOD_US 3000000u
+// Triangle-wave oscillator; period driven by cfg->breathe_speed_ms at runtime.
 static uint32_t breathe_phase_us = 0;
 static uint32_t breathe_last_us  = 0;
 static bool     breathe_seeded   = false;
 
 // ── LED wave state ───────────────────────────────────────────────────────────
-// Rising-edge triggered pulses.  Up to WAVE_MAX_ACTIVE simultaneous waves.
-// Each wave front travels outward from wave_origin at ~24 LEDs/sec
-// (41.7 ms per LED).  Each LED peaks at brightness 31 then fades to
-// base_brightness over 100 ms.
-#define WAVE_US_PER_LED  41667u
+// Rising-edge triggered pulses; travel speed driven by cfg->wave_speed_ms.
 #define WAVE_FADE_US     100000u
 #define WAVE_MAX_ACTIVE  4
 typedef struct { bool active; uint32_t start_us; } wave_t;
@@ -198,15 +191,18 @@ static void update_loop_colors(const led_config_t *cfg) {
         loop_seeded       = true;
     }
 
-    // How far through the current 1-second step are we? (0..255)
+    // Step duration based on configured speed (default 3000 ms / len LEDs)
+    uint32_t speed_ms = cfg->loop_speed_ms > 0 ? cfg->loop_speed_ms : 3000u;
+    uint32_t step_us  = (speed_ms * 1000u) / (len > 0 ? (uint32_t)len : 1u);
+
     uint32_t elapsed = now - loop_last_step_us;
-    if (elapsed >= 1000000u) {
+    if (elapsed >= step_us) {
         // Step complete — advance phase
         loop_phase = (uint8_t)((loop_phase + 1) % len);
         loop_last_step_us = now;
         elapsed = 0;
     }
-    uint32_t t256 = (elapsed * 256u) / 1000000u;  // 0..255
+    uint32_t t256 = (elapsed * 256u) / step_us;  // 0..255
 
     // Compute interpolated color for each slot in the loop
     for (uint8_t i = 0; i < len; i++) {
@@ -243,13 +239,14 @@ static uint8_t compute_breathe_brightness(const led_config_t *cfg) {
     }
     uint32_t delta = now - breathe_last_us;
     breathe_last_us  = now;
-    breathe_phase_us = (breathe_phase_us + delta) % BREATHE_PERIOD_US;
+    uint32_t period_us = (uint32_t)(cfg->breathe_speed_ms > 0 ? cfg->breathe_speed_ms : 3000u) * 1000u;
+    breathe_phase_us = (breathe_phase_us + delta) % period_us;
 
     // Triangle wave: first half rises 0→255, second half falls 255→0
-    uint32_t half = BREATHE_PERIOD_US / 2u;
+    uint32_t half = period_us / 2u;
     uint32_t t256 = (breathe_phase_us < half)
                   ? (breathe_phase_us * 256u) / half
-                  : ((BREATHE_PERIOD_US - breathe_phase_us) * 256u) / half;
+                  : ((period_us - breathe_phase_us) * 256u) / half;
 
     return (uint8_t)(mn + (((uint32_t)(mx - mn) * t256) / 256u));
 }
@@ -321,14 +318,16 @@ void apa102_update_from_inputs(const led_config_t *cfg, uint16_t pressed_mask) {
             uint8_t d = (uint8_t)(led >= origin ? led - origin : origin - led);
             if (d > max_dist) max_dist = d;
         }
-        uint32_t lifetime = (uint32_t)max_dist * WAVE_US_PER_LED + WAVE_FADE_US;
+        uint32_t wave_spd_ms = cfg->wave_speed_ms > 0 ? cfg->wave_speed_ms : 800u;
+        uint32_t us_per_led  = (wave_spd_ms * 1000u) / (count > 1u ? (uint32_t)(count - 1u) : 1u);
+        uint32_t lifetime = (uint32_t)max_dist * us_per_led + WAVE_FADE_US;
         for (int w = 0; w < WAVE_MAX_ACTIVE; w++) {
             if (!waves[w].active) continue;
             uint32_t elapsed = time_us_32() - waves[w].start_us;
             if (elapsed >= lifetime) { waves[w].active = false; continue; }
             for (int led = 0; led < count; led++) {
                 uint8_t  dist   = (uint8_t)(led >= origin ? led - origin : origin - led);
-                uint32_t t_peak = (uint32_t)dist * WAVE_US_PER_LED;
+                uint32_t t_peak = (uint32_t)dist * us_per_led;
                 if (elapsed >= t_peak) {
                     uint32_t since = elapsed - t_peak;
                     if (since < WAVE_FADE_US) {

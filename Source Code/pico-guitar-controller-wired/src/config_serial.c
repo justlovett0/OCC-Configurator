@@ -148,7 +148,7 @@ static const char *whammy_mode_str(uint8_t mode) {
 //--------------------------------------------------------------------
 
 static void send_config(const guitar_config_t *config) {
-    char buf[512];
+    char buf[768];
     int pos;
 
     serial_writeln("DEVTYPE:" DEVICE_TYPE);
@@ -256,8 +256,11 @@ static void send_config(const guitar_config_t *config) {
                     config->leds.breathe_max_bright);
     pos += snprintf(buf + pos, sizeof(buf) - pos, "wave_enabled=%d,",
                     config->leds.wave_enabled);
-    pos += snprintf(buf + pos, sizeof(buf) - pos, "wave_origin=%d",
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "wave_origin=%d,",
                     config->leds.wave_origin);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "loop_speed=%d,",    config->leds.loop_speed_ms);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "breathe_speed=%d,", config->leds.breathe_speed_ms);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "wave_speed=%d",     config->leds.wave_speed_ms);
     serial_writeln(buf);
 
     // Third line: LED colors (hex RRGGBB for each)
@@ -496,6 +499,26 @@ static bool handle_set(guitar_config_t *config, const char *kv_str) {
         int v = atoi(val);
         if (v < 0 || v >= MAX_LEDS) { serial_writeln("ERR:0-15"); return false; }
         config->leds.wave_origin = (uint8_t)v;
+        serial_writeln("OK"); return true;
+    }
+
+    // LED effect speeds
+    if (strcmp(key, "led_loop_speed") == 0) {
+        int v = atoi(val);
+        if (v < 100 || v > 9999) { serial_writeln("ERR:100-9999"); return false; }
+        config->leds.loop_speed_ms = (uint16_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_breathe_speed") == 0) {
+        int v = atoi(val);
+        if (v < 100 || v > 9999) { serial_writeln("ERR:100-9999"); return false; }
+        config->leds.breathe_speed_ms = (uint16_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_wave_speed") == 0) {
+        int v = atoi(val);
+        if (v < 100 || v > 9999) { serial_writeln("ERR:100-9999"); return false; }
+        config->leds.wave_speed_ms = (uint16_t)v;
         serial_writeln("OK"); return true;
     }
 

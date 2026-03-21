@@ -9,6 +9,7 @@
  * v10: Added i2c_model field to select accelerometer chip (ADXL345 / LIS3DH).
  *      Bumped CONFIG_VERSION to force defaults reset on first boot after update.
  * v11: Added ema_alpha field for user-configurable analog smoothing strength.
+ * v12: Added per-effect LED speed fields (loop_speed_ms, breathe_speed_ms, wave_speed_ms).
  */
 
 #ifndef _GUITAR_CONFIG_H_
@@ -19,7 +20,7 @@
 #include "apa102_leds.h"
 
 #define CONFIG_MAGIC              0x47554954  // "GUIT"
-#define CONFIG_VERSION            11
+#define CONFIG_VERSION            12
 #define DEVICE_NAME_MAX           31          // + null terminator = 32 bytes
 
 // ── Device type identifier (sent as DEVTYPE: in GET_CONFIG response) ──

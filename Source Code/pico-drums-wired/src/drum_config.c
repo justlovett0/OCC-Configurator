@@ -3,6 +3,7 @@
  *
  * v2: Added APA102 LED strip support.
  * v3: Added D-pad (up/down/left/right) and foot pedal inputs.
+ * v4: Added breathe+wave effects and per-effect LED speed fields.
  */
 
 #include "drum_config.h"
@@ -85,6 +86,20 @@ void config_set_defaults(drum_config_t *config) {
     config->leds.loop_enabled = 0;
     config->leds.loop_start   = 0;
     config->leds.loop_end     = 0;
+
+    config->leds.breathe_enabled    = 0;
+    config->leds.breathe_start      = 0;
+    config->leds.breathe_end        = 0;
+    config->leds.breathe_min_bright = 1;
+    config->leds.breathe_max_bright = 9;
+
+    config->leds.wave_enabled = 0;
+    config->leds.wave_origin  = 0;
+
+    // Effect speeds
+    config->leds.loop_speed_ms    = 3000;
+    config->leds.breathe_speed_ms = 3000;
+    config->leds.wave_speed_ms    = 800;
 
     strncpy(config->device_name, "Drum Controller", DEVICE_NAME_MAX);
     config->device_name[DEVICE_NAME_MAX] = '\0';

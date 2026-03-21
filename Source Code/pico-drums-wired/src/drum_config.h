@@ -11,6 +11,7 @@
  * v1: Initial drum kit config.
  * v2: Added APA102 LED strip support.
  * v3: Added D-pad (up/down/left/right) and foot pedal inputs.
+ * v4: Added breathe+wave effects and per-effect LED speed fields.
  */
 
 #ifndef _DRUM_CONFIG_H_
@@ -27,7 +28,7 @@
 #define DRUM_INPUT_COUNT  14
 
 #define CONFIG_MAGIC      0x4452554D  // "DRUM"
-#define CONFIG_VERSION    3           // Bumped for dpad + foot pedal
+#define CONFIG_VERSION    4           // Bumped for breathe+wave+speed
 #define DEVICE_NAME_MAX   31          // + null terminator = 32 bytes
 
 // ── Device type identifier (read by configurator GUI) ──

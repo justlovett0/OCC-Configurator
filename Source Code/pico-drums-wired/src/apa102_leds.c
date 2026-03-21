@@ -34,19 +34,22 @@ static uint8_t  active_buf = 0;        // Which buffer DMA is currently sending
 static bool     dma_busy = false;       // Is a DMA transfer in flight?
 
 // ── LED loop (color rotation) state ─────────────────────────────────────────
-// The loop rotates the configured colors of LEDs [loop_start..loop_end] by
-// one position every second, with a smooth integer crossfade at 60 Hz.
-//
-// loop_phase: which slot's color is currently shown at loop_start.
-//             Advances by 1 (mod loop_len) each time a full second elapses.
-// loop_last_step_us: time_us_32() value when the current step began.
-// loop_colors[][3]: current interpolated RGB for each LED in the loop range,
-//                   indexed 0..(loop_len-1).  Written every call so the
-//                   caller can substitute them into the frame.
 static uint8_t  loop_phase        = 0;
 static uint32_t loop_last_step_us = 0;
 static bool     loop_seeded       = false;
 static uint8_t  loop_colors[MAX_LEDS][3];  // interpolated output
+
+// ── LED breathe state ────────────────────────────────────────────────────────
+static uint32_t breathe_phase_us = 0;
+static uint32_t breathe_last_us  = 0;
+static bool     breathe_seeded   = false;
+
+// ── LED wave state ───────────────────────────────────────────────────────────
+#define WAVE_FADE_US    100000u
+#define WAVE_MAX_ACTIVE 4
+typedef struct { bool active; uint32_t start_us; } wave_t;
+static wave_t   waves[WAVE_MAX_ACTIVE];
+static uint16_t wave_prev_mask = 0xFFFFu;
 
 // ── Internal helpers ────────────────────────────────────
 
@@ -186,31 +189,56 @@ static void update_loop_colors(const led_config_t *cfg) {
         loop_seeded       = true;
     }
 
-    // How far through the current 1-second step are we? (0..255)
+    // Step duration based on configured speed (default 3000 ms / len LEDs)
+    uint32_t speed_ms = cfg->loop_speed_ms > 0 ? cfg->loop_speed_ms : 3000u;
+    uint32_t step_us  = (speed_ms * 1000u) / (len > 0 ? (uint32_t)len : 1u);
+
     uint32_t elapsed = now - loop_last_step_us;
-    if (elapsed >= 1000000u) {
+    if (elapsed >= step_us) {
         // Step complete — advance phase
         loop_phase = (uint8_t)((loop_phase + 1) % len);
         loop_last_step_us = now;
         elapsed = 0;
     }
-    uint32_t t256 = (elapsed * 256u) / 1000000u;  // 0..255
+    uint32_t t256 = (elapsed * 256u) / step_us;  // 0..255
 
     // Compute interpolated color for each slot in the loop
     for (uint8_t i = 0; i < len; i++) {
-        // Source color: config color at (phase + i) % len, relative to loop_start
         uint8_t cur_slot  = (uint8_t)((loop_phase + i)     % len);
         uint8_t next_slot = (uint8_t)((loop_phase + i + 1) % len);
 
         const led_color_t *cur  = &cfg->colors[start + cur_slot];
         const led_color_t *next = &cfg->colors[start + next_slot];
 
-        // Linear interpolate each channel: out = cur + t256*(next-cur)/256
-        // Use signed arithmetic to handle next < cur correctly.
         loop_colors[i][0] = (uint8_t)((int)cur->r + (int)((((int)next->r - (int)cur->r) * (int)t256) / 256));
         loop_colors[i][1] = (uint8_t)((int)cur->g + (int)((((int)next->g - (int)cur->g) * (int)t256) / 256));
         loop_colors[i][2] = (uint8_t)((int)cur->b + (int)((((int)next->b - (int)cur->b) * (int)t256) / 256));
     }
+}
+
+static uint8_t compute_breathe_brightness(const led_config_t *cfg) {
+    uint8_t mn = cfg->breathe_min_bright;
+    uint8_t mx = cfg->breathe_max_bright;
+    if (mn > mx) { uint8_t t = mn; mn = mx; mx = t; }
+    if (mn == mx) return mn;
+
+    uint32_t now = time_us_32();
+    if (!breathe_seeded) {
+        breathe_last_us  = now;
+        breathe_phase_us = 0;
+        breathe_seeded   = true;
+    }
+    uint32_t delta = now - breathe_last_us;
+    breathe_last_us  = now;
+    uint32_t period_us = (uint32_t)(cfg->breathe_speed_ms > 0 ? cfg->breathe_speed_ms : 3000u) * 1000u;
+    breathe_phase_us = (breathe_phase_us + delta) % period_us;
+
+    uint32_t half = period_us / 2u;
+    uint32_t t256 = (breathe_phase_us < half)
+                  ? (breathe_phase_us * 256u) / half
+                  : ((period_us - breathe_phase_us) * 256u) / half;
+
+    return (uint8_t)(mn + (((uint32_t)(mx - mn) * t256) / 256u));
 }
 
 void apa102_update_from_inputs(const led_config_t *cfg, uint16_t pressed_mask) {
@@ -224,6 +252,18 @@ void apa102_update_from_inputs(const led_config_t *cfg, uint16_t pressed_mask) {
         brightness[i] = cfg->base_brightness;
     }
 
+    // ── Breathe: override brightness for breathe range ───────────────────────
+    if (cfg->breathe_enabled &&
+        cfg->breathe_start <= cfg->breathe_end &&
+        cfg->breathe_end < count)
+    {
+        uint8_t bb = compute_breathe_brightness(cfg);
+        for (int i = cfg->breathe_start; i <= cfg->breathe_end; i++) {
+            brightness[i] = bb;
+        }
+    }
+
+    // ── Reactive: raise brightness for pressed inputs' mapped LEDs ────────────
     for (int inp = 0; inp < LED_INPUT_COUNT; inp++) {
         if (!(pressed_mask & (1u << inp))) continue;
         uint16_t mask = cfg->led_map[inp];
@@ -236,6 +276,61 @@ void apa102_update_from_inputs(const led_config_t *cfg, uint16_t pressed_mask) {
                 }
             }
         }
+    }
+
+    // ── Wave: rising-edge trigger, propagate outward ─────────────────────────
+    if (cfg->wave_enabled) {
+        uint16_t rising = pressed_mask & ~wave_prev_mask;
+        wave_prev_mask = pressed_mask;
+        if (rising) {
+            uint32_t now = time_us_32();
+            int slot = -1;
+            for (int i = 0; i < WAVE_MAX_ACTIVE; i++) {
+                if (!waves[i].active) { slot = i; break; }
+            }
+            if (slot < 0) {
+                slot = 0;
+                for (int i = 1; i < WAVE_MAX_ACTIVE; i++) {
+                    if ((uint32_t)(now - waves[i].start_us) >
+                        (uint32_t)(now - waves[slot].start_us))
+                        slot = i;
+                }
+            }
+            waves[slot].active   = true;
+            waves[slot].start_us = now;
+        }
+        uint8_t  origin   = (cfg->wave_origin < count) ? cfg->wave_origin : 0;
+        uint8_t  max_dist = 0;
+        for (int led = 0; led < count; led++) {
+            uint8_t d = (uint8_t)(led >= origin ? led - origin : origin - led);
+            if (d > max_dist) max_dist = d;
+        }
+        uint32_t wave_spd_ms = cfg->wave_speed_ms > 0 ? cfg->wave_speed_ms : 800u;
+        uint32_t us_per_led  = (wave_spd_ms * 1000u) / (count > 1u ? (uint32_t)(count - 1u) : 1u);
+        uint32_t lifetime = (uint32_t)max_dist * us_per_led + WAVE_FADE_US;
+        for (int w = 0; w < WAVE_MAX_ACTIVE; w++) {
+            if (!waves[w].active) continue;
+            uint32_t elapsed = time_us_32() - waves[w].start_us;
+            if (elapsed >= lifetime) { waves[w].active = false; continue; }
+            for (int led = 0; led < count; led++) {
+                uint8_t  dist   = (uint8_t)(led >= origin ? led - origin : origin - led);
+                uint32_t t_peak = (uint32_t)dist * us_per_led;
+                if (elapsed >= t_peak) {
+                    uint32_t since = elapsed - t_peak;
+                    if (since < WAVE_FADE_US) {
+                        uint32_t t256 = (since * 256u) / WAVE_FADE_US;
+                        int32_t  base = cfg->base_brightness;
+                        int32_t  wb   = 31 + ((base - 31) * (int32_t)t256) / 256;
+                        if (wb < 0)  wb = 0;
+                        if (wb > 31) wb = 31;
+                        if ((uint8_t)wb > brightness[led]) brightness[led] = (uint8_t)wb;
+                    }
+                }
+            }
+        }
+    } else {
+        wave_prev_mask = pressed_mask;
+        for (int i = 0; i < WAVE_MAX_ACTIVE; i++) waves[i].active = false;
     }
 
     // ── LED loop: substitute interpolated colors for loop LEDs ──────────────

@@ -7,8 +7,8 @@
  *
  * GET_CONFIG response (5 lines):
  *   DEVTYPE:drum_kit
- *   CFG:red_drum=N,...,dpad_up=N,dpad_down=N,dpad_left=N,dpad_right=N,foot_pedal=N,debounce=N,device_name=...
- *   LED:enabled=N,count=N,brightness=N,loop_enabled=N,loop_start=N,loop_end=N
+ *   CFG:red_drum=N,...,foot_pedal=N,debounce=N,device_name=...
+ *   LED:enabled=N,count=N,brightness=N,loop_enabled=N,...,wave_origin=N,loop_speed=N,breathe_speed=N,wave_speed=N
  *   LED_COLORS:R0G0B0,R1G1B1,...
  *   LED_MAP:name=mask:brightness,...
  *
@@ -19,7 +19,11 @@
  *           led_enabled, led_count, led_brightness,
  *           led_color_N (hex RRGGBB), led_map_N (hex 16-bit mask),
  *           led_active_N (0-31),
- *           led_loop_enabled, led_loop_start, led_loop_end
+ *           led_loop_enabled, led_loop_start, led_loop_end,
+ *           led_breathe_enabled, led_breathe_start, led_breathe_end,
+ *           led_breathe_min, led_breathe_max,
+ *           led_wave_enabled, led_wave_origin,
+ *           led_loop_speed, led_breathe_speed, led_wave_speed
  */
 
 #include "drum_config_serial.h"
@@ -126,18 +130,31 @@ static void send_config(const drum_config_t *config) {
                     config->device_name);
     serial_writeln(buf);
 
-    // Line 2: LED global settings (includes loop settings so PicoSerial.get_config()
-    //          naturally parses them as led_loop_enabled / led_loop_start / led_loop_end)
+    // Line 2: LED global settings
     pos = 0;
     pos += snprintf(buf + pos, sizeof(buf) - pos,
                     "LED:enabled=%d,count=%d,brightness=%d,"
-                    "loop_enabled=%d,loop_start=%d,loop_end=%d",
+                    "loop_enabled=%d,loop_start=%d,loop_end=%d,"
+                    "breathe_enabled=%d,breathe_start=%d,breathe_end=%d,"
+                    "breathe_min=%d,breathe_max=%d,"
+                    "wave_enabled=%d,wave_origin=%d,"
+                    "loop_speed=%d,breathe_speed=%d,wave_speed=%d",
                     (int)config->leds.enabled,
                     (int)config->leds.count,
                     (int)config->leds.base_brightness,
                     (int)config->leds.loop_enabled,
                     (int)config->leds.loop_start,
-                    (int)config->leds.loop_end);
+                    (int)config->leds.loop_end,
+                    (int)config->leds.breathe_enabled,
+                    (int)config->leds.breathe_start,
+                    (int)config->leds.breathe_end,
+                    (int)config->leds.breathe_min_bright,
+                    (int)config->leds.breathe_max_bright,
+                    (int)config->leds.wave_enabled,
+                    (int)config->leds.wave_origin,
+                    (int)config->leds.loop_speed_ms,
+                    (int)config->leds.breathe_speed_ms,
+                    (int)config->leds.wave_speed_ms);
     serial_writeln(buf);
 
     // Line 3: LED colors (R,G,B hex per LED)
@@ -223,6 +240,62 @@ static bool handle_led_set(drum_config_t *config, const char *key, const char *v
         int v = atoi(val);
         if (v < 0 || v >= MAX_LEDS) { serial_writeln("ERR:range"); return true; }
         config->leds.loop_end = (uint8_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_breathe_enabled") == 0) {
+        config->leds.breathe_enabled = (uint8_t)atoi(val);
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_breathe_start") == 0) {
+        int v = atoi(val);
+        if (v < 0 || v >= MAX_LEDS) { serial_writeln("ERR:range"); return true; }
+        config->leds.breathe_start = (uint8_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_breathe_end") == 0) {
+        int v = atoi(val);
+        if (v < 0 || v >= MAX_LEDS) { serial_writeln("ERR:range"); return true; }
+        config->leds.breathe_end = (uint8_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_breathe_min") == 0) {
+        int v = atoi(val);
+        if (v < 0 || v > 31) { serial_writeln("ERR:0-31"); return true; }
+        config->leds.breathe_min_bright = (uint8_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_breathe_max") == 0) {
+        int v = atoi(val);
+        if (v < 0 || v > 31) { serial_writeln("ERR:0-31"); return true; }
+        config->leds.breathe_max_bright = (uint8_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_wave_enabled") == 0) {
+        config->leds.wave_enabled = (uint8_t)atoi(val);
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_wave_origin") == 0) {
+        int v = atoi(val);
+        if (v < 0 || v >= MAX_LEDS) { serial_writeln("ERR:0-15"); return true; }
+        config->leds.wave_origin = (uint8_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_loop_speed") == 0) {
+        int v = atoi(val);
+        if (v < 100 || v > 9999) { serial_writeln("ERR:100-9999"); return true; }
+        config->leds.loop_speed_ms = (uint16_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_breathe_speed") == 0) {
+        int v = atoi(val);
+        if (v < 100 || v > 9999) { serial_writeln("ERR:100-9999"); return true; }
+        config->leds.breathe_speed_ms = (uint16_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_wave_speed") == 0) {
+        int v = atoi(val);
+        if (v < 100 || v > 9999) { serial_writeln("ERR:100-9999"); return true; }
+        config->leds.wave_speed_ms = (uint16_t)v;
         serial_writeln("OK"); return true;
     }
     return false;  // Not an LED key

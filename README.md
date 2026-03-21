@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <strong>This project uses AI/LLM assistance for coding efforts. I am however proud of this project and it actually works great.</strong>
+  <strong>This project uses AI/LLM assistance for coding efforts. I am however proud of this project and it works great.</strong>
 </p>
 
 <p>

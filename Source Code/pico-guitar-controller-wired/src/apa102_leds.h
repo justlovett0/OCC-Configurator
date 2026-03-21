@@ -60,6 +60,11 @@ typedef struct __attribute__((packed)) {
     // then fading back to base_brightness over 300 ms per LED.
     uint8_t  wave_enabled; // 0 = off, 1 = on
     uint8_t  wave_origin;  // LED index the wave originates from (0-based)
+
+    // ── Effect speeds ──
+    uint16_t loop_speed_ms;    // Color loop full rotation time (ms), default 3000
+    uint16_t breathe_speed_ms; // Breathe full cycle time (ms), default 3000
+    uint16_t wave_speed_ms;    // Ripple transit time across full strip (ms), default 800
 } led_config_t;
 
 // Initialize SPI pins for LED output

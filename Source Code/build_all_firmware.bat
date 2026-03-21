@@ -56,8 +56,8 @@ if errorlevel 1 (
 )
 
 echo Copying Wired Retro Controller firmware...
-copy /Y "build\pico_retro_controller.uf2" "%CONFIGURATOR%\Wired_Retro_Controller.uf2"
-copy /Y "build\pico_retro_controller.uf2.date" "%CONFIGURATOR%\Wired_Retro_Controller.uf2.date"
+copy /Y "build\Retro_Controller.uf2" "%CONFIGURATOR%\Wired_Retro_Controller.uf2"
+copy /Y "build\Retro_Controller.uf2.date" "%CONFIGURATOR%\Wired_Retro_Controller.uf2.date"
 echo   OK
 echo.
 
