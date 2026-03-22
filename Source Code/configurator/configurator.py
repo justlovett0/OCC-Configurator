@@ -68,6 +68,20 @@ def _resource_path(*parts):
     return os.path.join(base, *parts)
 
 
+GITHUB_REPO   = "justlovett0/OCC-Configurator"
+RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases"
+
+def _load_app_version():
+    """Read version.txt bundled by build_exe.bat. Falls back to 'dev' if missing."""
+    try:
+        with open(_resource_path("version.txt"), "r") as f:
+            return f.read().strip()
+    except Exception:
+        return "dev"
+
+APP_VERSION = _load_app_version()
+
+
 def _find_preset_configs(device_types=None):
     """Scan PresetConfigs/ for .json files matching the given device types.
     device_types: set of strings e.g. {"guitar_alternate", "drum_kit"}, or None for all.
@@ -311,6 +325,64 @@ def _centered_dialog(parent, title, message, kind="info"):
 
 
 
+# ── Update check ──────────────────────────────────────────────────────────────
+
+def _fetch_latest_release():
+    """Returns (tag_str, html_url) or (None, None) on any failure.
+    Tries /releases/latest first (published releases), falls back to /tags
+    for repos that only use git tags without formal releases."""
+    import urllib.request, json
+    headers = {"User-Agent": "OCC-Configurator"}
+
+    # Try published releases first
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+            tag = data.get("tag_name", "").lstrip("v")
+            if tag:
+                return tag, data.get("html_url", RELEASES_PAGE)
+    except Exception:
+        pass
+
+    # Fall back to tags list (covers repos using tags without formal releases)
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/tags"
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+            if data:
+                tag = data[0]["name"].lstrip("v")
+                html_url = f"https://github.com/{GITHUB_REPO}/releases/tag/{data[0]['name']}"
+                return tag, html_url
+    except Exception:
+        pass
+
+    return None, None
+
+def _version_is_newer(latest, current):
+    """True if latest > current (X.XX dot-separated)."""
+    try:
+        return tuple(int(x) for x in latest.split(".")) > \
+               tuple(int(x) for x in current.split("."))
+    except Exception:
+        return False
+
+def _show_update_dialog(root, latest_version, download_url):
+    """Prompt user about available update and open browser if they accept."""
+    import tkinter.messagebox as mb
+    import webbrowser
+    msg = (
+        f"A newer version of OCC is available!\n\n"
+        f"Your version:  {APP_VERSION}\n"
+        f"Latest version:  {latest_version}\n\n"
+        "Click OK to open the download page."
+    )
+    if mb.askokcancel("Update Available", msg, parent=root):
+        webbrowser.open(download_url)
+
+
 #  ROUNDED BUTTON  (plain tk.Canvas — no Frame wrapper)
 
 class RoundedButton(tk.Canvas):
@@ -396,6 +468,158 @@ class RoundedButton(tk.Canvas):
         self._press_bg = self._adjust(new_bg, -25)
         self._render(self._bg if self._enabled else self._disabled_bg)
 
+
+class HelpButton(tk.Canvas):
+    """Circle '?' button for screen headers. Canvas subclass, mirrors RoundedButton pattern."""
+
+    def __init__(self, parent, command, size=26):
+        try:
+            parent_bg = parent.cget("bg")
+        except Exception:
+            parent_bg = BG_CARD
+        super().__init__(parent, width=size, height=size,
+                         bg=parent_bg, highlightthickness=0, bd=0, cursor="hand2")
+        self._size = size
+        self._cmd  = command
+        self._normal = BG_INPUT
+        self._hover  = BG_HOVER
+        self._press  = BORDER
+        self._render(self._normal)
+        self.bind("<Enter>",           lambda e: self._render(self._hover))
+        self.bind("<Leave>",           lambda e: self._render(self._normal))
+        self.bind("<ButtonPress-1>",   lambda e: self._render(self._press))
+        self.bind("<ButtonRelease-1>", self._on_release)
+
+    def _on_release(self, _event):
+        self._render(self._hover)
+        if self._cmd:
+            self._cmd()
+
+    def _render(self, fill):
+        self.delete("all")
+        s = self._size
+        self.create_oval(1, 1, s - 1, s - 1, fill=fill, outline=BORDER)
+        self.create_text(s // 2, s // 2, text="?", fill=TEXT_HEADER,
+                         font=(FONT_UI, 10, "bold"))
+
+
+def _help_placeholder(text="Help content coming soon."):
+    """Returns a tab content builder that shows a placeholder label."""
+    def _build(frame):
+        tk.Label(frame, text=text, bg=BG_CARD, fg=TEXT,
+                 font=(FONT_UI, 10), wraplength=530, justify="left",
+                 anchor="nw", padx=20, pady=20).pack(anchor="nw")
+    return _build
+
+
+def _help_text(*segments):
+    """
+    Returns a tab content builder with per-segment formatting.
+    Each segment is a (text, style) tuple. Use "\n" text for blank lines.
+    Styles: None (normal), "bold", "dim", "header"
+    Example: _help_text(("Bold title", "bold"), ("\n", None), ("Body text.", None))
+    """
+    def _build(frame):
+        inner = tk.Frame(frame, bg=BG_CARD)
+        inner.pack(anchor="nw", padx=20, pady=20)
+        for text, style in segments:
+            if text == "\n" or text == "\n\n":
+                # blank spacer line
+                tk.Label(inner, text="", bg=BG_CARD, height=1).pack(anchor="w")
+            else:
+                if style == "bold":
+                    font_spec = (FONT_UI, 10, "bold")
+                elif style == "header":
+                    font_spec = (FONT_UI, 12, "bold")
+                else:
+                    font_spec = (FONT_UI, 10)
+                fg = TEXT_DIM if style == "dim" else TEXT
+                tk.Label(inner, text=text, bg=BG_CARD, fg=fg,
+                         font=font_spec, wraplength=530,
+                         justify="left", anchor="w").pack(anchor="w")
+    return _build
+
+
+class HelpDialog:
+    """
+    Non-modal help popup. 590x410, centered over root.
+    Tabs: same pack/pack_forget pattern as App._switch_tab.
+    Re-opening lifts existing window instead of opening a second one.
+    """
+    W, H = 590, 410
+
+    def __init__(self, root, tabs):
+        # tabs: list of (name: str, builder: callable(frame) -> None)
+        self.root = root
+        self.tabs = tabs
+        self._win = None
+
+    def open(self):
+        if self._win and self._win.winfo_exists():
+            self._win.lift()
+            self._win.focus_force()
+            return
+        self._build()
+
+    def _build(self):
+        win = tk.Toplevel(self.root)
+        self._win = win
+        win.title("Help")
+        win.configure(bg=BG_CARD)
+        win.resizable(False, False)
+        win.transient(self.root)
+
+        # Center over root
+        self.root.update_idletasks()
+        x = self.root.winfo_rootx() + (self.root.winfo_width()  - self.W) // 2
+        y = self.root.winfo_rooty() + (self.root.winfo_height() - self.H) // 2
+        win.geometry(f"{self.W}x{self.H}+{x}+{y}")
+
+        # Tab bar — same label+pack pattern as App
+        tab_bar = tk.Frame(win, bg=BG_MAIN)
+        tab_bar.pack(fill="x")
+        self._tab_labels = []
+        for i, (name, _) in enumerate(self.tabs):
+            lbl = tk.Label(tab_bar, text=name, bg=BG_MAIN, fg=TEXT_DIM,
+                           font=(FONT_UI, 10, "bold"), padx=16, pady=8, cursor="hand2")
+            lbl.pack(side="left")
+            lbl.bind("<Button-1>", lambda e, idx=i: self._switch_tab(idx))
+            self._tab_labels.append(lbl)
+        tk.Frame(win, bg=BORDER, height=1).pack(fill="x")
+
+        # Content area — one frame per tab, built once
+        container = tk.Frame(win, bg=BG_CARD)
+        container.pack(fill="both", expand=True)
+        self._tab_frames = []
+        for _, builder in self.tabs:
+            f = tk.Frame(container, bg=BG_CARD)
+            builder(f)
+            self._tab_frames.append(f)
+
+        # Close button row
+        btn_row = tk.Frame(win, bg=BG_CARD)
+        btn_row.pack(fill="x", pady=(0, 10))
+        RoundedButton(btn_row, text="Close", command=win.destroy,
+                      bg_color=BG_INPUT, btn_width=90, btn_height=30).pack(side="right", padx=12)
+
+        # Show first tab
+        self._active = 0
+        self._tab_frames[0].pack(fill="both", expand=True)
+        self._update_tab_styling()
+        win.protocol("WM_DELETE_WINDOW", win.destroy)
+
+    def _switch_tab(self, idx):
+        if idx == self._active:
+            return
+        self._tab_frames[self._active].pack_forget()
+        self._tab_frames[idx].pack(fill="both", expand=True)
+        self._active = idx
+        self._update_tab_styling()
+
+    def _update_tab_styling(self):
+        for i, lbl in enumerate(self._tab_labels):
+            lbl.config(bg=BG_CARD if i == self._active else BG_MAIN,
+                       fg=TEXT     if i == self._active else TEXT_DIM)
 
 
 class SpeedSlider(tk.Canvas):
@@ -992,6 +1216,7 @@ CONFIG_MODE_PIDS = {
     0xF00E: "Drum Kit Config",
     0xF00F: "Retro Gamepad Config",
     0xF010: "Pedal Config",
+    0xF011: "Keyboard Macro Config",
 }
 BAUD_RATE = 115200
 TIMEOUT = 2.0
@@ -1127,6 +1352,32 @@ def find_uf2_files():
             if f.lower().endswith('.uf2') and f.lower() != NUKE_UF2_FILENAME.lower():
                 found[f] = os.path.join(bundle_dir, f)
     return sorted(found.items())
+
+
+def _group_uf2_files(uf2_files):
+    """Group wired/wireless UF2 pairs into logical firmware families.
+
+    Strips 'Wired_'/'Wireless_' prefix to find the core name and pair variants.
+    Unprefixed files are treated as wired-only.
+
+    Returns list of (display_name, wired_path, wireless_path) in insertion order.
+    """
+    groups = {}
+    order = []
+    for fname, path in uf2_files:
+        stem = os.path.splitext(fname)[0]
+        ls = stem.lower()
+        if ls.startswith("wired_"):
+            core, variant = stem[6:], "wired"
+        elif ls.startswith("wireless_"):
+            core, variant = stem[9:], "wireless"
+        else:
+            core, variant = stem, "wired"
+        if core not in groups:
+            groups[core] = {"wired": None, "wireless": None}
+            order.append(core)
+        groups[core][variant] = path
+    return [(c.replace("_", " "), groups[c]["wired"], groups[c]["wireless"]) for c in order]
 
 
 def find_uf2_for_device_type(device_type):
@@ -2126,11 +2377,25 @@ class FlashFirmwareScreen:
         self._on_back = on_back   # called when we want to return to main menu
         self._poll_job   = None
         self._last_drive = None
+        self._help_dialog = None
 
         self.frame = tk.Frame(root, bg=BG_MAIN)
         self._build()
 
     # ── Layout ────────────────────────────────────────────────────
+
+    def _open_help(self):
+        if self._help_dialog is None:
+            self._help_dialog = HelpDialog(self.root, [
+                ("Overview",          _help_text(
+                    ("Welcome to the Firmware flash screen!", "bold"),
+                    ("\n\n", None),
+                    ("This is what you'll see if your Pico controller is detected to be in BOOTSEL/USB mode. You can use this screen to select an OCC firmware to install to your Pico, and then you will be automatically redirected to the main menu. Check out the \"Choosing Firmwares\" help tab for more information about the firmwares available here.", None),
+                )),
+                ("Choosing Firmwares", _help_placeholder("OCC has firmwares for typical game controllers, rhythm controllers, proprietary wireless dongles, and more! Depending on what controller you have plugged in right now, or what this Pi Pico will be used for, go ahead and select a firmware that suits your need. Different firmwares have different configurable settings, and will appear as different device types to your PC.")),
+                ("Wireless or Wired",  _help_placeholder("(Feature still in progress)\nOCC has firmwares for both wired Picos and wireless capable PicoWs! Clicking a firmware for a controller will automatically install the wireless or wired version of it, depending on what type of Pi Pico you have connected. If you want to manually pick a wired or wireless firmware yourself, right click the firmware you want, then make your pick.")),
+            ])
+        self._help_dialog.open()
 
     def _build(self):
         # ── Title bar — identical to MainMenu ─────────────────
@@ -2141,6 +2406,7 @@ class FlashFirmwareScreen:
         inner_title = tk.Frame(title_bar, bg=BG_CARD)
         inner_title.pack(fill="x", padx=24, pady=16)
 
+        HelpButton(inner_title, command=self._open_help).pack(side="right", anchor="n", pady=4)
         tk.Label(inner_title, text="OCC",
                  bg=BG_CARD, fg=TEXT_HEADER,
                  font=(FONT_UI, 18, "bold")).pack(anchor="w")
@@ -2278,7 +2544,7 @@ class FlashFirmwareScreen:
         for w in self._tile_frame.winfo_children():
             w.destroy()
 
-        uf2_files = find_uf2_files()   # list of (name, path) tuples
+        groups = _group_uf2_files(find_uf2_files())
         tile_total_h = self.TILE_IMG_H + self.TILE_LBL_H
 
         # Always show exactly COLS * FIXED_ROWS tiles
@@ -2329,11 +2595,20 @@ class FlashFirmwareScreen:
                 cm.create_oval(ox, oy, ox + _d, oy + _d,
                                fill=oval_color, outline=oval_color)
 
-            if idx < len(uf2_files):
-                name, path = uf2_files[idx]
+            if idx < len(groups):
+                display_name, wired_path, wireless_path = groups[idx]
 
-                # ── GIF / image area ──────────────────────────────
-                gif_path = self._find_gif_for_uf2(path)
+                # ── GIF: try wired path, then wireless path, then core name ──
+                # GIFs may be named after the core firmware name (no Wired_/Wireless_ prefix)
+                # e.g. Guitar_Controller.gif instead of Wired_Guitar_Controller.gif
+                gif_path = None
+                if wired_path:
+                    gif_path = self._find_gif_for_uf2(wired_path)
+                if not gif_path and wireless_path:
+                    gif_path = self._find_gif_for_uf2(wireless_path)
+                if not gif_path:
+                    gif_path = self._find_gif_for_uf2(display_name.replace(" ", "_") + ".gif")
+
                 img_label = tk.Label(img_area, bg=BG_CARD, cursor="hand2")
                 img_label.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -2345,7 +2620,7 @@ class FlashFirmwareScreen:
                                      font=(FONT_UI, 28))
 
                 # ── Name label below the image ────────────────────
-                name_lbl = tk.Label(lbl_area, text=name,
+                name_lbl = tk.Label(lbl_area, text=display_name,
                                     bg="#222226", fg=TEXT_HEADER,
                                     font=(FONT_UI, 8, "bold"),
                                     anchor="center", justify="center")
@@ -2365,32 +2640,41 @@ class FlashFirmwareScreen:
                     il.config(bg=BG_CARD)
                     la.config(bg="#222226")
                     nl.config(bg="#222226")
-                def _click(e, p=path):
+                def _click(e, wired=wired_path, wireless=wireless_path, dname=display_name):
                     drive = find_rpi_rp2_drive()
                     if not drive:
                         return
-                    # Warn if wireless firmware is being flashed onto a non-Pico-W
-                    if "wireless" in os.path.basename(p).lower():
-                        board_id = get_bootsel_board_id(drive) or "RPI-RP2"
-                        is_pico_w = "RP2W" in board_id.upper()
-                        if not is_pico_w:
+                    board_id = get_bootsel_board_id(drive) or "RPI-RP2"
+                    is_pico_w = "RP2W" in board_id.upper()
+                    if is_pico_w:
+                        if wireless:
+                            self._do_flash(wireless, drive, "Wireless")
+                        else:
+                            # Wired-only firmware on a Pico W — flash it, note in popup
+                            self._do_flash(wired, drive, "Wired", no_wireless_note=True)
+                    else:
+                        if wired:
+                            self._do_flash(wired, drive, "Wired")
+                        else:
+                            # Wireless-only firmware on a standard Pico — confirm first
                             ans = messagebox.askyesno(
-                                "Wrong Device?",
-                                f"This firmware is for the Raspberry Pi Pico W (wireless).\n\n"
-                                f"The connected device reports: {board_id}\n"
-                                f"This appears to be a standard Pico, not a Pico W.\n\n"
-                                f"Flashing wireless firmware onto a standard Pico will not work.\n\n"
-                                f"Flash anyway?",
+                                "Confirm Wireless Install",
+                                "OCC detected a Pico, not a Pico W.\n\n"
+                                "Are you sure you want to install Wireless firmware to this device?",
                                 icon="warning"
                             )
                             if not ans:
                                 return
-                    self._do_flash(p, drive)
+                            self._do_flash(wireless, drive, "Wireless")
+
+                def _rclick(e, wired=wired_path, wireless=wireless_path, dname=display_name):
+                    self._on_tile_right_click(wired, wireless, dname, e.x_root, e.y_root)
 
                 for widget in (img_area, lbl_area, img_label, name_lbl):
                     widget.bind("<Enter>",    _enter)
                     widget.bind("<Leave>",    _leave)
                     widget.bind("<Button-1>", _click)
+                    widget.bind("<Button-3>", _rclick)
                     widget.config(cursor="hand2")
             # else: empty dark tile
 
@@ -2416,6 +2700,39 @@ class FlashFirmwareScreen:
             if os.path.isfile(candidate):
                 return candidate
         return None
+
+    def _on_tile_right_click(self, wired_path, wireless_path, display_name, x, y):
+        """Right-click context menu on a firmware tile — manually pick wired or wireless."""
+        drive = find_rpi_rp2_drive()
+        if not drive:
+            return
+
+        def _flash_wireless():
+            board_id = get_bootsel_board_id(drive) or "RPI-RP2"
+            is_pico_w = "RP2W" in board_id.upper()
+            if not is_pico_w:
+                ans = messagebox.askyesno(
+                    "Confirm Wireless Install",
+                    "OCC detected a Pico, not a Pico W.\n\n"
+                    "Are you sure you want to install Wireless firmware to this device?",
+                    icon="warning"
+                )
+                if not ans:
+                    return
+            self._do_flash(wireless_path, drive, "Wireless")
+
+        menu = tk.Menu(self.root, tearoff=0, bg=BG_CARD, fg=TEXT,
+                       activebackground=ACCENT_BLUE, activeforeground="white")
+        if wired_path:
+            menu.add_command(label="Wired",
+                             command=lambda: self._do_flash(wired_path, drive, "Wired"))
+        else:
+            menu.add_command(label="Wired  (not available)", state="disabled")
+        if wireless_path:
+            menu.add_command(label="Wireless", command=_flash_wireless)
+        else:
+            menu.add_command(label="Wireless  (not available)", state="disabled")
+        menu.tk_popup(x, y)
 
     def _start_gif(self, label, gif_path, container):
         """
@@ -2500,7 +2817,7 @@ class FlashFirmwareScreen:
 
     # ── Flashing ──────────────────────────────────────────────────
 
-    def _do_flash(self, uf2_path, drive):
+    def _do_flash(self, uf2_path, drive, variant_label="", no_wireless_note=False):
         # ── 1. Show a non-blocking "please wait" popup ──────────────
         wait_dlg = tk.Toplevel(self.root)
         wait_dlg.title("Flashing Firmware")
@@ -2509,9 +2826,16 @@ class FlashFirmwareScreen:
         wait_dlg.transient(self.root)
         wait_dlg.protocol("WM_DELETE_WINDOW", lambda: None)  # prevent closing
 
-        tk.Label(wait_dlg, text="⚡  Flashing firmware… please wait",
+        if no_wireless_note:
+            wait_text = "⚡  Wired Firmware Installing…\nNo wireless version available."
+        elif variant_label:
+            wait_text = f"⚡  Flashing {variant_label} Firmware…\nplease wait"
+        else:
+            wait_text = "⚡  Flashing firmware… please wait"
+
+        tk.Label(wait_dlg, text=wait_text,
                  bg=BG_CARD, fg=TEXT, font=(FONT_UI, 11),
-                 padx=32, pady=28).pack()
+                 justify="center", padx=32, pady=28).pack()
 
         wait_dlg.update_idletasks()
         # Center over parent
@@ -2764,6 +3088,7 @@ class EasyConfigScreen:
         self._monitor_thread = None
         self._preview_active = False
         self._preview_seen = {}
+        self._help_dialog = None
 
         # Detected values persist across page navigation
         # Keys match firmware config keys: green, red, ..., dpad_up, joy_x, whammy_pin, tilt_pin …
@@ -2786,6 +3111,15 @@ class EasyConfigScreen:
         except Exception:
             pass
 
+    def _open_help(self):
+        if self._help_dialog is None:
+            self._help_dialog = HelpDialog(self.root, [
+                ("Overview",        _help_placeholder()),
+                ("Button Detection", _help_placeholder()),
+                ("Finishing Up",    _help_placeholder()),
+            ])
+        self._help_dialog.open()
+
     # ── Static layout (built once) ────────────────────────────────
 
     def _build(self):
@@ -2795,6 +3129,7 @@ class EasyConfigScreen:
         title_bar.pack(fill="x")
         inner_title = tk.Frame(title_bar, bg=BG_CARD)
         inner_title.pack(fill="x", padx=24, pady=16)
+        HelpButton(inner_title, command=self._open_help).pack(side="right", anchor="n", pady=4)
         tk.Label(inner_title, text="OCC", bg=BG_CARD, fg=TEXT_HEADER,
                  font=(FONT_UI, 18, "bold")).pack(anchor="w")
         tk.Label(inner_title, text="Easy Configuration \u2014 Step-by-Step Walkthrough",
@@ -5605,11 +5940,31 @@ class MainMenu:
         self._alternatefw_popup_shown = False
         # GP2040-CE one-time popup: shown at most once per session
         self._gp2040ce_popup_shown = False
+        self._help_dialog = None
 
         self.frame = tk.Frame(root, bg=BG_MAIN)
 
         self._build()
         self._poll()
+
+    def _open_help(self):
+        if self._help_dialog is None:
+            self._help_dialog = HelpDialog(self.root, [
+                ("Getting Started",       _help_text(
+                    ("Welcome to OCC, Open Controller Configurator!", "bold"),
+                    ("\n\n", None),
+                    ("This program is loaded with a set of firmwares for the Raspberry Pi Pico and Pico W and comes bundled with a configurator to set up your button inputs and other settings for game controllers and peripherals. Check out the other tabs in this help menu for more information about the functions of this screen.", None),
+                )),
+                ("Connecting a Device",   _help_placeholder("If a Pico is detected in BOOTSEL mode, (with no firmware and shows up as a storage drive), OCC should automatically switch to the firmware selection screen. If OCC detects a firmware already installed, you'll see the options to check for firmware updates and go into configuration screens. Check the Configuration Screens help tab for more information about Easy vs Advanced configurator.")),
+                ("Configuration Screens", _help_text(
+                    ("Easy Configurator", "bold"),
+                    ("Will walk you through the process of binding buttons of your controller one by one. It'll show you a screen to detect each button press, and at the end allow you to save your controller configuration. Simple!", None),
+                    ("\n", None),
+                    ("Advanced Configurator", "bold"),
+                    ("Will show you all options at once. It is a much denser menu that still lets you assign each button to a pin on your Pico, but it will not walk you through the process.", None),
+                )),
+            ])
+        self._help_dialog.open()
 
     # ── Layout ────────────────────────────────────────────────────
 
@@ -5622,12 +5977,17 @@ class MainMenu:
         inner_title = tk.Frame(title_bar, bg=BG_CARD)
         inner_title.pack(fill="x", padx=24, pady=16)
 
+        HelpButton(inner_title, command=self._open_help).pack(side="right", anchor="n", pady=4)
         tk.Label(inner_title, text="OCC",
                  bg=BG_CARD, fg=TEXT_HEADER,
                  font=(FONT_UI, 18, "bold")).pack(anchor="w")
         tk.Label(inner_title, text="Open Controller Configurator",
                  bg=BG_CARD, fg=ACCENT_BLUE,
                  font=(FONT_UI, 13)).pack(anchor="w")
+        if APP_VERSION != "dev":
+            tk.Label(inner_title, text=f"v{APP_VERSION}",
+                     bg=BG_CARD, fg=TEXT_DIM,
+                     font=(FONT_UI, 8)).pack(anchor="e")
 
         # ── Center content column ─────────────────────────────
         center = tk.Frame(self.frame, bg=BG_MAIN)
@@ -5930,7 +6290,7 @@ class MainMenu:
         # which device type is connected without opening a serial port.
         xinput_subtype = getattr(self, '_xinput_first_subtype', None)
 
-        # Determine which state we're in, in priority order:
+        # Determine which state device is in, in priority order:
         #   1. BOOTSEL drive present
         #   2. Config-mode serial port present
         #   3. XInput configurable OCC device present (guitar / drum)
@@ -6268,7 +6628,7 @@ class MainMenu:
                 setupapi.SetupDiDestroyDeviceInfoList(hdi)
 
         # ── Strategy 2: Direct WinUSB interface lookup ────────────────────────
-        # We now know the Alternatefw composite device has 4 interfaces:
+        # Some Alternatefw composite devices use 4 interfaces:
         #   MI_00 = unknown, MI_01 = XInput (xusb22),
         #   MI_02 = WinUSB command interface, MI_03 = Xbox Security
         # Scan all MI_XX siblings for the one with Service=WINUSB, then
@@ -8422,6 +8782,7 @@ class App:
         self._monitor_thread = None
         self._debug_text = None    # set when debug console is open
         self._debug_win  = None
+        self._help_dialog = None
 
         # Widget tracking
         self._all_widgets = []
@@ -8655,6 +9016,16 @@ class App:
             f"GUIDE button for 3 seconds."
         )
 
+    def _open_help(self):
+        if self._help_dialog is None:
+            self._help_dialog = HelpDialog(self.root, [
+                ("Buttons",       _help_placeholder()),
+                ("Tilt & Whammy", _help_placeholder()),
+                ("Joystick & Dpad", _help_placeholder()),
+                ("Lighting",      _help_placeholder()),
+            ])
+        self._help_dialog.open()
+
     def _build_ui(self):
         self._outer_frame = tk.Frame(self.root, bg=BG_MAIN)
         outer = self._outer_frame
@@ -8683,6 +9054,8 @@ class App:
             bg_color="#555560", btn_width=150, btn_height=34,
             btn_font=(FONT_UI, 8, "bold"))
         self.manual_btn.pack(side="left")
+
+        HelpButton(btn_bar, command=self._open_help).pack(side="right", anchor="center", padx=(0, 4))
 
         self.status_label = tk.Label(conn_card, text="   Not connected",
                                       bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9))
@@ -11646,7 +12019,10 @@ class App:
     # ── Pin Detection ───────────────────────────────────────
 
     def _start_detect(self, target_key, target_name):
-        if not self.pico.connected or self.scanning:
+        if not self.pico.connected:
+            return
+        if self.scanning:
+            self._cancel_detect()
             return
 
         # Stop monitoring if active
@@ -11655,38 +12031,15 @@ class App:
         self.scan_target = target_key
         self.scanning = True
         self._scan_i2c_found = False
-        for btn in self._det_btns.values():
-            btn.config(state="disabled")
 
-        self._detect_dlg = tk.Toplevel(self.root)
-        self._detect_dlg.title("Detecting Pin")
-        self._detect_dlg.configure(bg=BG_CARD)
-        self._detect_dlg.geometry("420x230")
-        self._detect_dlg.resizable(False, False)
-        self._detect_dlg.transient(self.root)
-        self._detect_dlg.grab_set()
-        self._detect_dlg.protocol("WM_DELETE_WINDOW", self._cancel_detect)
+        for key, btn in self._det_btns.items():
+            try:
+                btn.config(state="disabled" if key != target_key else "normal",
+                           text="Stop" if key == target_key else "Detect")
+            except Exception:
+                pass
 
-        frame = tk.Frame(self._detect_dlg, bg=BG_CARD)
-        frame.pack(fill="both", expand=True, padx=24, pady=20)
-
-        tk.Label(frame, text=f"Detecting: {target_name}", bg=BG_CARD, fg=TEXT_HEADER,
-                 font=(FONT_UI, 12, "bold")).pack(pady=(0, 10))
-        tk.Label(frame,
-                 text="Digital: press the button (connects GPIO to GND)\n"
-                      "Analog: move the whammy / tilt the guitar\n"
-                      "I2C: ADXL345 or LIS3DH auto-detected on SDA/SCL pins",
-                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9), justify="center").pack(pady=(0, 8))
-
-        self._detect_status = tk.Label(frame, text="Waiting for input...",
-                                        bg=BG_CARD, fg=ACCENT_BLUE,
-                                        font=(FONT_UI, 10))
-        self._detect_status.pack(pady=(0, 12))
-
-        RoundedButton(frame, text="Cancel", command=self._cancel_detect,
-                      bg_color="#555560", btn_width=100, btn_height=30,
-                      btn_font=(FONT_UI, 8, "bold")).pack()
-
+        self._set_status(f"   Detecting pin for {target_name} — press the button now...", ACCENT_BLUE)
         threading.Thread(target=self._scan_thread, daemon=True).start()
 
     def _scan_thread(self):
@@ -11704,8 +12057,7 @@ class App:
                     else:
                         # Update status to show I2C was found
                         self.root.after(0, lambda d=device:
-                            self._detect_status.config(
-                                text=f"Found {d} on I2C. Waiting for GPIO/ADC..."))
+                            self._set_status(f"   Found {d} on I2C — waiting for GPIO/ADC...", ACCENT_BLUE))
         except Exception as exc:
             self.root.after(0, lambda: self._on_scan_error(str(exc)))
             return
@@ -11758,13 +12110,11 @@ class App:
             self._on_toggle_analog("tilt")
             self._sync_i2c_combos()
 
-        self._close_detect_dialog()
         self._restore_detect_buttons()
-        messagebox.showinfo("Detected",
-            f"Found {device_name} accelerometer on I2C!\n\n"
-            f"Tilt mode set to I2C Accelerometer.\n"
-            f"SDA: GPIO {self.i2c_sda_pin.get()}, "
-            f"SCL: GPIO {self.i2c_scl_pin.get()}")
+        self._set_status(
+            f"   Found {device_name} accelerometer — tilt set to I2C "
+            f"(SDA: GPIO {self.i2c_sda_pin.get()}, SCL: GPIO {self.i2c_scl_pin.get()})",
+            ACCENT_GREEN)
 
     def _on_pin_detected(self, pin):
         try:
@@ -11809,19 +12159,20 @@ class App:
                 if hasattr(self, "_refresh_joy_combos"):
                     self._refresh_joy_combos(restore=True)
             else:
-                messagebox.showwarning("Detect",
-                    f"GPIO {pin} is not an ADC pin (GP26–28).\n"
-                    "Joystick VRx/VRy require an analog-capable pin.")
+                self._restore_detect_buttons()
+                self._set_status(
+                    f"   GPIO {pin} is not an ADC pin — joystick VRx/VRy need GP26–28",
+                    ACCENT_ORANGE)
                 return
         elif target == "joy_sw":
             # Joystick click switch — any digital GPIO; syncs guide combo too
             self._apply_guide_pin(pin)
 
-        self._close_detect_dialog()
         self._restore_detect_buttons()
 
         label = DIGITAL_PIN_LABELS.get(pin, f"GPIO {pin}")
         extra = "  (analog)" if 26 <= pin <= 28 else ""
+        self._set_status(f"   Detected {label}{extra}", ACCENT_GREEN)
 
     def _cancel_detect(self):
         self.scanning = False
@@ -11829,22 +12180,20 @@ class App:
             self.pico.stop_scan()
         except Exception:
             pass
-        self._close_detect_dialog()
         self._restore_detect_buttons()
+        self._set_status("")
 
     def _on_scan_error(self, msg):
         self.scanning = False
-        self._close_detect_dialog()
         self._restore_detect_buttons()
-        messagebox.showerror("Scan Error", msg)
-
-    def _close_detect_dialog(self):
-        if hasattr(self, '_detect_dlg') and self._detect_dlg.winfo_exists():
-            self._detect_dlg.destroy()
+        self._set_status(f"   Scan error: {msg}", ACCENT_ORANGE)
 
     def _restore_detect_buttons(self):
         for btn in self._det_btns.values():
-            btn.config(state="normal")
+            try:
+                btn.config(state="normal", text="Detect")
+            except Exception:
+                pass
 
     # ── Firmware Menu ───────────────────────────────────────
 
@@ -12631,6 +12980,7 @@ class DrumApp:
         self._debug_win  = None
         self._debug_text = None
         self._debug_reader_running = False
+        self._help_dialog = None
 
         self._build_menu()
         self._build_ui()
@@ -12747,6 +13097,15 @@ class DrumApp:
         "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
     ]
 
+    def _open_help(self):
+        if self._help_dialog is None:
+            self._help_dialog = HelpDialog(self.root, [
+                ("Overview",   _help_placeholder()),
+                ("Drum Pads",  _help_placeholder()),
+                ("LEDs",       _help_placeholder()),
+            ])
+        self._help_dialog.open()
+
     # ── Full UI build ────────────────────────────────────────────────
 
     def _build_ui(self):
@@ -12814,6 +13173,8 @@ class DrumApp:
             command=self._connect_clicked,
             bg_color=ACCENT_BLUE, btn_width=190, btn_height=34)
         self._connect_btn.pack(side="left", padx=(0, 8))
+
+        HelpButton(btn_bar, command=self._open_help).pack(side="right", anchor="center", padx=(0, 4))
 
         self._status_lbl = tk.Label(
             conn_card, textvariable=self._status_var,
@@ -14761,6 +15122,7 @@ class PedalApp:
         self._debug_win  = None
         self._debug_text = None
         self._debug_reader_running = False
+        self._help_dialog = None
 
         self._build_menu()
         self._build_ui()
@@ -14817,6 +15179,15 @@ class PedalApp:
         mb.add_cascade(label="Help", menu=hm)
 
         self._menu_bar = mb
+
+    def _open_help(self):
+        if self._help_dialog is None:
+            self._help_dialog = HelpDialog(self.root, [
+                ("Overview",       _help_placeholder()),
+                ("Pedal Inputs",   _help_placeholder()),
+                ("Calibration",    _help_placeholder()),
+            ])
+        self._help_dialog.open()
 
     # ── Full UI build ────────────────────────────────────────────────
 
@@ -14884,6 +15255,8 @@ class PedalApp:
             command=self._connect_clicked,
             bg_color=ACCENT_BLUE, btn_width=190, btn_height=34)
         self._connect_btn.pack(side="left", padx=(0, 8))
+
+        HelpButton(btn_bar, command=self._open_help).pack(side="right", anchor="center", padx=(0, 4))
 
         self._status_lbl = tk.Label(
             conn_card, textvariable=self._status_var,
@@ -16412,6 +16785,7 @@ class RetroApp:
         # ── State ─────────────────────────────────────────────────
         self._status_var          = tk.StringVar(value="")
         self._debug_win           = None
+        self._help_dialog         = None
         self._debug_text          = None
         self._debug_reader_running = False
         self.scanning             = False
@@ -16497,6 +16871,15 @@ class RetroApp:
 
         self._menubar = mb
 
+    def _open_help(self):
+        if self._help_dialog is None:
+            self._help_dialog = HelpDialog(self.root, [
+                ("Overview",       _help_placeholder()),
+                ("Button Mapping", _help_placeholder()),
+                ("Triggers",       _help_placeholder()),
+            ])
+        self._help_dialog.open()
+
     # ── Full UI build ────────────────────────────────────────────────
 
     def _build_ui(self):
@@ -16523,6 +16906,8 @@ class RetroApp:
             command=self._connect_clicked,
             bg_color=ACCENT_BLUE, btn_width=190, btn_height=34)
         self._connect_btn.pack(side="left", padx=(0, 8))
+
+        HelpButton(btn_bar, command=self._open_help).pack(side="right", anchor="center", padx=(0, 4))
 
         self._status_lbl = tk.Label(
             conn_card, textvariable=self._status_var,
@@ -17183,9 +17568,9 @@ class RetroApp:
 
     # ── Detect helpers ───────────────────────────────────────────────
 
-    def _set_det_btn_cancel(self, det_btn, cancel_fn):
-        """Convert a detect button to a cancel button in-place."""
-        det_btn._label     = "Cancel"
+    def _set_det_btn_stop(self, det_btn, cancel_fn):
+        """Convert a detect button to a Stop button in-place."""
+        det_btn._label     = "Stop"
         det_btn._bg        = ACCENT_ORANGE
         det_btn._hover_bg  = det_btn._adjust(ACCENT_ORANGE, 25)
         det_btn._press_bg  = det_btn._adjust(ACCENT_ORANGE, -25)
@@ -17193,13 +17578,22 @@ class RetroApp:
         det_btn._render(det_btn._bg)
         self._scan_det_btn = det_btn
 
-    def _reset_det_btn(self, det_btn):
-        """Restore a cancel-mode button back to its normal detect appearance."""
-        det_btn._label     = "Detect"
-        det_btn._bg        = "#555560"
-        det_btn._hover_bg  = det_btn._adjust("#555560", 25)
-        det_btn._press_bg  = det_btn._adjust("#555560", -25)
-        det_btn._render(det_btn._bg)
+    def _restore_all_detect_btns(self):
+        """Re-enable and reset every detect button (button rows + triggers)."""
+        all_btns = list(self._btn_detect_buttons.values())
+        for btn in [self._lt_detect_btn, self._rt_detect_btn]:
+            if btn:
+                all_btns.append(btn)
+        for btn in all_btns:
+            try:
+                btn._label    = "Detect"
+                btn._bg       = "#555560"
+                btn._hover_bg = btn._adjust("#555560", 25)
+                btn._press_bg = btn._adjust("#555560", -25)
+                btn.set_state("normal")
+                btn._render(btn._bg)
+            except Exception:
+                pass
         self._scan_det_btn = None
 
     # ── Button detect ────────────────────────────────────────────────
@@ -17207,7 +17601,7 @@ class RetroApp:
     def _start_btn_detect(self, key):
         """Start a SCAN to detect which GPIO pin a button press comes from."""
         if not self.pico.connected:
-            self._status_var.set("\u26a0  Not connected to controller.")
+            self._set_status("   Not connected to controller.", ACCENT_ORANGE)
             return
 
         det_btn = self._btn_detect_buttons.get(key)
@@ -17219,21 +17613,33 @@ class RetroApp:
                 self.pico.stop_scan()
             except Exception:
                 pass
-            if self._scan_det_btn:
-                self._reset_det_btn(self._scan_det_btn)
-            self._status_var.set("Detection cancelled.")
+            self._restore_all_detect_btns()
+            self._set_status("")
             return
 
         label = dict(self.RETRO_BUTTON_DEFS).get(key, key)
         self.scanning = True
-        self._status_var.set(f"Waiting for {label}\u2026  Press the button now.")
+
+        # Active button → Stop; all others → disabled
         if det_btn:
-            self._set_det_btn_cancel(det_btn, lambda: self._start_btn_detect(key))
+            self._set_det_btn_stop(det_btn, lambda: self._start_btn_detect(key))
+        for k, btn in self._btn_detect_buttons.items():
+            if k != key:
+                try:
+                    btn.set_state("disabled")
+                except Exception:
+                    pass
+        for btn in [self._lt_detect_btn, self._rt_detect_btn]:
+            if btn:
+                try:
+                    btn.set_state("disabled")
+                except Exception:
+                    pass
+
+        self._set_status(f"   Detecting pin for {label} — press the button now...", ACCENT_BLUE)
 
         def _on_detected(pin):
-            self.scanning = False
-            if self._scan_det_btn:
-                self._reset_det_btn(self._scan_det_btn)
+            self._restore_all_detect_btns()
             combo = self._btn_combos.get(key)
             if combo:
                 pin_str = str(pin)
@@ -17241,18 +17647,17 @@ class RetroApp:
                     idx = self.GPIO_OPTIONS.index(pin_str)
                     combo.current(idx)
                     self._pin_vars[key].set(pin)
-            self._status_var.set(f"\u2713  {label} detected on GPIO {pin}.")
+            self._set_status(f"   Detected GPIO {pin} for {label}", ACCENT_GREEN)
 
         def _on_error(msg):
-            self.scanning = False
-            if self._scan_det_btn:
-                self._reset_det_btn(self._scan_det_btn)
-            self._status_var.set(f"\u26a0  Scan error: {msg}")
+            self._restore_all_detect_btns()
+            self._set_status(f"   Scan error: {msg}", ACCENT_ORANGE)
 
         def _thread():
             try:
                 self.pico.start_scan()
-                while self.scanning:
+                deadline = time.time() + 15.0
+                while self.scanning and time.time() < deadline:
                     line = self.pico.read_scan_line(0.1)
                     if line and line.startswith("PIN:"):
                         try:
@@ -17266,6 +17671,15 @@ class RetroApp:
                             return
             except Exception as exc:
                 self.root.after(0, lambda e=str(exc): _on_error(e))
+                return
+            if self.scanning:
+                self.scanning = False
+                try:
+                    self.pico.stop_scan()
+                except Exception:
+                    pass
+                self.root.after(0, self._restore_all_detect_btns)
+                self.root.after(0, lambda: self._set_status(""))
 
         threading.Thread(target=_thread, daemon=True).start()
 
@@ -17274,7 +17688,7 @@ class RetroApp:
     def _start_trigger_detect(self, prefix):
         """Start a SCAN to detect which GPIO pin a trigger press comes from."""
         if not self.pico.connected:
-            self._status_var.set("\u26a0  Not connected to controller.")
+            self._set_status("   Not connected to controller.", ACCENT_ORANGE)
             return
 
         det_btn = self._lt_detect_btn if prefix == "lt" else self._rt_detect_btn
@@ -17288,65 +17702,71 @@ class RetroApp:
                 self.pico.stop_scan()
             except Exception:
                 pass
-            if self._scan_det_btn:
-                self._reset_det_btn(self._scan_det_btn)
-            self._status_var.set("Detection cancelled.")
+            self._restore_all_detect_btns()
+            self._set_status("")
             return
 
         self.scanning = True
-        hint = "Press the trigger." if mode == 0 else "Move the trigger (analog input)."
-        self._status_var.set(f"Waiting for {label} trigger\u2026  {hint}")
+        hint = "press the trigger" if mode == 0 else "move the trigger (analog)"
+
+        # Active button → Stop; all others → disabled
         if det_btn:
-            self._set_det_btn_cancel(det_btn, lambda p=prefix: self._start_trigger_detect(p))
+            self._set_det_btn_stop(det_btn, lambda p=prefix: self._start_trigger_detect(p))
+        for btn in self._btn_detect_buttons.values():
+            try:
+                btn.set_state("disabled")
+            except Exception:
+                pass
+        other_trig = self._rt_detect_btn if prefix == "lt" else self._lt_detect_btn
+        if other_trig:
+            try:
+                other_trig.set_state("disabled")
+            except Exception:
+                pass
+
+        self._set_status(f"   Detecting pin for {label} trigger — {hint}...", ACCENT_BLUE)
 
         pin_var   = self._pin_lt  if prefix == "lt" else self._pin_rt
         pin_combo = self._lt_pin_combo if prefix == "lt" else self._rt_pin_combo
 
         def _on_detected(pin):
-            self.scanning = False
-            if self._scan_det_btn:
-                self._reset_det_btn(self._scan_det_btn)
-            # Update the combo — use ADC options list if analog mode
+            self._restore_all_detect_btns()
             if pin_combo:
                 if mode == 1:  # analog
                     pin_str = str(pin)
                     if pin_str in self.ADC_OPTIONS:
-                        idx = self.ADC_OPTIONS.index(pin_str)
-                        pin_combo.current(idx)
+                        pin_combo.current(self.ADC_OPTIONS.index(pin_str))
                         pin_var.set(pin)
                 else:  # digital
                     pin_str = str(pin)
                     if pin_str in self.GPIO_OPTIONS:
-                        idx = self.GPIO_OPTIONS.index(pin_str)
-                        pin_combo.current(idx)
+                        pin_combo.current(self.GPIO_OPTIONS.index(pin_str))
                         pin_var.set(pin)
             mode_str = "analog" if mode == 1 else "digital"
-            self._status_var.set(
-                f"\u2713  {label} trigger detected on GPIO {pin} ({mode_str}).")
+            self._set_status(f"   Detected GPIO {pin} for {label} trigger ({mode_str})", ACCENT_GREEN)
 
         def _on_error(msg):
-            self.scanning = False
-            if self._scan_det_btn:
-                self._reset_det_btn(self._scan_det_btn)
-            self._status_var.set(f"\u26a0  Scan error: {msg}")
+            self._restore_all_detect_btns()
+            self._set_status(f"   Scan error: {msg}", ACCENT_ORANGE)
 
         def _thread():
             try:
                 self.pico.start_scan()
-                while self.scanning:
+                deadline = time.time() + 15.0
+                while self.scanning and time.time() < deadline:
                     line = self.pico.read_scan_line(0.1)
                     if line and line.startswith("PIN:"):
                         try:
                             pin = int(line[4:])
                         except ValueError:
                             continue
-                        if mode == 1:  # analog — accept ADC pins only
+                        if mode == 1:  # analog — ADC pins only
                             if pin in (26, 27, 28):
                                 self.pico.stop_scan()
                                 self.scanning = False
                                 self.root.after(0, lambda p=pin: _on_detected(p))
                                 return
-                        else:  # digital — accept any GPIO except reserved
+                        else:  # digital — any non-reserved GPIO
                             if 0 <= pin <= 28 and pin not in (23, 24, 25):
                                 self.pico.stop_scan()
                                 self.scanning = False
@@ -17354,6 +17774,15 @@ class RetroApp:
                                 return
             except Exception as exc:
                 self.root.after(0, lambda e=str(exc): _on_error(e))
+                return
+            if self.scanning:
+                self.scanning = False
+                try:
+                    self.pico.stop_scan()
+                except Exception:
+                    pass
+                self.root.after(0, self._restore_all_detect_btns)
+                self.root.after(0, lambda: self._set_status(""))
 
         threading.Thread(target=_thread, daemon=True).start()
 
@@ -17849,6 +18278,1140 @@ class RetroApp:
             "threepieces.nut")
 
 
+class KeyMacroApp:
+    """Keyboard Macro Pad configurator screen.
+
+    Composite HID keyboard + CDC serial — always in config mode,
+    no reboot needed. Save does NOT disconnect the device.
+    """
+
+    MACRO_COUNT    = 20
+    MACRO_STR_LEN  = 180
+    TRIGGER_LABELS = ["On Press", "On Release", "Hold (Repeat)"]
+
+    def __init__(self, root, on_back=None):
+        self.root     = root
+        self._on_back = on_back
+        self.root.configure(bg=BG_MAIN)
+
+        self.pico = PicoSerial()
+        self.frame = tk.Frame(root, bg=BG_MAIN)
+        self._status_var = tk.StringVar(value="")
+        self._debug_win  = None
+        self._debug_text = None
+        self._debug_reader_running = False
+
+        self._pin_vars    = [tk.IntVar(value=-1) for _ in range(self.MACRO_COUNT)]
+        self._pin_combos  = [None] * self.MACRO_COUNT
+        self._mode_vars   = [tk.IntVar(value=0)  for _ in range(self.MACRO_COUNT)]
+        self._mode_combos = [None] * self.MACRO_COUNT
+        self._text_vars   = [tk.StringVar(value="") for _ in range(self.MACRO_COUNT)]
+        self._text_entries = [None] * self.MACRO_COUNT
+        self._enter_vars  = [tk.BooleanVar(value=False) for _ in range(self.MACRO_COUNT)]
+        self._det_btns    = [None] * self.MACRO_COUNT
+        self._all_widgets = []
+
+        self.debounce_var = tk.IntVar(value=5)
+        self.device_name  = tk.StringVar(value="Macro Pad")
+
+        self.scanning    = False
+        self.scan_target = None
+
+        self._build_menu()
+        self._build_ui()
+
+    # ── Menu bar ────────────────────────────────────────────────────
+
+    def _build_menu(self):
+        mb = tk.Menu(self.root, bg=BG_CARD, fg=TEXT,
+                     activebackground=ACCENT_BLUE, activeforeground="#fff", bd=0)
+
+        adv = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
+                      activebackground=ACCENT_BLUE, activeforeground="#fff")
+
+        uf2_list = find_uf2_files()
+        if uf2_list:
+            flash_sub = tk.Menu(adv, tearoff=0, bg=BG_CARD, fg=TEXT,
+                                activebackground=ACCENT_BLUE, activeforeground="#fff")
+            for display_name, full_path in uf2_list:
+                flash_sub.add_command(
+                    label=display_name,
+                    command=lambda p=full_path: self._flash_firmware(p))
+            flash_sub.add_separator()
+            flash_sub.add_command(label="Browse for .uf2...",
+                                  command=lambda: self._flash_firmware(None))
+            adv.add_cascade(label="Flash Firmware to Pico...", menu=flash_sub)
+        else:
+            adv.add_command(label="Flash Firmware to Pico...",
+                            command=lambda: self._flash_firmware(None))
+
+        adv.add_command(label="Enter BOOTSEL Mode", command=self._enter_bootsel)
+        adv.add_separator()
+        adv.add_command(label="Export Configuration...", command=self._export_config)
+        adv.add_command(label="Import Configuration...", command=self._import_config)
+        adv.add_separator()
+        adv.add_command(label="Serial Debug Console", command=self._show_serial_debug)
+        adv.add_separator()
+        adv.add_command(label="Exit", command=self._on_close)
+        mb.add_cascade(label="Advanced", menu=adv)
+
+        pm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
+                     activebackground=ACCENT_BLUE, activeforeground="#fff")
+        presets = _find_preset_configs({"keyboard_macro"})
+        if presets:
+            for display_name, fpath in presets:
+                pm.add_command(label=display_name,
+                               command=lambda p=fpath: self._import_preset(p))
+        else:
+            pm.add_command(label="No preset configs found", state="disabled")
+        mb.add_cascade(label="Preset Config", menu=pm)
+
+        hm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
+                     activebackground=ACCENT_BLUE, activeforeground="#fff")
+        hm.add_command(label="About", command=self._show_about)
+        mb.add_cascade(label="Help", menu=hm)
+
+        self._menu_bar = mb
+
+    # ── Full UI build ────────────────────────────────────────────────
+
+    def _build_ui(self):
+        outer = self.frame
+        outer.configure(bg=BG_MAIN)
+
+        # ── Connection card ──────────────────────────────────────────
+        conn_card = tk.Frame(outer, bg=BG_CARD,
+                             highlightbackground=BORDER, highlightthickness=1)
+        conn_card.pack(fill="x", pady=(8, 6), padx=12, ipady=6, ipadx=14)
+
+        tk.Label(conn_card, text="CONNECTION", bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="w", padx=14, pady=(6, 0))
+        tk.Label(conn_card,
+                 text="The keyboard macro pad is always in config mode — connect any time.",
+                 bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(anchor="w", padx=14, pady=(0, 6))
+
+        btn_bar = tk.Frame(conn_card, bg=BG_CARD)
+        btn_bar.pack(fill="x", padx=14)
+
+        self._connect_btn = RoundedButton(
+            btn_bar, text="Connect to Controller",
+            command=self._connect_clicked,
+            bg_color=ACCENT_BLUE, btn_width=190, btn_height=34)
+        self._connect_btn.pack(side="left", padx=(0, 8))
+
+        self._status_lbl = tk.Label(
+            conn_card, textvariable=self._status_var,
+            bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9))
+        self._status_lbl.pack(anchor="w", padx=14, pady=(8, 6))
+
+        # ── Scrollable content area ──────────────────────────────────
+        scroll_outer = tk.Frame(outer, bg=BG_MAIN)
+        scroll_outer.pack(fill="both", expand=True, padx=12)
+
+        self._scroll_canvas = tk.Canvas(scroll_outer, bg=BG_MAIN,
+                                        highlightthickness=0, bd=0)
+        self._scrollbar = ttk.Scrollbar(scroll_outer, orient="vertical",
+                                        command=self._on_yview)
+        self.content = tk.Frame(self._scroll_canvas, bg=BG_MAIN)
+        self._scroll_enabled   = True
+        self._scroll_animating = False
+        self._scroll_target    = None
+
+        self.content.bind("<Configure>", self._on_content_configure)
+        self._content_window = self._scroll_canvas.create_window(
+            (0, 0), window=self.content, anchor="nw")
+        self._scroll_canvas.configure(yscrollcommand=self._scrollbar.set)
+        self._scroll_canvas.pack(side="left", fill="both", expand=True)
+        self._scrollbar.pack(side="right", fill="y")
+        self._scroll_canvas.bind("<Configure>", self._on_canvas_resize)
+
+        # ── Sections ─────────────────────────────────────────────────
+        self._make_device_name_section()
+        self._make_macro_section()
+        self._make_debounce_section()
+
+        # ── Bottom action bar ─────────────────────────────────────────
+        bottom = tk.Frame(outer, bg=BG_MAIN)
+        bottom.pack(fill="x", pady=(6, 8), padx=12)
+
+        RoundedButton(
+            bottom, text="◀  Main Menu", command=self._go_back,
+            bg_color="#555560", btn_width=130, btn_height=32,
+            btn_font=(FONT_UI, 8, "bold")).pack(side="left", padx=(0, 8))
+
+        self._defaults_btn = RoundedButton(
+            bottom, text="Reset to Defaults", command=self._reset_defaults,
+            bg_color="#555560", btn_width=155, btn_height=32,
+            btn_font=(FONT_UI, 8, "bold"))
+        self._defaults_btn.pack(side="left")
+        self._defaults_btn.set_state("disabled")
+
+        self._save_btn = RoundedButton(
+            bottom, text="Save Configuration",
+            command=self._save,
+            bg_color=ACCENT_GREEN, btn_width=180, btn_height=34)
+        self._save_btn.pack(side="right")
+        self._save_btn.set_state("disabled")
+
+        self._set_controls_enabled(False)
+
+    # ── Scroll helpers ───────────────────────────────────────────────
+
+    def _update_scroll_state(self):
+        self._scroll_canvas.update_idletasks()
+        content_h = self.content.winfo_reqheight()
+        canvas_h  = self._scroll_canvas.winfo_height()
+        needs_scroll = content_h > canvas_h
+        if needs_scroll and not self._scroll_enabled:
+            self._scrollbar.pack(side="right", fill="y")
+            self._scroll_enabled = True
+        elif not needs_scroll and self._scroll_enabled:
+            self._scroll_canvas.yview_moveto(0)
+            self._scrollbar.pack_forget()
+            self._scroll_enabled = False
+        self._scroll_canvas.configure(
+            scrollregion=self._scroll_canvas.bbox("all"))
+
+    def _on_content_configure(self, _event):
+        self._update_scroll_state()
+
+    def _on_canvas_resize(self, event):
+        self._scroll_canvas.itemconfig(self._content_window, width=event.width)
+        self._update_scroll_state()
+
+    def _on_yview(self, *args):
+        self._scroll_target = None
+        self._scroll_canvas.yview(*args)
+
+    def _on_mousewheel(self, event):
+        if not self._scroll_enabled:
+            return
+        delta = int(-1 * (event.delta / 120))
+        content_h = max(1, self.content.winfo_reqheight())
+        cur_frac  = self._scroll_canvas.yview()[0]
+        new_frac  = cur_frac + delta * 60 / content_h
+        new_frac  = max(0.0, min(1.0, new_frac))
+        self._scroll_target = new_frac
+        if not self._scroll_animating:
+            self._scroll_animating = True
+            self._do_scroll_step()
+
+    def _do_scroll_step(self):
+        if self._scroll_target is None or not self._scroll_canvas.winfo_exists():
+            self._scroll_animating = False
+            return
+        cur  = self._scroll_canvas.yview()[0]
+        diff = self._scroll_target - cur
+        if abs(diff) < 0.0005:
+            self._scroll_canvas.yview_moveto(self._scroll_target)
+            self._scroll_animating = False
+            self._scroll_target    = None
+            return
+        self._scroll_canvas.yview_moveto(cur + diff * 0.25)
+        self._scroll_canvas.after(16, self._do_scroll_step)
+
+    # ── Card helper ──────────────────────────────────────────────────
+
+    def _make_card(self):
+        card = tk.Frame(self.content, bg=BG_CARD,
+                        highlightbackground=BORDER, highlightthickness=1)
+        card.pack(fill="x", pady=(0, 6), padx=2)
+        return card
+
+    # ── Section: Device Name ─────────────────────────────────────────
+
+    def _make_device_name_section(self):
+        card = self._make_card()
+        inner = tk.Frame(card, bg=BG_CARD)
+        inner.pack(fill="x", padx=12, pady=10)
+
+        tk.Label(inner, text="DEVICE NAME", bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="w")
+        tk.Label(inner,
+                 text="Custom USB device name. Appears in Device Manager USB properties.",
+                 bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8), wraplength=820,
+                 justify="left", anchor="w").pack(fill="x", pady=(0, 6))
+
+        row = tk.Frame(inner, bg=BG_CARD)
+        row.pack(fill="x")
+        tk.Label(row, text="Name:", bg=BG_CARD, fg=TEXT,
+                 font=(FONT_UI, 9)).pack(side="left", padx=(0, 6))
+        _vcmd = (self.root.register(
+            lambda P: len(P) <= 20 and all(c in VALID_NAME_CHARS for c in P)), '%P')
+        self._name_entry = tk.Entry(
+            row, textvariable=self.device_name,
+            bg=BG_INPUT, fg=TEXT, insertbackground=TEXT,
+            font=(FONT_UI, 10), width=30, bd=1, relief="solid",
+            validate="key", validatecommand=_vcmd)
+        self._name_entry.pack(side="left")
+        self._all_widgets.append(self._name_entry)
+        tk.Label(row, text="(letters, numbers, spaces only  ·  max 20 chars)",
+                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left", padx=(8, 0))
+
+    # ── Section: Macro Buttons ───────────────────────────────────────
+
+    def _make_macro_section(self):
+        card = self._make_card()
+        inner = tk.Frame(card, bg=BG_CARD)
+        inner.pack(fill="x", padx=12, pady=10)
+
+        tk.Label(inner, text="MACRO BUTTONS", bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="w")
+        tk.Label(inner,
+                 text="Assign a GPIO pin and keystroke string to each macro. "
+                      "Wire each button between the GPIO pin and GND (active-low, internal pull-ups). "
+                      "Press Detect and press the button to auto-assign the pin. "
+                      "Max 180 characters per macro. "
+                      "Tip: use \\n for newline or \\t for tab in your keystroke string.",
+                 bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8), wraplength=820,
+                 justify="left", anchor="w").pack(fill="x", pady=(0, 8))
+
+        # Column headers
+        hdr = tk.Frame(inner, bg=BG_CARD)
+        hdr.pack(fill="x", pady=(0, 2))
+        tk.Frame(hdr, width=86, bg=BG_CARD).pack(side="left")
+        tk.Label(hdr, text="GPIO Pin", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7, "bold"), width=21, anchor="w").pack(side="left")
+        tk.Frame(hdr, width=60, bg=BG_CARD).pack(side="left")
+        tk.Label(hdr, text="Trigger", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7, "bold"), width=16, anchor="w").pack(side="left")
+        tk.Label(hdr, text="Keystrokes  (max 180 chars)", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7, "bold"), anchor="w").pack(side="left")
+
+        for i in range(self.MACRO_COUNT):
+            self._make_macro_row(inner, i)
+
+    def _make_macro_row(self, parent, idx):
+        row = tk.Frame(parent, bg=BG_CARD)
+        row.pack(fill="x", pady=3)
+
+        tk.Label(row, text=f"Macro {idx + 1}", bg=BG_CARD, fg=TEXT,
+                 width=8, anchor="w",
+                 font=(FONT_UI, 9)).pack(side="left", padx=(0, 8))
+
+        tk.Label(row, text="Pin:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        pin_combo = CustomDropdown(
+            row, state="readonly", width=18,
+            values=[DIGITAL_PIN_LABELS[p] for p in DIGITAL_PINS])
+        pin_combo.current(0)  # Disabled
+        pin_combo.pack(side="left", padx=(0, 4))
+        pin_combo.bind("<<ComboboxSelected>>",
+                       lambda _e, i=idx, c=pin_combo: self._on_pin_combo(i, c))
+        self._pin_combos[idx] = pin_combo
+        self._all_widgets.append(pin_combo)
+
+        det_btn = ttk.Button(
+            row, text="Detect", style="Det.TButton", width=7,
+            command=lambda i=idx: self._start_detect(i))
+        det_btn.pack(side="left", padx=(0, 10))
+        self._det_btns[idx] = det_btn
+        self._all_widgets.append(det_btn)
+
+        tk.Label(row, text="Mode:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        mode_combo = CustomDropdown(
+            row, state="readonly", width=12,
+            values=self.TRIGGER_LABELS)
+        mode_combo.current(0)
+        mode_combo.pack(side="left", padx=(0, 10))
+        mode_combo.bind("<<ComboboxSelected>>",
+                        lambda _e, i=idx, c=mode_combo: self._on_mode_combo(i, c))
+        self._mode_combos[idx] = mode_combo
+        self._all_widgets.append(mode_combo)
+
+        tk.Label(row, text="Keystrokes:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 4))
+        _vcmd = (self.root.register(
+            lambda P: len(P) <= self.MACRO_STR_LEN), '%P')
+        entry = tk.Entry(
+            row, textvariable=self._text_vars[idx],
+            bg=BG_INPUT, fg=TEXT, insertbackground=TEXT,
+            font=(FONT_UI, 9), width=38, bd=1, relief="solid",
+            validate="key", validatecommand=_vcmd)
+        entry.pack(side="left", padx=(0, 4))
+        self._text_entries[idx] = entry
+        self._all_widgets.append(entry)
+
+        tk.Label(row, text="(180)", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7)).pack(side="left", padx=(0, 6))
+
+        enter_cb = ttk.Checkbutton(
+            row, text="↵ Enter",
+            variable=self._enter_vars[idx])
+        enter_cb.pack(side="left")
+        self._all_widgets.append(enter_cb)
+
+    def _on_pin_combo(self, idx, combo):
+        self._pin_vars[idx].set(DIGITAL_PINS[combo.current()])
+
+    def _on_mode_combo(self, idx, combo):
+        self._mode_vars[idx].set(combo.current())
+
+    # ── Section: Debounce ────────────────────────────────────────────
+
+    def _make_debounce_section(self):
+        card = self._make_card()
+        inner = tk.Frame(card, bg=BG_CARD)
+        inner.pack(fill="x", padx=12, pady=10)
+
+        tk.Label(inner, text="DEBOUNCE", bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="w", pady=(0, 4))
+        row = tk.Frame(inner, bg=BG_CARD)
+        row.pack(fill="x")
+        tk.Label(row, text="Debounce time:", bg=BG_CARD, fg=TEXT).pack(
+            side="left", padx=(0, 5))
+        sp = ttk.Spinbox(row, from_=0, to=50, width=5,
+                         textvariable=self.debounce_var)
+        sp.pack(side="left", padx=(0, 5))
+        self._all_widgets.append(sp)
+        tk.Label(row, text="ms  (0 = none, 3-5 typical)", bg=BG_CARD,
+                 fg=TEXT_DIM, font=(FONT_UI, 8)).pack(side="left")
+
+    # ── Enable/disable all controls ───────────────────────────────────
+
+    def _set_controls_enabled(self, enabled):
+        state = "normal" if enabled else "disabled"
+        for w in self._all_widgets:
+            try:
+                w.config(state=state)
+            except Exception:
+                pass
+        try:
+            self._defaults_btn.set_state(state)
+            self._save_btn.set_state(state)
+        except Exception:
+            pass
+
+    # ── Config load ───────────────────────────────────────────────────
+
+    def _load_config(self):
+        # Custom reader — pico.get_config() only reads 3 lines after CFG:,
+        # but we send 20 MACRO: lines. Read until blank/timeout manually.
+        try:
+            self.pico.ser.write(b"GET_CONFIG\n")
+            self.pico.ser.flush()
+            lines = []
+            while True:
+                raw  = self.pico.ser.readline()
+                line = raw.decode("ascii", errors="replace").strip() if raw else ""
+                if not line:
+                    break
+                lines.append(line)
+        except Exception as exc:
+            messagebox.showerror("Error", f"Failed to read config: {exc}")
+            return
+
+        cfg    = {}
+        macros = {}
+        for line in lines:
+            if line.startswith("CFG:"):
+                for kv in line[4:].split(","):
+                    if "=" in kv:
+                        k, v = kv.split("=", 1)
+                        cfg[k.strip()] = v.strip()
+            elif line.startswith("MACRO:"):
+                # MACRO:N,pin=X,mode=Y,text=Z  (text last — may contain commas)
+                rest = line[6:]
+                try:
+                    comma    = rest.index(",")
+                    slot_idx = int(rest[:comma])
+                    params   = rest[comma + 1:]
+                    text_pos = params.index("text=")
+                    kv_part  = params[:text_pos].rstrip(",")
+                    text     = params[text_pos + 5:]
+                    slot     = {}
+                    for kv in kv_part.split(","):
+                        if "=" in kv:
+                            k, v = kv.split("=", 1)
+                            slot[k.strip()] = v.strip()
+                    slot["text"] = text
+                    macros[slot_idx] = slot
+                except (ValueError, IndexError):
+                    pass
+
+        for i in range(self.MACRO_COUNT):
+            m     = macros.get(i, {"pin": "-1", "mode": "0", "enter": "0", "text": ""})
+            pin   = int(m.get("pin",   -1))
+            mode  = int(m.get("mode",   0))
+            enter = int(m.get("enter",  0)) != 0
+            text  = m.get("text", "")
+
+            self._pin_vars[i].set(pin)
+            combo = self._pin_combos[i]
+            if combo is not None:
+                combo.current(DIGITAL_PINS.index(pin) if pin in DIGITAL_PINS else 0)
+                self._pin_vars[i].set(pin)   # re-sync after .current()
+
+            self._mode_vars[i].set(mode)
+            if self._mode_combos[i] is not None:
+                safe_mode = mode if 0 <= mode < len(self.TRIGGER_LABELS) else 0
+                self._mode_combos[i].current(safe_mode)
+                self._mode_vars[i].set(mode)
+
+            self._text_vars[i].set(text)
+            self._enter_vars[i].set(enter)
+
+        self.debounce_var.set(int(cfg.get("debounce", 5)))
+        self.device_name.set(cfg.get("device_name", "Macro Pad"))
+        self._update_scroll_state()
+
+    # ── Push all values to firmware ───────────────────────────────────
+
+    def _push_all_values(self):
+        for i in range(self.MACRO_COUNT):
+            self.pico.set_value(f"macro{i}_pin",   str(self._pin_vars[i].get()))
+            self.pico.set_value(f"macro{i}_mode",  str(self._mode_vars[i].get()))
+            text = self._text_vars[i].get()[:self.MACRO_STR_LEN]
+            self.pico.set_value(f"macro{i}_text",  text)
+            self.pico.set_value(f"macro{i}_enter", "1" if self._enter_vars[i].get() else "0")
+        self.pico.set_value("debounce", str(self.debounce_var.get()))
+        name = ''.join(c for c in self.device_name.get()
+                       if c in VALID_NAME_CHARS).strip() or "Macro Pad"
+        self.pico.set_value("device_name", name[:20])
+
+    # ── Save (no reboot) ──────────────────────────────────────────────
+
+    def _save(self):
+        if not self.pico.connected:
+            messagebox.showwarning("Not Connected", "Connect before saving.")
+            return
+        self._stop_detect()
+        try:
+            self._push_all_values()
+            self.pico.save()
+            self._set_status("   Saved. Macros are now active.", ACCENT_GREEN)
+        except Exception as exc:
+            messagebox.showerror("Save Error", str(exc))
+
+    # ── Reset to Defaults ─────────────────────────────────────────────
+
+    def _reset_defaults(self):
+        if not self.pico.connected:
+            return
+        if not messagebox.askyesno("Reset to Defaults",
+                "Reset all macro settings to factory defaults?\n\n"
+                "This will clear all pin assignments and keystroke strings."):
+            return
+        try:
+            self.pico.ser.write(b"DEFAULTS\n")
+            self.pico.ser.flush()
+            time.sleep(0.3)
+            self._load_config()
+            self._set_status("   Reset to defaults.", ACCENT_ORANGE)
+        except Exception as exc:
+            messagebox.showerror("Reset Error", str(exc))
+
+    # ── Pin detection (SCAN) ─────────────────────────────────────────
+
+    def _start_detect(self, idx):
+        if not self.pico.connected:
+            return
+        if self.scanning:
+            self._stop_detect()
+            return
+        self.scanning    = True
+        self.scan_target = idx
+
+        for i, btn in enumerate(self._det_btns):
+            try:
+                btn.config(state="disabled" if i != idx else "normal",
+                           text="Stop" if i == idx else "Detect")
+            except Exception:
+                pass
+
+        self._set_status(
+            f"   Detecting pin for Macro {idx + 1} — press the button now...",
+            ACCENT_BLUE)
+
+        def _scan_worker():
+            try:
+                self.pico.ser.write(b"SCAN\n")
+                self.pico.ser.flush()
+                deadline = time.time() + 15.0
+                while time.time() < deadline and self.scanning:
+                    raw  = self.pico.ser.readline()
+                    line = raw.decode("ascii", errors="replace").strip() if raw else ""
+                    if line.startswith("PIN:"):
+                        pin = int(line[4:])
+                        self.root.after(0, lambda p=pin: self._detect_result(idx, p))
+                        return
+            except Exception:
+                pass
+            self.root.after(0, self._stop_detect)
+
+        threading.Thread(target=_scan_worker, daemon=True).start()
+
+    def _detect_result(self, idx, pin):
+        self._stop_detect()
+        if pin in DIGITAL_PINS:
+            combo = self._pin_combos[idx]
+            if combo:
+                combo.current(DIGITAL_PINS.index(pin))
+            self._pin_vars[idx].set(pin)   # re-sync after .current() (doesn't fire event)
+            self._set_status(f"   Detected GPIO {pin} for Macro {idx + 1}", ACCENT_GREEN)
+
+    def _stop_detect(self):
+        was_scanning = self.scanning
+        self.scanning    = False
+        self.scan_target = None
+        if was_scanning:
+            try:
+                self.pico.ser.write(b"STOP\n")
+                self.pico.ser.flush()
+            except Exception:
+                pass
+        for btn in self._det_btns:
+            try:
+                btn.config(state="normal", text="Detect")
+            except Exception:
+                pass
+
+    # ── Status bar ────────────────────────────────────────────────────
+
+    def _set_status(self, text, color=TEXT_DIM):
+        self._status_var.set(text)
+        try:
+            self._status_lbl.config(fg=color)
+        except Exception:
+            pass
+        try:
+            self.root.update_idletasks()
+        except Exception:
+            pass
+
+    # ── Navigation / lifecycle ───────────────────────────────────────
+
+    def _go_back(self):
+        self._stop_detect()
+        if self.pico.connected:
+            self._set_status("   Saving configuration...", ACCENT_ORANGE)
+            try:
+                self._push_all_values()
+                self.pico.save()
+            except Exception:
+                pass
+        if self._on_back:
+            self.hide()
+            self._on_back()
+
+    def _on_close(self):
+        self.root.destroy()
+
+    def show(self):
+        self.root.title("OCC - Keyboard Macro Pad Configurator")
+        self.root.config(menu=self._menu_bar)
+        self.frame.pack(fill="both", expand=True)
+        self._scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    def hide(self):
+        """Hide screen without rebooting — device stays active as a keyboard."""
+        self._scroll_canvas.unbind_all("<MouseWheel>")
+        if self.pico.connected:
+            self.pico.disconnect()
+        self.frame.pack_forget()
+
+    # ── Connection ────────────────────────────────────────────────────
+
+    def _connect_clicked(self):
+        if self.pico.connected:
+            self._stop_detect()
+            self.pico.disconnect()
+            self._set_status("   Disconnected", TEXT_DIM)
+            self._set_controls_enabled(False)
+            self._connect_btn.set_state("normal")
+            return
+        port = PicoSerial.find_config_port()
+        if port:
+            self._connect_serial(port)
+        else:
+            self._set_status("   No Keyboard Macro device found.", TEXT_DIM)
+
+    def _connect_serial(self, port):
+        """Called when device is detected on a config port."""
+        try:
+            self.pico.connect(port)
+            for _ in range(5):
+                if self.pico.ping():
+                    break
+                time.sleep(0.3)
+            else:
+                self.pico.disconnect()
+                self._set_status("   Not responding", ACCENT_RED)
+                return
+            self._set_status(f"   Connected  —  {port}", ACCENT_GREEN)
+            try:
+                self._connect_btn.set_state("disabled")
+            except Exception:
+                pass
+            self._set_controls_enabled(True)
+            self._load_config()
+        except Exception as exc:
+            self._set_status(f"   Connection failed: {exc}", ACCENT_RED)
+
+    def _wait_for_port(self, timeout=8.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            port = PicoSerial.find_config_port()
+            if port:
+                time.sleep(0.5)
+                if PicoSerial.find_config_port() == port:
+                    return port
+            time.sleep(0.2)
+        return None
+
+    def _wait_for_drive(self, timeout=10.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            drive = find_rpi_rp2_drive()
+            if drive:
+                time.sleep(0.5)
+                return drive
+            time.sleep(0.5)
+            self.root.update_idletasks()
+        return None
+
+    # ── Advanced > Flash Firmware ────────────────────────────────────
+
+    def _flash_firmware(self, uf2=None):
+        if not uf2:
+            uf2 = filedialog.askopenfilename(
+                title="Select UF2 Firmware File",
+                filetypes=[("UF2 Firmware", "*.uf2"), ("All Files", "*.*")])
+            if not uf2:
+                return
+
+        def _worker():
+            drive = find_rpi_rp2_drive()
+
+            if not drive:
+                if self.pico.connected:
+                    self.root.after(0, lambda: self._set_status(
+                        "   Entering BOOTSEL mode...", ACCENT_ORANGE))
+                    try:
+                        self.pico.bootsel()
+                        self.pico.disconnect()
+                    except Exception:
+                        pass
+                    self.root.after(0, lambda: [
+                        self._connect_btn.set_state("normal"),
+                        self._set_controls_enabled(False),
+                    ])
+                    drive = self._wait_for_drive(12.0)
+                else:
+                    self.root.after(0, lambda: messagebox.showinfo(
+                        "Controller Not Found",
+                        "No controller detected.\n\n"
+                        "To flash firmware manually:\n"
+                        "  1. Hold the BOOTSEL button on the Pico\n"
+                        "  2. Plug it in while holding BOOTSEL\n"
+                        "  3. The RPI-RP2 drive will appear\n"
+                        "  4. Try Flash Firmware again\n\n"
+                        "Or connect the controller first via the Connect button."))
+                    return
+
+            if not drive:
+                self.root.after(0, lambda: [
+                    self._set_status("   RPI-RP2 drive not found", ACCENT_RED),
+                    messagebox.showwarning("Timeout",
+                        "The RPI-RP2 drive didn't appear.\n"
+                        "Try holding BOOTSEL while plugging in manually.")
+                ])
+                return
+
+            self.root.after(0, lambda d=drive: self._set_status(
+                f"   Flashing firmware to {d}...", ACCENT_ORANGE))
+            try:
+                def _flash_status(msg):
+                    self.root.after(0, lambda m=msg: self._set_status(
+                        f"   {m}", ACCENT_ORANGE))
+                flash_uf2_with_reboot(uf2, drive, status_cb=_flash_status)
+                self.root.after(0, lambda: [
+                    self._set_status("   Firmware flashed!", ACCENT_GREEN),
+                    messagebox.showinfo("Success",
+                        f"Firmware flashed successfully!\n\n"
+                        f"File: {os.path.basename(uf2)}\n"
+                        f"Drive: {drive}\n\n"
+                        "The Pico will reboot and reconnect as the keyboard macro pad.\n"
+                        "Click 'Connect' to configure it.")
+                ])
+            except Exception as exc:
+                self.root.after(0, lambda e=str(exc): [
+                    self._set_status("   Flash failed", ACCENT_RED),
+                    messagebox.showerror("Flash Error", e)
+                ])
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    # ── Advanced > Enter BOOTSEL Mode ───────────────────────────────
+
+    def _enter_bootsel(self):
+        enter_bootsel_for(self)
+
+    # ── Advanced > Export / Import Configuration ────────────────────
+
+    def _export_config(self):
+        if not self.pico.connected:
+            messagebox.showwarning("Not Connected",
+                "Connect to the macro pad before exporting.")
+            return
+        device_name = self.device_name.get().strip() or "Macro Pad"
+        date_str = datetime.datetime.now().strftime("%m-%d-%Y")
+        default_name = f"{device_name} {date_str}"
+        path = filedialog.asksaveasfilename(
+            title="Export Macro Pad Configuration",
+            initialfile=default_name,
+            defaultextension=".json",
+            filetypes=[("JSON config", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            # Build config dict from current UI state using SET-compatible key names
+            cfg = {}
+            for i in range(self.MACRO_COUNT):
+                cfg[f"macro{i}_pin"]   = str(self._pin_vars[i].get())
+                cfg[f"macro{i}_mode"]  = str(self._mode_vars[i].get())
+                cfg[f"macro{i}_text"]  = self._text_vars[i].get()
+                cfg[f"macro{i}_enter"] = "1" if self._enter_vars[i].get() else "0"
+            cfg["debounce"]    = str(self.debounce_var.get())
+            cfg["device_name"] = self.device_name.get()
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, indent=2)
+            messagebox.showinfo("Export Successful",
+                                f"Configuration exported to:\n{path}")
+        except Exception as exc:
+            messagebox.showerror("Export Error", str(exc))
+
+    def _apply_config_dict(self, cfg):
+        """Push all SET-able keys from cfg to firmware. Returns list of error strings."""
+        SKIP_KEYS = {"device_type"}
+        errors = []
+        for key, val in cfg.items():
+            if key in SKIP_KEYS:
+                continue
+            try:
+                self.pico.set_value(key, val)
+            except Exception as exc:
+                errors.append(f"{key}: {exc}")
+        return errors
+
+    def _import_config(self):
+        if not self.pico.connected:
+            messagebox.showwarning("Not Connected",
+                "Connect to the macro pad before importing.")
+            return
+        path = filedialog.askopenfilename(
+            title="Import Macro Pad Configuration",
+            filetypes=[("JSON config", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception as exc:
+            messagebox.showerror("Import Error", f"Could not read file:\n{exc}")
+            return
+
+        errors = self._apply_config_dict(cfg)
+        if errors:
+            messagebox.showwarning("Import Partial",
+                "Some keys could not be set:\n" + "\n".join(errors[:10]))
+        else:
+            if messagebox.askyesno("Import Successful",
+                    "Configuration imported.\n\nSave to flash now?"):
+                try:
+                    self.pico.save()
+                    self._set_status("   Config saved to flash", ACCENT_GREEN)
+                except Exception as exc:
+                    messagebox.showerror("Save Error", str(exc))
+
+    def _import_preset(self, filepath):
+        """Load a preset JSON directly and push to firmware (no file dialog)."""
+        if not self.pico.connected:
+            messagebox.showwarning("Not Connected",
+                "Connect to the macro pad before loading a preset.")
+            return
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except Exception as exc:
+            messagebox.showerror("Preset Error", f"Could not read preset:\n{exc}")
+            return
+
+        errors = self._apply_config_dict(cfg)
+        if errors:
+            messagebox.showwarning("Preset Partial",
+                "Some keys could not be set:\n" + "\n".join(errors[:10]))
+        else:
+            if messagebox.askyesno("Preset Loaded",
+                    "Preset applied.\n\nSave to flash now?"):
+                try:
+                    self.pico.save()
+                    self._set_status("   Config saved to flash", ACCENT_GREEN)
+                except Exception as exc:
+                    messagebox.showerror("Save Error", str(exc))
+
+    # ── Advanced > Serial Debug Console ─────────────────────────────
+
+    def _debug_log(self, line):
+        txt = getattr(self, '_debug_text', None)
+        if txt is None:
+            return
+        try:
+            txt.configure(state="normal")
+            txt.insert("end", line + "\n")
+            total = int(txt.index("end-1c").split(".")[0])
+            if total > 500:
+                txt.delete("1.0", f"{total - 500}.0")
+            txt.see("end")
+            txt.configure(state="disabled")
+        except Exception:
+            pass
+
+    def _show_serial_debug(self):
+        if getattr(self, '_debug_win', None):
+            try:
+                if self._debug_win.winfo_exists():
+                    self._debug_win.lift()
+                    self._debug_win.focus_force()
+                    return
+            except Exception:
+                pass
+
+        win = tk.Toplevel()
+        win.title("Serial Debug Console — Keyboard Macro Pad")
+        win.configure(bg=BG_MAIN)
+        win.geometry("700x520")
+        win.minsize(500, 380)
+        win.resizable(True, True)
+        self._debug_win = win
+
+        import queue as _queue
+        _send_queue = _queue.Queue()
+
+        TAG_OUT  = "out"
+        TAG_IN   = "in"
+        TAG_ERR  = "err"
+        TAG_INFO = "info"
+
+        def _log(line, tag=TAG_IN):
+            txt = getattr(self, '_debug_text', None)
+            if txt is None:
+                return
+            try:
+                txt.configure(state="normal")
+                txt.insert("end", line + "\n", tag)
+                total = int(txt.index("end-1c").split(".")[0])
+                if total > 600:
+                    txt.delete("1.0", f"{total - 600}.0")
+                txt.see("end")
+                txt.configure(state="disabled")
+            except Exception:
+                pass
+
+        def _send_raw(cmd):
+            _log(f">> {cmd}", TAG_OUT)
+            if not self.pico.connected:
+                _log("!! Not connected — connect first.", TAG_ERR)
+                return
+            _send_queue.put(cmd.strip())
+
+        info_frame = tk.Frame(win, bg=BG_CARD)
+        info_frame.pack(fill="x", padx=8, pady=(8, 0), ipady=5)
+        tk.Label(info_frame, text="Config:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8, "bold")).pack(side="left", padx=(8, 4))
+        info_lbl = tk.Label(info_frame, text="", bg=BG_CARD, fg=TEXT,
+                            font=("Consolas", 8))
+        info_lbl.pack(side="left", fill="x", expand=True)
+
+        def _refresh_info():
+            conn = getattr(self, 'pico', None)
+            info_lbl.config(text="connected" if (conn and conn.connected) else "NOT connected")
+
+        _refresh_info()
+        tk.Button(info_frame, text="↺ Refresh", bg=BG_INPUT, fg=TEXT_DIM,
+                  font=(FONT_UI, 7), relief="flat", bd=0, padx=6,
+                  command=_refresh_info).pack(side="right", padx=6)
+
+        qbar = tk.Frame(win, bg=BG_MAIN)
+        qbar.pack(fill="x", padx=8, pady=(6, 0))
+        QUICK = [
+            ("PING",       "PING",       ACCENT_BLUE),
+            ("GET CONFIG", "GET_CONFIG", ACCENT_BLUE),
+            ("SCAN",       "SCAN",       ACCENT_BLUE),
+            ("STOP",       "STOP",       ACCENT_ORANGE),
+            ("REBOOT",     "REBOOT",     ACCENT_RED),
+        ]
+        for lbl, cmd, color in QUICK:
+            RoundedButton(qbar, text=lbl, command=lambda c=cmd: _send_raw(c),
+                          bg_color=color, btn_width=90, btn_height=24,
+                          btn_font=(FONT_UI, 7, "bold")).pack(
+                side="left", padx=(0, 4), pady=2)
+
+        ref_frame = tk.Frame(win, bg=BG_CARD)
+        ref_frame.pack(fill="x", padx=8, pady=(4, 0))
+
+        REF_LINES = [
+            "PING                              → PONG  (connection check)",
+            "GET_CONFIG                        → DEVTYPE:keyboard_macro + CFG: + 20 MACRO: lines",
+            "GET_FW_DATE                       → FW_DATE:YYYY-MM-DD",
+            "SCAN                              → streams PIN:N on button press; send STOP to end",
+            "STOP                              → ends SCAN mode",
+            "SET:macro0_pin=<-1..28>           → assign GPIO pin to Macro 1 (-1 = disabled)",
+            "SET:macro0_mode=<0-2>             → 0=On Press, 1=On Release, 2=Hold (Repeat)",
+            "SET:macro0_text=<string>          → keystroke string for Macro 1 (max 180 chars)",
+            "SET:debounce=<0-50>               → debounce time in ms",
+            "SET:device_name=<name>            → custom USB device name (max 20 chars)",
+            "SAVE                              → write current config to flash",
+            "DEFAULTS                          → reset all config to factory defaults",
+            "REBOOT                            → restart firmware",
+            "BOOTSEL                           → restart into USB mass-storage (UF2 flash) mode",
+        ]
+
+        ref_visible = tk.BooleanVar(value=False)
+        ref_body = tk.Frame(win, bg=BG_CARD)
+
+        ref_text = tk.Text(ref_body, bg="#111116", fg="#8888aa",
+                           font=("Consolas", 8), height=len(REF_LINES),
+                           state="normal", wrap="none", relief="flat",
+                           bd=0, highlightthickness=0)
+        ref_text.pack(fill="x", padx=8, pady=(0, 6))
+        for ln in REF_LINES:
+            ref_text.insert("end", ln + "\n")
+        ref_text.configure(state="disabled")
+
+        def _toggle_ref():
+            if ref_visible.get():
+                ref_body.pack_forget()
+                ref_visible.set(False)
+                ref_toggle_btn.config(text="▶ Command Reference")
+            else:
+                ref_body.pack(fill="x", padx=8, after=ref_frame)
+                ref_visible.set(True)
+                ref_toggle_btn.config(text="▼ Command Reference")
+
+        ref_toggle_btn = tk.Button(
+            ref_frame, text="▶ Command Reference",
+            bg=BG_CARD, fg=ACCENT_BLUE, font=(FONT_UI, 8),
+            relief="flat", bd=0, anchor="w", padx=8, pady=4,
+            command=_toggle_ref)
+        ref_toggle_btn.pack(fill="x")
+
+        out_frame = tk.Frame(win, bg=BG_MAIN)
+        out_frame.pack(fill="both", expand=True, padx=8, pady=(6, 0))
+        vsb = ttk.Scrollbar(out_frame, orient="vertical")
+        vsb.pack(side="right", fill="y")
+        hsb = ttk.Scrollbar(out_frame, orient="horizontal")
+        hsb.pack(side="bottom", fill="x")
+        self._debug_text = tk.Text(
+            out_frame, bg="#0d0d12", fg="#b0ffb0",
+            font=("Consolas", 9), state="disabled",
+            wrap="none", relief="flat", bd=0,
+            highlightthickness=1, highlightbackground=BORDER,
+            yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self._debug_text.pack(fill="both", expand=True)
+        vsb.config(command=self._debug_text.yview)
+        hsb.config(command=self._debug_text.xview)
+        self._debug_text.tag_config(TAG_OUT,  foreground="#668866")
+        self._debug_text.tag_config(TAG_IN,   foreground="#b0ffb0")
+        self._debug_text.tag_config(TAG_ERR,  foreground="#ff6060")
+        self._debug_text.tag_config(TAG_INFO, foreground="#6699cc")
+
+        send_frame = tk.Frame(win, bg=BG_MAIN)
+        send_frame.pack(fill="x", padx=8, pady=6)
+        tk.Label(send_frame, text="CMD:", bg=BG_MAIN, fg=TEXT_DIM,
+                 font=("Consolas", 9, "bold")).pack(side="left", padx=(0, 4))
+        entry_var = tk.StringVar()
+        entry = tk.Entry(send_frame, textvariable=entry_var,
+                         bg=BG_INPUT, fg="#ffffff", insertbackground="#ffffff",
+                         font=("Consolas", 10), relief="flat",
+                         highlightthickness=2, highlightcolor=ACCENT_BLUE,
+                         highlightbackground=BORDER)
+        entry.pack(side="left", fill="x", expand=True, ipady=4, padx=(0, 6))
+
+        def _do_send(_event=None):
+            cmd = entry_var.get().strip()
+            if not cmd:
+                return
+            entry_var.set("")
+            entry.focus_set()
+            _send_raw(cmd)
+
+        entry.bind("<Return>", _do_send)
+        RoundedButton(send_frame, text="Send ↵", command=_do_send,
+                      bg_color=ACCENT_GREEN, btn_width=75, btn_height=30,
+                      btn_font=(FONT_UI, 8, "bold")).pack(side="left", padx=(0, 4))
+
+        def _clear():
+            self._debug_text.configure(state="normal")
+            self._debug_text.delete("1.0", "end")
+            self._debug_text.configure(state="disabled")
+
+        RoundedButton(send_frame, text="Clear", command=_clear,
+                      bg_color="#555560", btn_width=60, btn_height=30,
+                      btn_font=(FONT_UI, 8, "bold")).pack(side="left")
+
+        self._debug_reader_running = True
+
+        def _reader_thread():
+            while self._debug_reader_running:
+                if not getattr(self, '_debug_win', None):
+                    break
+                try:
+                    if not self.pico.connected:
+                        time.sleep(0.2)
+                        continue
+                    ser = self.pico.ser
+                    try:
+                        cmd = _send_queue.get_nowait()
+                        try:
+                            ser.write((cmd + "\n").encode())
+                            ser.flush()
+                        except Exception as exc:
+                            win.after(0, lambda e=str(exc): _log(f"!! Write error: {e}", TAG_ERR))
+                    except _queue.Empty:
+                        pass
+                    old_to = ser.timeout
+                    ser.timeout = 0.05
+                    try:
+                        raw = ser.readline()
+                    finally:
+                        ser.timeout = old_to
+                    line = raw.decode("ascii", errors="replace").strip() if raw else ""
+                    if line:
+                        win.after(0, lambda l=line: _log(f"<< {l}", TAG_IN))
+                except Exception:
+                    time.sleep(0.1)
+
+        threading.Thread(target=_reader_thread, daemon=True).start()
+
+        def _on_close():
+            self._debug_reader_running = False
+            self._debug_text = None
+            self._debug_win  = None
+            win.destroy()
+
+        win.protocol("WM_DELETE_WINDOW", _on_close)
+        _log("=== Serial Debug Console — Keyboard Macro Pad ===", TAG_INFO)
+        _log("Type a command below and press Enter, or use the quick buttons above.", TAG_INFO)
+        _log("Click '▶ Command Reference' to see all available commands.", TAG_INFO)
+        _log("", TAG_INFO)
+        win.after(50, entry.focus_set)
+
+    # ── Help > About ────────────────────────────────────────────────
+
+    def _show_about(self):
+        messagebox.showinfo("About",
+            "OCC — Open Controller Configurator\n"
+            "Guitars, Drums, Whatever you want I guess\n"
+            "threepieces.nut")
+
+
 #  DEVICE TYPE → SCREEN CLASS  routing table
 #
 #  To add a new device type:
@@ -17863,6 +19426,7 @@ DEVICE_SCREEN_MAP = {
     "drum_kit":                None,   # filled in main() once DrumApp is instantiated
     "pedal":                   None,   # filled in main() once PedalApp is instantiated
     "pico_retro":              None,   # filled in main() once RetroApp is instantiated
+    "keyboard_macro":          None,   # filled in main() once KeyMacroApp is instantiated
 }
 
 # Map device_type → the constructor to call (used to build instances in main())
@@ -17873,6 +19437,7 @@ DEVICE_SCREEN_CLASSES = {
     "drum_kit":                DrumApp,
     "pedal":                   PedalApp,
     "pico_retro":              RetroApp,
+    "keyboard_macro":          KeyMacroApp,
 }
 
 
@@ -17939,6 +19504,15 @@ def main():
     menu.show()
     SplashOverlay(root, geometry=(w, h, x, y))
     root.deiconify()
+
+    # ── Startup update check (background, non-blocking) ──────────────
+    def _startup_update_check():
+        if APP_VERSION == "dev":
+            return
+        latest, url = _fetch_latest_release()
+        if latest and _version_is_newer(latest, APP_VERSION):
+            root.after(0, lambda: _show_update_dialog(root, latest, url))
+    threading.Thread(target=_startup_update_check, daemon=True).start()
 
     # ── Deferred device screen construction ─────────────────────────
     device_screens = {}

@@ -11,6 +11,16 @@ REM Previously the working directory reset after popd, so PyInstaller
 REM couldn't resolve --add-data paths relative to the script folder.
 pushd "%~dp0"
 
+REM App version — read from version.txt. Edit that file before building.
+set "APP_VERSION=dev"
+if exist "version.txt" (
+    set /p APP_VERSION=<version.txt
+    echo   Building version: !APP_VERSION!
+) else (
+    echo   WARNING: version.txt not found - version will be "dev". Create it with your version number.
+)
+echo.
+
 if exist build (
     echo Deleting build folder...
     rmdir /s /q build
@@ -54,25 +64,16 @@ if not defined NUKE_FOUND (
     set "NUKE_ARG=--add-data="!NUKE_FOUND!;.""
 )
 
-REM Scan for .gif files matching any bundled .uf2 firmware name and embed them
+REM Bundle all .gif files found in this folder (firmware tile animations)
 echo.
-echo Scanning for matching .gif files...
+echo Scanning for .gif files...
 set "GIF_ARGS="
-for /f "usebackq delims=" %%A in (`dir /b *.uf2 2^>nul`) do (
-    if /i not "%%A"=="nuke.uf2" (
-        REM Strip .uf2 extension and look for matching .gif
-        for /f "delims=" %%B in ("%%~nA.gif") do (
-            if exist "%%B" (
-                echo   Found GIF: %%B  ^(matches %%A^)
-                set "GIF_ARGS=!GIF_ARGS! --add-data="%%B;.""
-            ) else (
-                echo   No GIF found for %%A  ^(expected %%B^)
-            )
-        )
-    )
+for %%G in (*.gif) do (
+    echo   Bundling GIF: %%G
+    set "GIF_ARGS=!GIF_ARGS! --add-data="%%G;.""
 )
 if not defined GIF_ARGS (
-    echo   No matching .gif files bundled.
+    echo   No .gif files found.
 )
 
 REM ── Generate fw_dates.json ──────────────────────────────────────
@@ -193,7 +194,7 @@ pyinstaller --clean --onefile --windowed ^
     !PRESET_ARGS! ^
     %UF2_ARGS% !NUKE_ARG! ^
     !GIF_ARGS! ^
-    !FW_DATES_ARG! ^
+    !FW_DATES_ARG! --add-data=version.txt;. ^
     --exclude-module numpy --exclude-module matplotlib ^
     configurator.py
 

@@ -113,7 +113,7 @@ echo.
 :: ------------------------------------------------------------
 :: 7. Pedal Controller
 :: ------------------------------------------------------------
-echo [7/7] Building pico-pedal...
+echo [7/8] Building pico-pedal...
 cd /d "%SRC%pico-pedal"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -128,10 +128,27 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
+:: 8. Keyboard Macro Pad
+:: ------------------------------------------------------------
+echo [8/8] Building pico-keyboard-macro...
+cd /d "%SRC%pico-keyboard-macro"
+%BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
+if errorlevel 1 (
+    echo ERROR: pico-keyboard-macro build FAILED.
+    goto :error
+)
+
+echo Copying Keyboard Macro Pad firmware...
+copy /Y "build\pico_keyboard_macro.uf2" "%CONFIGURATOR%\Keyboard_Macro_Pad.uf2"
+copy /Y "build\pico_keyboard_macro.uf2.date" "%CONFIGURATOR%\Keyboard_Macro_Pad.uf2.date"
+echo   OK
+echo.
+
+:: ------------------------------------------------------------
 :: Done
 :: ------------------------------------------------------------
 echo ============================================================
-echo  All 7 firmware projects built and copied to configurator folder.
+echo  All 8 firmware projects built and copied to configurator folder.
 echo ============================================================
 goto :end
 
