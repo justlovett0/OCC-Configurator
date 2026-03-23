@@ -20,7 +20,7 @@
 </p>
 
 <p>
-  OCC (Open Controller Configurator) is a collection of XInput controller firmware variants for the Raspberry Pi Pico (RP2040) and Pico W (RP2040 + CYW43), paired with a Windows configurator application. Originally created for guitar and drum kit peripherals for use with games like Clone Hero and Rock Band, I am also working to expand scope to other controller and input devices, supporting wired XInput, wireless Bluetooth HID, and wireless dongle operation.
+  OCC (Open Controller Configurator) is a collection of firmware variants for the Raspberry Pi Pico (RP2040) and Pico W (RP2040 + CYW43), paired with a Windows configurator application. Originally created for guitar and drum kit peripherals for use with games like Clone Hero and Rock Band, I am also working to expand scope to other controller and input devices — including a USB HID keyboard macro pad — supporting wired XInput, wireless Bluetooth HID, and wireless dongle operation.
 </p>
 
 <p>
@@ -33,7 +33,7 @@
 
 ## Features
 
-- Multiple firmware variants: wired guitar, wired drums, wireless guitar (BLE HID + dongle), single-channel dongle, and 4-channel dongle
+- Multiple firmware variants: wired guitar, wired drums, wireless guitar (BLE HID + dongle), single-channel dongle, 4-channel dongle, and USB HID keyboard macro pad
 - Windows configurator EXE — Detects your controller firmware, connects over comm, configure, and flash your button mappings
 - Fully configurable GPIO pin assignments for all digital button inputs
 - Analog and digital tilt sensor and whammy bar inputs, with per-channel min/max sensitivity range and EMA smoothing
@@ -58,6 +58,7 @@
 | Wireless Guitar Controller | Guitar (XInput subtype 0x07) | USB XInput + BLE HID | Yes — BLE HID or Dongle | CDC Serial | No |
 | Wireless Dongle | Dongle (XInput subtype 0x0B) | USB XInput (relay) | Yes — BLE central | None | No (1 controller) |
 | Wireless Dongle 4-Channel | Dongle (XInput subtype 0x0B) | USB XInput (relay) | Yes — BLE central | None | Yes (up to 4) |
+| Keyboard Macro Pad | USB HID Keyboard | USB HID | No | CDC Serial (always-on) | No |
 
 ## Getting Started
 
