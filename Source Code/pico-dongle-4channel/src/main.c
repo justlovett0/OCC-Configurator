@@ -72,6 +72,7 @@
 #include "usb_descriptors.h"
 #include "xinput_driver.h"
 #include "dongle_bt.h"
+#include "apa102_leds.h"
 
 /* ── Timing constants ──────────────────────────────────────────────── */
 
@@ -142,38 +143,46 @@ static bool slot_allocated[DONGLE_MAX_CONTROLLERS]    = {false};
 static bool slot_was_connected[DONGLE_MAX_CONTROLLERS] = {false};
 
 /* ────────────────────────────────────────────────────────────────── */
-/* CYW43 LED helpers                                                  */
+/* APA102 LED update                                                  */
+/*                                                                    */
+/* LED pairs per slot (1-indexed in schematic → 0-indexed here):     */
+/*   Slot 0: LEDs 0 & 7   Slot 1: LEDs 1 & 6                        */
+/*   Slot 2: LEDs 2 & 5   Slot 3: LEDs 3 & 4                        */
+/*                                                                    */
+/* off = not syncing, idle                                            */
+/* flash = actively binding to a controller                           */
+/* solid = controller connected                                       */
 /* ────────────────────────────────────────────────────────────────── */
 
-static void led_set(bool on) {
-    if (g_cyw43_init_ok)
-        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, on ? 1 : 0);
-}
+static void dongle_led_update(void) {
+    static uint32_t blink_last  = 0;
+    static bool     blink_state = false;
 
-static void led_blink_config(void) {
-    static uint32_t last  = 0;
-    static int      phase = 0;
     uint32_t now = to_ms_since_boot(get_absolute_time());
-    static const uint32_t pat[] = { 100, 100, 100, 700 };
-    if (now - last >= pat[phase % 4]) {
-        last = now;
-        led_set((phase % 2) == 0);
-        phase++;
+    if (now - blink_last >= 300) {
+        blink_last  = now;
+        blink_state = !blink_state;
     }
-}
 
-static void led_blink_fast(void) {
-    static uint32_t last  = 0;
-    static bool     state = false;
-    uint32_t now = to_ms_since_boot(get_absolute_time());
-    if (now - last >= 100) { last = now; state = !state; led_set(state); }
-}
+    static const uint8_t led_pairs[DONGLE_MAX_CONTROLLERS][2] = {
+        {0, 7}, {1, 6}, {2, 5}, {3, 4}
+    };
+    uint8_t brightness[DONGLE_LED_COUNT] = {0};
 
-static void led_blink_slow(void) {
-    static uint32_t last  = 0;
-    static bool     state = false;
-    uint32_t now = to_ms_since_boot(get_absolute_time());
-    if (now - last >= 1000) { last = now; state = !state; led_set(state); }
+    for (uint8_t s = 0; s < DONGLE_MAX_CONTROLLERS; s++) {
+        uint8_t b = 0;
+        bool binding = dongle_bt_is_binding() && (dongle_bt_binding_slot() == s);
+
+        if (dongle_bt_connected(s))
+            b = 15;                      // solid, half brightness
+        else if (binding && blink_state)
+            b = 15;                      // flash on half-cycle
+
+        brightness[led_pairs[s][0]] = b;
+        brightness[led_pairs[s][1]] = b;
+    }
+
+    apa102_write(brightness, 255, 255, 255);  // white
 }
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -431,7 +440,9 @@ int main(void) {
         while (1) tight_loop_contents();   /* Fatal: CYW43 chip init failed */
     }
     g_cyw43_init_ok = true;
-    led_set(true);   /* Solid ON during early boot */
+
+    apa102_init();
+    apa102_all_off();
 
     init_sync_buttons();
 
@@ -491,13 +502,7 @@ int main(void) {
         }
 
         /* ── LED status ── */
-        if (dongle_bt_is_binding()) {
-            led_blink_fast();
-        } else if (dongle_bt_active_count() > 0) {
-            led_set(true);
-        } else {
-            led_blink_slow();
-        }
+        dongle_led_update();
 
         /* ── Send XInput reports at ~1 kHz for all exposed slots ── */
         uint64_t now_us = time_us_64();

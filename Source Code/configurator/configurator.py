@@ -5932,6 +5932,8 @@ class MainMenu:
         self._xinput_dongle_count = 0
         self._backup_in_progress = False  # suppress poll's serial open during worker
         self._check_in_progress = False   # suppress poll rebuilds during update check
+        self._probing_ctrl = False        # background serial probe in flight
+        self._factory_reset_in_progress = False  # suppress flash screen during factory reset
         # BOOTSEL debounce: drive must be seen for this many consecutive polls
         # before we switch screens.  POLL_MS=1000ms so 2 polls = ~2s minimum.
         self._bootsel_stable_count = 0
@@ -5945,7 +5947,8 @@ class MainMenu:
         self.frame = tk.Frame(root, bg=BG_MAIN)
 
         self._build()
-        self._poll()
+        # poll starts in show() via after(50, self._poll) — don't call here or
+        # the job it schedules gets orphaned when show() overwrites _poll_job
 
     def _open_help(self):
         if self._help_dialog is None:
@@ -6136,7 +6139,9 @@ class MainMenu:
         drive = find_rpi_rp2_drive()
         if drive:
             self._bootsel_stable_count += 1
-            if self._bootsel_stable_count >= self._BOOTSEL_STABLE_NEEDED                     and self._on_flash_screen:
+            if self._bootsel_stable_count >= self._BOOTSEL_STABLE_NEEDED \
+                    and self._on_flash_screen \
+                    and not self._factory_reset_in_progress:
                 self._bootsel_stable_count = 0
                 self._on_flash_screen(drive)
                 return   # poll stops here; flash screen has its own poll loop
@@ -6154,59 +6159,27 @@ class MainMenu:
     def _refresh_controller_status(self):
         port = PicoSerial.find_config_port()
         if port:
-            # Skip opening the serial port while a background worker owns it —
-            # opening it here would race and cause PermissionError in the worker.
-            if not self._backup_in_progress:
-                try:
-                    ps = PicoSerial()
-                    ps.connect(port)
-                    cfg = ps.get_config()
-                    ps.disconnect()
-                    name = cfg.get("device_name", "Controller")
-                    dtype = cfg.get("device_type", "unknown")
-                except Exception:
-                    name = "Controller"
-                    dtype = "unknown"
-            else:
-                name = "Controller"
-                dtype = "unknown"
-            self._ctrl_icon.config(text="●", fg=ACCENT_GREEN)
-            self._ctrl_status.config(text=name, fg=ACCENT_GREEN)
-            if dtype == "dongle":
-                self._ctrl_status.config(
-                    text="Dongle detected, no configuration options available.",
-                    fg=ACCENT_ORANGE)
-                self._ctrl_detail.config(text="", fg=TEXT_DIM)
-                self._cfg_btn.set_state("disabled")
-                self._easy_cfg_btn.set_state("disabled")
-            elif dtype == "guitar_alternate_dongle":
-                detail_text = f"Guitar for Dongle  ·  Config mode  ·  {port}"
-                self._ctrl_detail.config(text=detail_text, fg=TEXT_DIM)
-                self._cfg_btn.set_state("normal")
-                self._easy_cfg_btn.set_state("normal")
-            elif dtype == "guitar_combined":
-                detail_text = f"Guitar (Combined)  ·  Config mode  ·  {port}"
-                self._ctrl_detail.config(text=detail_text, fg=TEXT_DIM)
-                self._cfg_btn.set_state("normal")
-                self._easy_cfg_btn.set_state("normal")
-            elif dtype == "drum_kit":
-                detail_text = f"Drum Kit  ·  Config mode  ·  {port}  ·  No Easy Configurator for Drums yet"
-                self._ctrl_detail.config(text=detail_text, fg=TEXT_DIM)
-                self._cfg_btn.set_state("normal")
-                self._easy_cfg_btn.set_state("disabled")
-            elif dtype == "pedal":
-                detail_text = f"Pedal Controller  ·  Config mode  ·  {port}"
-                self._ctrl_detail.config(text=detail_text, fg=TEXT_DIM)
-                self._cfg_btn.set_state("normal")
-                self._easy_cfg_btn.set_state("disabled")
-            else:
-                detail_text = f"Config mode  ·  {port}"
-                self._ctrl_detail.config(text=detail_text, fg=TEXT_DIM)
-                self._cfg_btn.set_state("normal")
-                self._easy_cfg_btn.set_state("normal")
-            self._pending_port = port
-            self._xinput_count = 0
-            self._xinput_dongle_count = 0
+            # Skip opening the serial port while a background worker owns it,
+            # or while a probe is already in flight.
+            if not self._backup_in_progress and not self._probing_ctrl:
+                self._probing_ctrl = True
+                def _probe(captured_port=port):
+                    try:
+                        ps = PicoSerial()
+                        ps.connect(captured_port)
+                        cfg = ps.get_config()
+                        ps.disconnect()
+                        name  = cfg.get("device_name", "Controller")
+                        dtype = cfg.get("device_type", "unknown")
+                    except Exception:
+                        name, dtype = "Controller", "unknown"
+                    finally:
+                        self._probing_ctrl = False
+                    self.root.after(0, lambda n=name, d=dtype, p=captured_port:
+                        self._apply_ctrl_status(n, d, p))
+                threading.Thread(target=_probe, daemon=True).start()
+            # UI update arrives via _apply_ctrl_status callback; nothing to do here
+            return
         else:
             # Check for XInput controller
             has_xinput = False
@@ -6274,6 +6247,47 @@ class MainMenu:
                 self._pending_port = None
                 self._xinput_first_subtype = None
                 self._xinput_dongle_count  = 0
+
+    def _apply_ctrl_status(self, name, dtype, port):
+        """Apply serial probe result to the controller card. Runs on main thread."""
+        self._ctrl_icon.config(text="●", fg=ACCENT_GREEN)
+        self._ctrl_status.config(text=name, fg=ACCENT_GREEN)
+        if dtype == "dongle":
+            self._ctrl_status.config(
+                text="Dongle detected, no configuration options available.",
+                fg=ACCENT_ORANGE)
+            self._ctrl_detail.config(text="", fg=TEXT_DIM)
+            self._cfg_btn.set_state("disabled")
+            self._easy_cfg_btn.set_state("disabled")
+        elif dtype == "guitar_alternate_dongle":
+            self._ctrl_detail.config(
+                text=f"Guitar for Dongle  ·  Config mode  ·  {port}", fg=TEXT_DIM)
+            self._cfg_btn.set_state("normal")
+            self._easy_cfg_btn.set_state("normal")
+        elif dtype == "guitar_combined":
+            self._ctrl_detail.config(
+                text=f"Guitar (Combined)  ·  Config mode  ·  {port}", fg=TEXT_DIM)
+            self._cfg_btn.set_state("normal")
+            self._easy_cfg_btn.set_state("normal")
+        elif dtype == "drum_kit":
+            self._ctrl_detail.config(
+                text=f"Drum Kit  ·  Config mode  ·  {port}  ·  No Easy Configurator for Drums yet",
+                fg=TEXT_DIM)
+            self._cfg_btn.set_state("normal")
+            self._easy_cfg_btn.set_state("disabled")
+        elif dtype == "pedal":
+            self._ctrl_detail.config(
+                text=f"Pedal Controller  ·  Config mode  ·  {port}", fg=TEXT_DIM)
+            self._cfg_btn.set_state("normal")
+            self._easy_cfg_btn.set_state("disabled")
+        else:
+            self._ctrl_detail.config(
+                text=f"Config mode  ·  {port}", fg=TEXT_DIM)
+            self._cfg_btn.set_state("normal")
+            self._easy_cfg_btn.set_state("normal")
+        self._pending_port = port
+        self._xinput_count = 0
+        self._xinput_dongle_count = 0
 
     def _refresh_firmware_status(self):
         """Update the FIRMWARE card on the main menu each poll cycle."""
@@ -8475,17 +8489,20 @@ class MainMenu:
             dlg.update_idletasks()
 
         def finish_ok():
+            self._factory_reset_in_progress = False
             set_status("✓  Factory reset complete!", "", ACCENT_GREEN)
             close_btn.set_state("normal")
             dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
             dlg.after(2000, lambda: dlg.destroy() if dlg.winfo_exists() else None)
 
         def finish_err(msg, detail=""):
+            self._factory_reset_in_progress = False
             set_status(msg, detail, ACCENT_RED)
             close_btn.set_state("normal")
             dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
 
         def worker():
+            self._factory_reset_in_progress = True
             pico = PicoSerial()
 
             # ── Step 1: ensure we are in config mode ─────────────────────
@@ -8631,6 +8648,26 @@ class MainMenu:
             except Exception as exc:
                 self.root.after(0, lambda e=exc: finish_err("Flash failed.", str(e)))
                 return
+
+            # nuke.uf2 keeps running after file copy — wait for drive to vanish
+            self.root.after(0, lambda: set_status(
+                f"{step_n}  —  Waiting for Pico to restart…",
+                "Nuke in progress — do not unplug"))
+            deadline = time.time() + 10.0
+            while time.time() < deadline:
+                if not find_rpi_rp2_drive():
+                    break
+                time.sleep(0.5)
+
+            # now wait for the fresh BOOTSEL drive to appear
+            self.root.after(0, lambda: set_status(
+                f"{step_n}  —  Waiting for Pico to restart…",
+                "Waiting for fresh boot"))
+            deadline = time.time() + 15.0
+            while time.time() < deadline:
+                if find_rpi_rp2_drive():
+                    break
+                time.sleep(0.5)
 
             self.root.after(0, finish_ok)
 
@@ -18314,8 +18351,10 @@ class KeyMacroApp:
         self.debounce_var = tk.IntVar(value=5)
         self.device_name  = tk.StringVar(value="Macro Pad")
 
-        self.scanning    = False
-        self.scan_target = None
+        self.scanning         = False
+        self.scan_target      = None
+        self._scan_gen        = 0
+        self._save_in_progress = False
 
         self._build_menu()
         self._build_ui()
@@ -18689,22 +18728,28 @@ class KeyMacroApp:
     # ── Config load ───────────────────────────────────────────────────
 
     def _load_config(self):
-        # Custom reader — pico.get_config() only reads 3 lines after CFG:,
-        # but we send 20 MACRO: lines. Read until blank/timeout manually.
-        try:
-            self.pico.ser.write(b"GET_CONFIG\n")
-            self.pico.ser.flush()
-            lines = []
-            while True:
-                raw  = self.pico.ser.readline()
-                line = raw.decode("ascii", errors="replace").strip() if raw else ""
-                if not line:
-                    break
-                lines.append(line)
-        except Exception as exc:
-            messagebox.showerror("Error", f"Failed to read config: {exc}")
-            return
+        """Kick off a background thread to read config, then apply to UI."""
+        def _worker():
+            try:
+                self.pico.ser.write(b"GET_CONFIG\n")
+                self.pico.ser.flush()
+                lines = []
+                while True:
+                    raw  = self.pico.ser.readline()
+                    line = raw.decode("ascii", errors="replace").strip() if raw else ""
+                    if not line:
+                        break
+                    lines.append(line)
+            except Exception as exc:
+                self.root.after(0, lambda e=str(exc): messagebox.showerror(
+                    "Error", f"Failed to read config: {e}"))
+                return
+            self.root.after(0, lambda: self._apply_config(lines))
 
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _apply_config(self, lines):
+        """Parse config lines (from worker thread) and update UI. Runs on main thread."""
         cfg    = {}
         macros = {}
         for line in lines:
@@ -18779,13 +18824,30 @@ class KeyMacroApp:
         if not self.pico.connected:
             messagebox.showwarning("Not Connected", "Connect before saving.")
             return
+        if self._save_in_progress:
+            return
         self._stop_detect()
+        self._save_in_progress = True
+        self._set_status("   Saving...", ACCENT_ORANGE)
         try:
-            self._push_all_values()
-            self.pico.save()
-            self._set_status("   Saved. Macros are now active.", ACCENT_GREEN)
-        except Exception as exc:
-            messagebox.showerror("Save Error", str(exc))
+            self._save_btn.set_state("disabled")
+        except Exception:
+            pass
+
+        def _worker():
+            try:
+                self._push_all_values()
+                self.pico.save()
+                self.root.after(0, lambda: self._set_status(
+                    "   Saved. Macros are now active.", ACCENT_GREEN))
+            except Exception as exc:
+                self.root.after(0, lambda e=str(exc): messagebox.showerror(
+                    "Save Error", e))
+            finally:
+                self._save_in_progress = False
+                self.root.after(0, lambda: self._save_btn.set_state("normal"))
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     # ── Reset to Defaults ─────────────────────────────────────────────
 
@@ -18796,14 +18858,23 @@ class KeyMacroApp:
                 "Reset all macro settings to factory defaults?\n\n"
                 "This will clear all pin assignments and keystroke strings."):
             return
-        try:
-            self.pico.ser.write(b"DEFAULTS\n")
-            self.pico.ser.flush()
-            time.sleep(0.3)
-            self._load_config()
-            self._set_status("   Reset to defaults.", ACCENT_ORANGE)
-        except Exception as exc:
-            messagebox.showerror("Reset Error", str(exc))
+        self._set_status("   Resetting to defaults...", ACCENT_ORANGE)
+
+        def _worker():
+            try:
+                self.pico.ser.write(b"DEFAULTS\n")
+                self.pico.ser.flush()
+                time.sleep(0.3)
+            except Exception as exc:
+                self.root.after(0, lambda e=str(exc): messagebox.showerror(
+                    "Reset Error", e))
+                return
+            self.root.after(0, lambda: [
+                self._load_config(),
+                self._set_status("   Reset to defaults.", ACCENT_ORANGE),
+            ])
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     # ── Pin detection (SCAN) ─────────────────────────────────────────
 
@@ -18813,6 +18884,8 @@ class KeyMacroApp:
         if self.scanning:
             self._stop_detect()
             return
+        self._scan_gen  += 1
+        my_gen           = self._scan_gen
         self.scanning    = True
         self.scan_target = idx
 
@@ -18829,19 +18902,28 @@ class KeyMacroApp:
 
         def _scan_worker():
             try:
-                self.pico.ser.write(b"SCAN\n")
-                self.pico.ser.flush()
-                deadline = time.time() + 15.0
-                while time.time() < deadline and self.scanning:
-                    raw  = self.pico.ser.readline()
-                    line = raw.decode("ascii", errors="replace").strip() if raw else ""
-                    if line.startswith("PIN:"):
-                        pin = int(line[4:])
-                        self.root.after(0, lambda p=pin: self._detect_result(idx, p))
-                        return
+                self.pico.start_scan()   # sends SCAN, reads OK
             except Exception:
-                pass
-            self.root.after(0, self._stop_detect)
+                if self._scan_gen == my_gen:
+                    self.root.after(0, self._stop_detect)
+                return
+            deadline = time.time() + 15.0
+            while time.time() < deadline and self.scanning and self._scan_gen == my_gen:
+                line = self.pico.read_scan_line(0.2)
+                if line and line.startswith("PIN:"):
+                    pin = int(line[4:])
+                    if self._scan_gen == my_gen:
+                        self.root.after(0, lambda p=pin: self._detect_result(idx, p))
+                    return
+            # only act if we still own the scan
+            if self._scan_gen == my_gen:
+                timed_out = time.time() >= deadline
+                def _on_timeout(to=timed_out):
+                    self._stop_detect()
+                    if to:
+                        self._set_status(
+                            "   No input detected within timeout window.", ACCENT_ORANGE)
+                self.root.after(0, _on_timeout)
 
         threading.Thread(target=_scan_worker, daemon=True).start()
 
@@ -18855,13 +18937,12 @@ class KeyMacroApp:
             self._set_status(f"   Detected GPIO {pin} for Macro {idx + 1}", ACCENT_GREEN)
 
     def _stop_detect(self):
-        was_scanning = self.scanning
+        was_scanning     = self.scanning
         self.scanning    = False
         self.scan_target = None
         if was_scanning:
             try:
-                self.pico.ser.write(b"STOP\n")
-                self.pico.ser.flush()
+                self.pico.stop_scan()   # sends STOP, drains OK
             except Exception:
                 pass
         for btn in self._det_btns:
@@ -18876,10 +18957,6 @@ class KeyMacroApp:
         self._status_var.set(text)
         try:
             self._status_lbl.config(fg=color)
-        except Exception:
-            pass
-        try:
-            self.root.update_idletasks()
         except Exception:
             pass
 
@@ -18931,26 +19008,40 @@ class KeyMacroApp:
             self._set_status("   No Keyboard Macro device found.", TEXT_DIM)
 
     def _connect_serial(self, port):
-        """Called when device is detected on a config port."""
+        """Kick off background thread to connect + ping + load config."""
+        self._set_status("   Connecting...", TEXT_DIM)
         try:
-            self.pico.connect(port)
-            for _ in range(5):
-                if self.pico.ping():
-                    break
-                time.sleep(0.3)
-            else:
-                self.pico.disconnect()
-                self._set_status("   Not responding", ACCENT_RED)
-                return
-            self._set_status(f"   Connected  —  {port}", ACCENT_GREEN)
+            self._connect_btn.set_state("disabled")
+        except Exception:
+            pass
+
+        def _worker():
             try:
-                self._connect_btn.set_state("disabled")
-            except Exception:
-                pass
-            self._set_controls_enabled(True)
-            self._load_config()
-        except Exception as exc:
-            self._set_status(f"   Connection failed: {exc}", ACCENT_RED)
+                self.pico.connect(port)
+                for _ in range(5):
+                    if self.pico.ping():
+                        break
+                    time.sleep(0.3)
+                else:
+                    self.pico.disconnect()
+                    self.root.after(0, lambda: [
+                        self._set_status("   Not responding", ACCENT_RED),
+                        self._connect_btn.set_state("normal"),
+                    ])
+                    return
+            except Exception as exc:
+                self.root.after(0, lambda e=str(exc): [
+                    self._set_status(f"   Connection failed: {e}", ACCENT_RED),
+                    self._connect_btn.set_state("normal"),
+                ])
+                return
+            self.root.after(0, lambda: [
+                self._set_status(f"   Connected  —  {port}", ACCENT_GREEN),
+                self._set_controls_enabled(True),
+                self._load_config(),
+            ])
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _wait_for_port(self, timeout=8.0):
         deadline = time.time() + timeout
@@ -19118,6 +19209,7 @@ class KeyMacroApp:
             return
 
         errors = self._apply_config_dict(cfg)
+        self._load_config()   # re-read firmware state so UI fields reflect the import
         if errors:
             messagebox.showwarning("Import Partial",
                 "Some keys could not be set:\n" + "\n".join(errors[:10]))
@@ -19144,6 +19236,7 @@ class KeyMacroApp:
             return
 
         errors = self._apply_config_dict(cfg)
+        self._load_config()   # re-read firmware state so UI fields reflect the preset
         if errors:
             messagebox.showwarning("Preset Partial",
                 "Some keys could not be set:\n" + "\n".join(errors[:10]))

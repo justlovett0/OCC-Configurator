@@ -209,6 +209,7 @@ static const char   *exec_text_start = NULL; // start of macro text (for hold re
 static uint8_t       exec_slot     = 0;
 static uint32_t      exec_until_us = 0;      // time when current phase ends
 static bool          exec_enter_sent = false; // tracks if trailing Enter was already sent
+static uint32_t      exec_hid_stall_us = 0;  // when HID-not-ready stall began (for timeout)
 
 // Queue a macro to execute. Ignored if one is already running.
 static void macro_queue(uint8_t slot) {
@@ -216,17 +217,25 @@ static void macro_queue(uint8_t slot) {
     const char *text = g_config.macros[slot].text;
     if (!text[0]) return;  // empty string — nothing to do
 
-    exec_slot        = slot;
-    exec_text_start  = text;
-    exec_text_ptr    = text;
-    exec_state       = EXEC_KEY_DOWN;
-    exec_until_us    = 0;   // send immediately next step
-    exec_enter_sent  = false;
+    exec_slot         = slot;
+    exec_text_start   = text;
+    exec_text_ptr     = text;
+    exec_state        = EXEC_KEY_DOWN;
+    exec_until_us     = 0;   // send immediately next step
+    exec_enter_sent   = false;
+    exec_hid_stall_us = 0;
 }
 
 // Advance the state machine. Call every main loop iteration.
 static void exec_step(uint32_t now_us) {
     if (exec_state == EXEC_IDLE) return;
+
+    // If USB is suspended, signal the host to wake up — don't try to send reports
+    if (g_suspended) {
+        tud_remote_wakeup();
+        return;
+    }
+
     if ((int32_t)(now_us - exec_until_us) < 0) return; // not time yet
 
     if (exec_state == EXEC_KEY_DOWN) {
@@ -271,8 +280,13 @@ static void exec_step(uint32_t now_us) {
     else if (exec_state == EXEC_KEY_UP) {
         if (tud_hid_ready()) {
             tud_hid_keyboard_report(0, 0, NULL);  // release all keys
-            exec_state    = EXEC_KEY_DOWN;
-            exec_until_us = now_us + KEY_UP_US;
+            exec_state       = EXEC_KEY_DOWN;
+            exec_until_us    = now_us + KEY_UP_US;
+            exec_hid_stall_us = 0;
+        } else {
+            // Track how long we've been stalled — abort after 1s to avoid deadlock
+            if (exec_hid_stall_us == 0) exec_hid_stall_us = now_us;
+            if ((now_us - exec_hid_stall_us) > 1000000u) exec_state = EXEC_IDLE;
         }
     }
     else if (exec_state == EXEC_HOLD_WAIT) {
@@ -341,10 +355,12 @@ static void poll_buttons(uint32_t now_us) {
 // TinyUSB mount callbacks (required)
 //--------------------------------------------------------------------
 
+static bool g_suspended = false;
+
 void tud_mount_cb(void)   {}
 void tud_umount_cb(void)  {}
-void tud_suspend_cb(bool remote_wakeup_en) { (void)remote_wakeup_en; }
-void tud_resume_cb(void)  {}
+void tud_suspend_cb(bool remote_wakeup_en) { (void)remote_wakeup_en; g_suspended = true; }
+void tud_resume_cb(void)  { g_suspended = false; }
 
 //--------------------------------------------------------------------
 // Main

@@ -60,8 +60,8 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
 #define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN + TUD_CDC_DESC_LEN)
 
 static const uint8_t config_desc[] = {
-    // Config header: 1 config, 3 interfaces total, no special attributes, 100mA
-    TUD_CONFIG_DESCRIPTOR(1, 3, 0, CONFIG_TOTAL_LEN, 0x00, 100),
+    // Config header: 1 config, 3 interfaces total, remote wakeup enabled, 100mA
+    TUD_CONFIG_DESCRIPTOR(1, 3, 0, CONFIG_TOTAL_LEN, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
 
     // HID keyboard: interface 0, EP 0x81, 1ms poll interval
     TUD_HID_DESCRIPTOR(0, 0, HID_ITF_PROTOCOL_NONE,
