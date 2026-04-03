@@ -1,24 +1,17 @@
 /*
- * dongle_bt.h - Multi-slot BLE Passive Scanner for Guitar Controller Dongle
+ * dongle_bt.h - Multi-slot GATT Central for Guitar Controller Dongle (4-channel)
  *
- * Manages up to 4 independent controller slots. Each slot is identified by
- * the BLE MAC address of the controller that was bound to it. The dongle
- * passively scans for advertisements and routes each one to the correct slot
- * by matching the source MAC against stored bindings.
- *
- * NO CHANGES are needed to the controller firmware — it still broadcasts
- * its report in advertisement manufacturer data exactly as before. The dongle
- * simply reads the MAC address from each packet to tell controllers apart.
+ * Manages up to 4 connected BLE slots. Each slot has its own GATT state
+ * machine: scan → connect → discover service 0xFFE0 → discover char
+ * 0xFFE1 → subscribe → receive 12-byte reports via notifications.
  *
  * Bind flow:
  *   1. Call dongle_bt_start_bind(slot, callback).
- *   2. The next valid OCC advertisement seen (from any NEW controller)
- *      gets its MAC saved to that slot and the callback is invoked.
- *   3. After binding, that controller's reports flow into slot automatically.
+ *   2. First OCC ADV_IND seen → connect → GATT setup → callback fires.
+ *   3. MAC saved; dongle_bt.c auto-reconnects on disconnect internally.
  *
- * "Connected" means: a report was received from that slot's MAC within
- * CONTROLLER_TIMEOUT_MS. If the controller goes out of range, the slot
- * reports as disconnected but the MAC binding is preserved.
+ * "Connected" = GATT subscription active. On disconnect, dongle_bt.c
+ * calls gap_connect(mac) directly — main.c does not call start_bind.
  */
 
 #ifndef _DONGLE_BT_H_

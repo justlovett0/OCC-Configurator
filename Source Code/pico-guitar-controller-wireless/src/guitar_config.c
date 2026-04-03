@@ -53,7 +53,7 @@ void config_set_defaults(guitar_config_t *config) {
     config->pin_whammy_digital   = -1;
     config->pin_whammy_analog    = 26;
 
-    config->debounce_ms = 5;
+    config->debounce_ms = 2;
 
     config->pin_i2c_sda   = 20;
     config->pin_i2c_scl   = 21;

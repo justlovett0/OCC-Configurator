@@ -1,14 +1,12 @@
 /*
- * dongle_bt.h - BLE Passive Scanner for Guitar Controller Dongle
+ * dongle_bt.h - GATT Central for Single-Slot Guitar Controller Dongle
  *
- * The dongle continuously scans for BLE advertisements from the guitar
- * controller. The controller embeds its 12-byte gamepad report directly
- * in the advertisement's Manufacturer Specific Data field.
+ * Scans for any OCC controller (ADV_IND with service UUID 0xFFE0),
+ * connects, discovers service/characteristic, subscribes for notifications,
+ * and receives 12-byte gamepad reports.
  *
- * No BLE connection is established — this is a pure broadcast/scan model.
- * The dongle identifies the controller by:
- *   1. 16-bit service UUID 0xFFE0 in the advertisement
- *   2. Manufacturer Specific Data with company ID 0xFFFF and tag 0x47
+ * Connected BLE: 37-channel frequency hopping + ACK/retransmit for
+ * better range vs the old broadcast/scan model.
  */
 
 #ifndef _DONGLE_BT_H_

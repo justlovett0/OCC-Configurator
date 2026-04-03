@@ -97,6 +97,15 @@ if exist "fw_dates.json" (
     echo   WARNING: fw_dates.json could not be generated.
 )
 
+REM ControllerFWPresets.json — preset-to-firmware mapping for Controller Presets tab
+set "FW_PRESETS_ARG="
+if exist "ControllerFWPresets.json" (
+    set "FW_PRESETS_ARG=--add-data=ControllerFWPresets.json;."
+    echo   ControllerFWPresets.json will be bundled.
+) else (
+    echo   WARNING: ControllerFWPresets.json not found - Controller Presets tab will be empty.
+)
+
 REM Font folder — bundle every .ttf / .otf found in font\
 set "FONT_ARGS="
 if exist "font\" (
@@ -157,6 +166,17 @@ if exist "PresetConfigs\" (
     echo   No PresetConfigs\ folder found - presets will not be bundled.
 )
 
+    REM ---- GIF files ----
+    for %%G in (PresetConfigs\*.gif PresetConfigs\*.GIF) do (
+        if exist "%%G" (
+            echo Bundling preset GIF: %%G
+            set "PRESET_ARGS=!PRESET_ARGS! --add-data="%%G;PresetConfigs""
+        )
+    )
+) else (
+    echo No PresetConfigs\ folder found - presets will not be bundled.
+)
+
 REM Splash image
 set "SPLASH_ARG="
 for %%S in (splash.png splash.PNG splash.jpg splash.JPG) do (
@@ -194,7 +214,7 @@ pyinstaller --clean --onefile --windowed ^
     !PRESET_ARGS! ^
     %UF2_ARGS% !NUKE_ARG! ^
     !GIF_ARGS! ^
-    !FW_DATES_ARG! --add-data=version.txt;. ^
+    !FW_DATES_ARG! %FW_PRESETS_ARG% --add-data=version.txt;. ^
     --exclude-module numpy --exclude-module matplotlib ^
     configurator.py
 
@@ -203,9 +223,9 @@ echo ==========================================
 if exist "dist\OCC - Configurator.exe" (
     echo  SUCCESS!  dist\OCC - Configurator.exe
     echo  Moving to OCC root folder...
-    move /y "dist\OCC - Configurator.exe" "..\..\OCC - Configurator.exe"
-    if exist "..\..\OCC - Configurator.exe" (
-        echo  Moved to OCC - Configurator.exe
+    move /y "dist\OCC - Configurator.exe" "..\..\OCC - Configurator v!APP_VERSION!.exe"
+    if exist "..\..\OCC - Configurator v!APP_VERSION!.exe" (
+        echo  Moved to OCC - Configurator v!APP_VERSION!.exe
     ) else (
         echo  WARNING: Move failed - exe remains in dist\
     )

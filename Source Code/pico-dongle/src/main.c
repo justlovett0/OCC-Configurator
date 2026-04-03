@@ -47,7 +47,7 @@
 
 // After disconnecting USB, wait this long before reconnecting so the
 // host OS notices the removal. This is done non-blocking.
-#define USB_RECONNECT_DELAY_MS   500
+#define USB_RECONNECT_DELAY_MS   100
 
 // ────────────────────────────────────────────────────────────────────────
 // State

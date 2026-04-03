@@ -51,7 +51,7 @@
 #include "bt_hid_gamepad.h"     // Bluetooth HID gamepad
 
 #define REPORT_INTERVAL_US      1000      // ~1000 Hz for USB XInput
-#define BT_REPORT_INTERVAL_US   4000      // ~250 Hz for BLE/BT wireless
+#define BT_REPORT_INTERVAL_US   1000      // ~1 kHz — faster detection of fast taps
 #define LED_UPDATE_INTERVAL_US  16667     // ~60 Hz LED refresh
 #define ADC_RESOLUTION          4095
 #define DIGITAL_AXIS_ON         32767
@@ -815,12 +815,13 @@ int main(void) {
             // ═══════════════════════════════════════════════════════════
             // WIRELESS DONGLE MODE
             //
-            // Broadcasts gamepad report via BLE advertisements.
-            // The USB dongle passively scans and reads the data.
-            // No BLE connection is established — always broadcasting.
-            // The controller is always ready to pair; no sync button needed.
+            // Controller is a GATT peripheral (ADV_IND, service 0xFFE0).
+            // Dongle connects, subscribes to 0xFFE1, receives notifications.
+            // controller_bt_connected() is true only when the dongle has
+            // subscribed — real connection state, not a timer guess.
             //
-            // APA102 LEDs blink yellow continuously in dongle mode.
+            // APA102 LEDs blink yellow while searching for a dongle.
+            // Switch to normal colors once connected; back to yellow on loss.
             //
             // GUIDE BUTTON HOLD (3 s): reboots into Bluetooth HID mode.
             // Hold GUIDE again in BT mode to switch back. Repeatable.
@@ -834,14 +835,6 @@ int main(void) {
             controller_report_t dongle_report;
             uint64_t last_report_us = 0;
             uint64_t last_led_us = 0;
-
-            // ── Dongle pairing blink timeout ──
-            // Since dongle mode is broadcast-only (no true connection handshake),
-            // we blink yellow for a fixed window then switch to normal LED colors.
-            // 5 seconds matches the feel of BT HID pairing feedback.
-            #define DONGLE_PAIRING_BLINK_MS  5000
-            uint32_t dongle_start_ms = to_ms_since_boot(get_absolute_time());
-            bool     dongle_paired   = false;
 
             // ── GUIDE hold tracking ──
             int8_t   guide_pin = g_config.pin_buttons[BTN_IDX_GUIDE];
@@ -879,12 +872,16 @@ int main(void) {
 
                 // ── Onboard LED ──
                 if (!in_guide_countdown) {
-                    picow_led_blink_bt_waiting();
+                    if (controller_bt_connected()) {
+                        picow_led_set(true);
+                    } else {
+                        picow_led_blink_bt_waiting();
+                    }
                 }
 
                 uint64_t now_us = time_us_64();
 
-                // ── Broadcast wireless reports at ~250 Hz ──
+                // ── Send wireless reports at ~250 Hz ──
                 if (now_us - last_report_us >= BT_REPORT_INTERVAL_US) {
                     last_report_us = now_us;
                     build_wireless_dongle_report(&dongle_report);
@@ -892,25 +889,19 @@ int main(void) {
                 }
 
                 // ── APA102 LED strip ──
-                // Blink yellow while waiting for a dongle to pick up the broadcast.
-                // After DONGLE_PAIRING_BLINK_MS, assume the dongle has synced and
-                // switch to the user's configured color scheme.
-                if (!dongle_paired &&
-                    (to_ms_since_boot(get_absolute_time()) - dongle_start_ms >= DONGLE_PAIRING_BLINK_MS)) {
-                    dongle_paired = true;
-                }
-
+                // Blink yellow while searching for a dongle; normal colors once
+                // the dongle has connected and subscribed. Goes back to yellow
+                // immediately if the dongle disconnects mid-session.
                 if (g_aligned_leds.enabled &&
                     (now_us - last_led_us >= LED_UPDATE_INTERVAL_US)) {
                     last_led_us = now_us;
-                    if (dongle_paired) {
+                    if (controller_bt_connected()) {
                         apa102_update_from_inputs(&g_aligned_leds, g_pressed_mask);
                     } else {
                         apa102_blink_pairing(255, 200, 0);
                     }
                 }
 
-                sleep_us(100);
             }
 
         } else {
@@ -998,7 +989,6 @@ int main(void) {
                     }
                 }
 
-                sleep_us(100);
             }
         }
     }

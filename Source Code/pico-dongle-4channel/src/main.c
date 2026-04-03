@@ -118,9 +118,10 @@ typedef enum {
     USB_DISCONNECTING,
 } usb_state_t;
 
-static usb_state_t usb_state          = USB_IDLE;
-static uint32_t    usb_state_enter_ms = 0;   /* timestamp of last state change */
-static bool        g_usb_ever_connected = false; /* true after first tud_connect */
+static usb_state_t usb_state               = USB_IDLE;
+static uint32_t    usb_state_enter_ms      = 0;     /* timestamp of last state change */
+static bool        g_usb_ever_connected    = false; /* true after first tud_connect */
+static bool        g_usb_physically_connected = false; /* true while D+ is pulled high */
 
 /*
  * Desired interface count — updated whenever the wireless topology changes.
@@ -146,8 +147,8 @@ static bool slot_was_connected[DONGLE_MAX_CONTROLLERS] = {false};
 /* APA102 LED update                                                  */
 /*                                                                    */
 /* LED pairs per slot (1-indexed in schematic → 0-indexed here):     */
-/*   Slot 0: LEDs 0 & 7   Slot 1: LEDs 1 & 6                        */
-/*   Slot 2: LEDs 2 & 5   Slot 3: LEDs 3 & 4                        */
+/*   Slot 0: LEDs 4 & 5   Slot 1: LEDs 3 & 6                        */
+/*   Slot 2: LEDs 2 & 7   Slot 3: LEDs 1 & 8                        */
 /*                                                                    */
 /* off = not syncing, idle                                            */
 /* flash = actively binding to a controller                           */
@@ -165,7 +166,7 @@ static void dongle_led_update(void) {
     }
 
     static const uint8_t led_pairs[DONGLE_MAX_CONTROLLERS][2] = {
-        {0, 7}, {1, 6}, {2, 5}, {3, 4}
+        {3, 4}, {2, 5}, {1, 6}, {0, 7}
     };
     uint8_t brightness[DONGLE_LED_COUNT] = {0};
 
@@ -294,26 +295,35 @@ static void usb_connection_task(void) {
                      * Just pull DP high; no prior disconnect needed.
                      */
                     tud_connect();
-                    g_usb_ever_connected = true;
+                    g_usb_ever_connected       = true;
+                    g_usb_physically_connected = true;
                     usb_state = USB_IDLE;
                 } else if (g_desired_num_ctrl == 0) {
                     /*
                      * All controllers gone — pull DP low.
-                     * Don't reconnect; stay disconnected until a controller
-                     * comes back and schedule_usb_update() fires again.
+                     * Stay disconnected until a controller comes back.
                      */
                     tud_disconnect();
+                    g_usb_physically_connected = false;
                     usb_state = USB_IDLE;
-                } else {
+                } else if (g_usb_physically_connected) {
                     /*
-                     * Interface count changed (up or down) while USB was
-                     * already active. Must re-enumerate.
+                     * Interface count changed while USB was active — re-enumerate.
                      * Phase 1: disconnect now.
                      * Phase 2: reconnect after USB_RECONNECT_PAUSE_MS.
                      */
                     tud_disconnect();
+                    g_usb_physically_connected = false;
                     usb_state_enter_ms = now_ms;
                     usb_state = USB_DISCONNECTING;
+                } else {
+                    /*
+                     * USB was already physically down (count went 0→N).
+                     * Skip the disconnect+pause — just connect directly.
+                     */
+                    tud_connect();
+                    g_usb_physically_connected = true;
+                    usb_state = USB_IDLE;
                 }
             }
             break;
@@ -337,6 +347,7 @@ static void usb_connection_task(void) {
                 } else {
                     /* At least one controller alive — reconnect */
                     tud_connect();
+                    g_usb_physically_connected = true;
                     usb_state = USB_IDLE;
                 }
             }
@@ -411,7 +422,8 @@ static void rebind_disconnected_slots(void) {
              */
             slot_was_connected[s] = false;
             any_changed = true;
-            dongle_bt_start_bind(s, on_bind_complete);
+            /* Auto-reconnect is now handled internally by dongle_bt.c via
+             * gap_connect(mac) — no need to call dongle_bt_start_bind here. */
         }
     }
 
@@ -501,8 +513,12 @@ int main(void) {
             sync_was_pressed[s] = pressed;
         }
 
-        /* ── LED status ── */
-        dongle_led_update();
+        /* ── LED status (~60 Hz — avoids blocking on DMA every loop) ── */
+        static uint32_t last_led_ms = 0;
+        if (now_ms - last_led_ms >= 16) {
+            last_led_ms = now_ms;
+            dongle_led_update();
+        }
 
         /* ── Send XInput reports at ~1 kHz for all exposed slots ── */
         uint64_t now_us = time_us_64();

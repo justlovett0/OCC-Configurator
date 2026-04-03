@@ -1,26 +1,12 @@
 /*
- * controller_bt.h - BLE Advertisement Broadcaster for Guitar Controller
+ * controller_bt.h - GATT Peripheral for Guitar Controller (wireless)
  *
- * NEW APPROACH: Instead of a GATT connection, the controller broadcasts
- * its gamepad report directly inside the BLE advertisement payload.
- * The dongle passively scans and reads the data — no connection needed.
+ * Controller advertises as ADV_IND with service UUID 0xFFE0.
+ * The dongle connects, subscribes to characteristic 0xFFE1,
+ * and receives 12-byte gamepad reports via GATT notifications.
  *
- * This avoids all GATT service discovery, characteristic subscription,
- * and connection state management that can fail silently on the CYW43.
- *
- * Advertisement payload layout (31 bytes max):
- *   [3 bytes] Flags (General Discoverable | BR/EDR Not Supported)
- *   [3 bytes] 16-bit Service UUID: 0xFFE0 (identifies this as our controller)
- *   [15 bytes] Manufacturer Specific Data:
- *       [1 byte]  length (14)
- *       [1 byte]  AD type (0xFF = Manufacturer Specific)
- *       [2 bytes] Company ID: 0xFFFF (reserved for testing)
- *       [1 byte]  Protocol tag: 0x47 ('G' for guitar)
- *       [12 bytes] Report data (buttons, triggers, axes)
- *
- * The dongle identifies us by:
- *   1. The 16-bit service UUID 0xFFE0 in the advertisement
- *   2. The company ID 0xFFFF and protocol tag 0x47 in manufacturer data
+ * Connected BLE: 37-channel frequency hopping + ACK/retransmit,
+ * giving much better range than the old ADV_NONCONN_IND broadcast.
  */
 
 #ifndef _CONTROLLER_BT_H_

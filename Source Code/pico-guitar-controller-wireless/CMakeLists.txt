@@ -27,6 +27,10 @@ add_executable(pico_guitar_controller_bt
     src/controller_bt.c
 )
 
+# Generate occ_controller_gatt.h from occ_controller.gatt (GATT profile constants)
+pico_btstack_make_gatt_header(pico_guitar_controller_bt PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/src/occ_controller.gatt")
+
 # Include directories
 target_include_directories(pico_guitar_controller_bt PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src

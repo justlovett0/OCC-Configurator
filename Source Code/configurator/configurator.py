@@ -259,6 +259,22 @@ def _set_fallback_fonts():
 
 #  CENTERED DIALOG HELPER
 
+def _center_window(dlg, root):
+    """Center *dlg* Toplevel over the *root* window.
+    Call after all widgets have been added to dlg but before grab_set/wait.
+    """
+    dlg.update_idletasks()
+    dw = dlg.winfo_reqwidth()
+    dh = dlg.winfo_reqheight()
+    px = root.winfo_rootx()
+    py = root.winfo_rooty()
+    pw = root.winfo_width()
+    ph = root.winfo_height()
+    x = px + (pw - dw) // 2
+    y = py + (ph - dh) // 2
+    dlg.geometry(f"{dw}x{dh}+{x}+{y}")
+
+
 def _centered_dialog(parent, title, message, kind="info"):
     """Show a modal dialog centered over *parent*.
 
@@ -313,8 +329,8 @@ def _centered_dialog(parent, title, message, kind="info"):
     ph = parent.winfo_height()
     px = parent.winfo_rootx()
     py = parent.winfo_rooty()
-    dw = dlg.winfo_width()
-    dh = dlg.winfo_height()
+    dw = dlg.winfo_reqwidth()
+    dh = dlg.winfo_reqheight()
     x = px + (pw - dw) // 2
     y = py + (ph - dh) // 2
     dlg.geometry(f"+{x}+{y}")
@@ -323,6 +339,61 @@ def _centered_dialog(parent, title, message, kind="info"):
     parent.wait_window(dlg)
     return result[0]
 
+
+def _ask_wired_or_wireless(parent, has_wired=True, has_wireless=True):
+    """Modal dialog to pick Wired or Wireless firmware.
+    Unavailable variants are shown greyed out.
+    Returns 'wired', 'wireless', or None if cancelled.
+    """
+    dlg = tk.Toplevel(parent)
+    dlg.title("Select Firmware Type")
+    dlg.configure(bg=BG_CARD)
+    dlg.resizable(False, False)
+    dlg.transient(parent)
+
+    tk.Label(dlg, text="Select firmware to install:",
+             bg=BG_CARD, fg=TEXT, font=(FONT_UI, 10),
+             justify="center", padx=24, pady=16).pack()
+
+    result = [None]
+
+    btn_frame = tk.Frame(dlg, bg=BG_CARD, pady=12)
+    btn_frame.pack()
+
+    def _pick(val):
+        result[0] = val
+        dlg.destroy()
+
+    ACCENT_BLUE_HOVER = "#2e7fd4"
+
+    def _make_fw_btn(frame, text, enabled, command):
+        bg_normal = ACCENT_BLUE if enabled else BG_CARD
+        bg_hover  = ACCENT_BLUE_HOVER if enabled else BG_CARD
+        fg_color  = "white" if enabled else TEXT_DIM
+        btn = tk.Label(frame, text=text, width=12,
+                       bg=bg_normal, fg=fg_color,
+                       font=(FONT_UI, 10, "bold"),
+                       relief="flat", padx=8, pady=6,
+                       cursor="hand2" if enabled else "arrow")
+        if enabled:
+            btn.bind("<Enter>", lambda e: btn.config(bg=bg_hover))
+            btn.bind("<Leave>", lambda e: btn.config(bg=bg_normal))
+            btn.bind("<Button-1>", lambda e: command())
+        btn.pack(side="left", padx=8)
+        return btn
+
+    _make_fw_btn(btn_frame, "Wired",    has_wired,    lambda: _pick("wired"))
+    _make_fw_btn(btn_frame, "Wireless", has_wireless, lambda: _pick("wireless"))
+
+    dlg.update_idletasks()
+    pw = parent.winfo_width();  ph = parent.winfo_height()
+    px = parent.winfo_rootx(); py = parent.winfo_rooty()
+    dw = dlg.winfo_reqwidth(); dh = dlg.winfo_reqheight()
+    dlg.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
+
+    dlg.grab_set()
+    parent.wait_window(dlg)
+    return result[0]
 
 
 # ── Update check ──────────────────────────────────────────────────────────────
@@ -1276,6 +1347,7 @@ DONGLE_XINPUT_SUBTYPES = {11}
 DIGITAL_PINS = [-1] + list(range(0, 23)) + [26, 27, 28]
 ANALOG_PINS = [26, 27, 28]
 
+
 DIGITAL_PIN_LABELS = {-1: "Disabled"}
 for _p in range(0, 23):
     DIGITAL_PIN_LABELS[_p] = f"GPIO {_p}"
@@ -1378,6 +1450,61 @@ def _group_uf2_files(uf2_files):
             order.append(core)
         groups[core][variant] = path
     return [(c.replace("_", " "), groups[c]["wired"], groups[c]["wireless"]) for c in order]
+
+
+def load_fw_presets():
+    """Load ControllerFWPresets.json. Returns (dict, base_dir) or ({}, None)."""
+    filename = "ControllerFWPresets.json"
+    candidates = []
+    bundle_dir = getattr(sys, '_MEIPASS', None)
+    if bundle_dir:
+        candidates.append(bundle_dir)
+    candidates.append(os.path.dirname(os.path.abspath(__file__)))
+    for d in candidates:
+        path = os.path.join(d, filename)
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f), d
+            except Exception:
+                pass
+    return {}, None
+
+
+def _apply_preset_config(pico, cfg_path):
+    """Send all SET commands from a preset JSON to an already-connected PicoSerial.
+    Handles led_colors/led_maps/led_active_br arrays.  Skips device_type (read-only).
+    """
+    with open(cfg_path, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+
+    SKIP = {"device_type", "led_colors", "led_maps", "led_active_br"}
+    for key, val in cfg.items():
+        if key in SKIP:
+            continue
+        try:
+            pico.set_value(key, str(val))
+        except Exception:
+            pass
+
+    for i, color in enumerate(cfg.get("led_colors", [])):
+        if i < MAX_LEDS:
+            try:
+                pico.set_value(f"led_color_{i}", str(color).upper())
+            except Exception:
+                pass
+
+    for i, m in enumerate(cfg.get("led_maps", [])):
+        try:
+            pico.set_value(f"led_map_{i}", f"{int(m):04X}")
+        except Exception:
+            pass
+
+    for i, b in enumerate(cfg.get("led_active_br", [])):
+        try:
+            pico.set_value(f"led_active_{i}", str(b))
+        except Exception:
+            pass
 
 
 def find_uf2_for_device_type(device_type):
@@ -1551,21 +1678,6 @@ def find_rpi_rp2_drive_info():
                     break
     return None
 
-
-def get_bootsel_board_id(drive_path):
-    """Read Board-ID from INFO_UF2.TXT on a BOOTSEL drive. Returns string or None.
-    Pico = 'RPI-RP2', Pico W = 'RPI-RP2W'."""
-    try:
-        info_path = os.path.join(drive_path, "INFO_UF2.TXT")
-        with open(info_path) as f:
-            for line in f:
-                if line.lower().startswith("board-id"):
-                    parts = line.split(":", 1)
-                    if len(parts) == 2:
-                        return parts[1].strip()
-    except Exception:
-        pass
-    return None
 
 
 def flash_uf2(uf2_path, drive_path):
@@ -2378,6 +2490,7 @@ class FlashFirmwareScreen:
         self._poll_job   = None
         self._last_drive = None
         self._help_dialog = None
+        self._busy = False        # suppresses _poll navigation during preset install
 
         self.frame = tk.Frame(root, bg=BG_MAIN)
         self._build()
@@ -2440,32 +2553,42 @@ class FlashFirmwareScreen:
         self._device_combo.pack()
         self._refresh_device_combo()
 
-        # ── Scrollable tile grid ──────────────────────────────
-        grid_outer = tk.Frame(self.frame, bg=BORDER,
-                              highlightbackground=BORDER, highlightthickness=1)
-        grid_outer.pack(fill="both", expand=True, padx=40, pady=(0, 14))
+        # ── Tabbed panel (OCC Firmware / Controller Presets) ─────
+        tab_outer = tk.Frame(self.frame, bg=BORDER,
+                             highlightbackground=BORDER, highlightthickness=1)
+        tab_outer.pack(fill="both", expand=True, padx=40, pady=(0, 14))
 
-        self._canvas = tk.Canvas(grid_outer, bg=BG_MAIN,
-                                 highlightthickness=0, bd=0)
-        scrollbar = tk.Scrollbar(grid_outer, orient="vertical",
-                                 command=self._canvas.yview)
-        self._canvas.configure(yscrollcommand=scrollbar.set)
+        # Tab bar
+        tab_bar = tk.Frame(tab_outer, bg=BG_CARD)
+        tab_bar.pack(fill="x")
+        tab_bar.columnconfigure(0, weight=1)
+        tab_bar.columnconfigure(1, weight=1)
 
-        scrollbar.pack(side="right", fill="y")
-        self._canvas.pack(side="left", fill="both", expand=True)
+        self._fw_content      = tk.Frame(tab_outer, bg=BG_MAIN)
+        self._presets_content = tk.Frame(tab_outer, bg=BG_MAIN)
 
-        self._tile_frame = tk.Frame(self._canvas, bg=BG_MAIN)
-        self._tile_window = self._canvas.create_window(
-            (0, 0), window=self._tile_frame, anchor="nw")
+        def _make_tab(parent, text, col, cmd):
+            f = tk.Frame(parent, bg=BG_CARD, cursor="hand2")
+            f.grid(row=0, column=col, sticky="nsew")
+            lbl = tk.Label(f, text=text, bg=BG_CARD, fg=TEXT_DIM,
+                           font=(FONT_UI, 12, "bold"), pady=12)
+            lbl.pack(fill="x")
+            line = tk.Frame(f, bg=ACCENT_BLUE, height=3)
+            for w in (f, lbl):
+                w.bind("<Button-1>", lambda e, c=cmd: c())
+                w.bind("<Enter>", lambda e, l=lbl: l.config(fg=TEXT_HEADER))
+                w.bind("<Leave>", lambda e, l=lbl, c=cmd: None)  # reset handled by _switch_tab
+            return f, lbl, line
 
-        self._tile_frame.bind("<Configure>", self._on_tile_frame_configure)
-        self._canvas.bind("<Configure>",     self._on_canvas_configure)
-        self._canvas.bind("<MouseWheel>",    self._on_mousewheel)
-        self._tile_frame.bind("<MouseWheel>", self._on_mousewheel)
+        self._fw_tab_f,   self._fw_tab_lbl,   self._fw_tab_line   = _make_tab(tab_bar, "OCC Firmware",       0, lambda: self._switch_tab("firmware"))
+        self._pres_tab_f, self._pres_tab_lbl, self._pres_tab_line = _make_tab(tab_bar, "Controller Presets", 1, lambda: self._switch_tab("presets"))
 
-        self._build_tiles()
-        # Trigger initial reflow after the window is drawn
-        self.frame.after(50, self._reflow_tiles)
+        # Divider between tab bar and content
+        tk.Frame(tab_outer, bg=BORDER, height=1).pack(fill="x")
+
+        self._build_fw_tab(self._fw_content)
+        self._build_presets_tab(self._presets_content)
+        self._switch_tab("firmware")
 
         # ── Reset Pico card (bottom) ──────────────────────────
         rst_card = tk.Frame(self.frame, bg=BG_CARD,
@@ -2528,6 +2651,415 @@ class FlashFirmwareScreen:
         else:
             self._device_combo.config(values=["No USB device detected"])
             self._device_var.set("No USB device detected")
+
+    # ── Tab management ────────────────────────────────────────────
+
+    def _switch_tab(self, name):
+        """Show the named tab ('firmware' or 'presets'), hide the other.
+        Resets the target tab to its original state each time it is shown."""
+        if name == "firmware":
+            self._presets_content.pack_forget()
+            self._fw_content.pack(fill="both", expand=True)
+            self._fw_tab_lbl.config(fg=TEXT_HEADER)
+            self._fw_tab_line.pack(fill="x")
+            self._pres_tab_lbl.config(fg=TEXT_DIM)
+            self._pres_tab_line.pack_forget()
+            # Reset firmware tab: scroll back to top
+            if hasattr(self, "_canvas"):
+                self._canvas.yview_moveto(0)
+        else:
+            self._fw_content.pack_forget()
+            self._presets_content.pack(fill="both", expand=True)
+            self._pres_tab_lbl.config(fg=TEXT_HEADER)
+            self._pres_tab_line.pack(fill="x")
+            self._fw_tab_lbl.config(fg=TEXT_DIM)
+            self._fw_tab_line.pack_forget()
+            # Reset presets tab: close all accordion sections and scroll to top
+            if hasattr(self, "_accordion_closers"):
+                for close_fn in self._accordion_closers:
+                    close_fn()
+            if hasattr(self, "_presets_canvas"):
+                self._presets_canvas.yview_moveto(0)
+
+    def _build_fw_tab(self, parent):
+        """Build the scrollable firmware tile grid into parent."""
+        self._canvas = tk.Canvas(parent, bg=BG_MAIN,
+                                 highlightthickness=0, bd=0)
+        scrollbar = tk.Scrollbar(parent, orient="vertical",
+                                 command=self._canvas.yview)
+        self._canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        self._canvas.pack(side="left", fill="both", expand=True)
+
+        self._tile_frame = tk.Frame(self._canvas, bg=BG_MAIN)
+        self._tile_window = self._canvas.create_window(
+            (0, 0), window=self._tile_frame, anchor="nw")
+
+        self._tile_frame.bind("<Configure>", self._on_tile_frame_configure)
+        self._canvas.bind("<Configure>",     self._on_canvas_configure)
+        self._canvas.bind("<MouseWheel>",    self._on_mousewheel)
+        self._tile_frame.bind("<MouseWheel>", self._on_mousewheel)
+
+        self._build_tiles()
+        self.frame.after(50, self._reflow_tiles)
+
+    def _build_presets_tab(self, parent):
+        """Scrollable accordion of controller preset sections."""
+        canvas = tk.Canvas(parent, bg=BG_MAIN, highlightthickness=0, bd=0)
+        scrollbar = tk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        # Store canvas reference so _switch_tab can reset scroll position
+        self._presets_canvas = canvas
+
+        inner = tk.Frame(canvas, bg=BG_MAIN)
+        inner_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def _update_scrollregion(e=None):
+            # Force scrollregion to always start at y=0 so the user cannot
+            # scroll up into empty space above the content.
+            bbox = canvas.bbox("all")
+            if bbox:
+                canvas.configure(scrollregion=(0, 0, bbox[2], bbox[3]))
+
+        inner.bind("<Configure>", _update_scrollregion)
+        canvas.bind("<Configure>",
+                    lambda e: (canvas.itemconfig(inner_id, width=e.width),
+                               canvas.after(1, _update_scrollregion)))
+        canvas.bind("<MouseWheel>",
+                    lambda e: canvas.yview_scroll(-1 * (e.delta // 120), "units"))
+        inner.bind("<MouseWheel>",
+                   lambda e: canvas.yview_scroll(-1 * (e.delta // 120), "units"))
+
+        presets, base_dir = load_fw_presets()
+        uf2_groups = {name: (w, wl) for name, w, wl in _group_uf2_files(find_uf2_files())}
+
+        # Track accordion toggle functions so _switch_tab can close them all
+        self._accordion_closers = []
+
+        for section_name, section_data in presets.items():
+            self._build_accordion_section(inner, canvas, section_name,
+                                          section_data, uf2_groups, base_dir)
+
+        # Bottom padding
+        tk.Frame(inner, bg=BG_MAIN, height=12).pack()
+
+        # Clamp scrollregion once layout has settled so y=0 is always the top
+        canvas.after(50, _update_scrollregion)
+
+    def _build_accordion_section(self, parent, canvas, title, section_data, uf2_groups, base_dir):
+        """One collapsible accordion section with item buttons.
+        section_data: {item_name: {firmware, preset_config}} from ControllerFWPresets.json.
+        Items with preset_config=None are greyed-out stubs.
+        """
+        is_open = [False]
+
+        section = tk.Frame(parent, bg=BG_MAIN)
+        section.pack(fill="x", padx=16, pady=(8, 0))
+
+        # Header row
+        hdr = tk.Frame(section, bg=BG_CARD, cursor="hand2")
+        hdr.pack(fill="x")
+
+        arrow = tk.Label(hdr, text="▶", bg=BG_CARD, fg=ACCENT_BLUE,
+                         font=(FONT_UI, 10), width=2, anchor="center")
+        arrow.pack(side="left", padx=(12, 4), pady=10)
+
+        # Section icon — load PresetConfigs/<title>.gif at 24×24.
+        # Falls back to a blank spacer if the file is missing or unreadable.
+        _icon_img = None
+        _icon_path = _resource_path("PresetConfigs", title + ".gif")
+        if os.path.isfile(_icon_path):
+            try:
+                from PIL import Image, ImageTk
+                _pil = Image.open(_icon_path).convert("RGBA").resize((24, 24), Image.LANCZOS)
+                _icon_img = ImageTk.PhotoImage(_pil)
+                if not hasattr(self, "_preset_icon_refs"):
+                    self._preset_icon_refs = []
+                self._preset_icon_refs.append(_icon_img)
+            except Exception:
+                _icon_img = None
+        icon_lbl = tk.Label(hdr, image=_icon_img, bg=BG_CARD)
+        icon_lbl.pack(side="left", padx=(0, 8), pady=10)
+
+        tk.Label(hdr, text=title, bg=BG_CARD, fg=TEXT_HEADER,
+                 font=(FONT_UI, 11, "bold"), anchor="w").pack(
+                     side="left", fill="x", expand=True, pady=10)
+
+        # Items frame — hidden until expanded
+        items_frame = tk.Frame(section, bg=BG_MAIN)
+
+        for item_name, item_info in section_data.items():
+            cfg_rel  = item_info.get("preset_config")   # None = stub
+            fw_name  = item_info.get("firmware", "")
+            wired, wireless = uf2_groups.get(fw_name, (None, None))
+            cfg_abs  = os.path.join(base_dir, cfg_rel) if cfg_rel and base_dir else None
+            is_stub  = cfg_abs is None
+
+            row = tk.Frame(items_frame, bg=BG_MAIN,
+                           cursor="arrow" if is_stub else "hand2")
+            row.pack(fill="x", padx=(40, 0), pady=1)
+            lbl = tk.Label(row, text=item_name, bg=BG_MAIN,
+                           fg=TEXT_DIM if is_stub else TEXT,
+                           font=(FONT_UI, 10), anchor="w", padx=16, pady=8)
+            lbl.pack(fill="x")
+
+            # Forward scroll events from every item widget up to the canvas
+            for w in (row, lbl):
+                w.bind("<MouseWheel>",
+                       lambda e: canvas.yview_scroll(-1 * (e.delta // 120), "units"))
+                w.bind("<Button-4>",
+                       lambda e: canvas.yview_scroll(-1, "units"))
+                w.bind("<Button-5>",
+                       lambda e: canvas.yview_scroll(1, "units"))
+
+            if not is_stub:
+                for w in (row, lbl):
+                    w.bind("<Enter>", lambda e, r=row, l=lbl: (r.config(bg=BG_CARD), l.config(bg=BG_CARD)))
+                    w.bind("<Leave>", lambda e, r=row, l=lbl: (r.config(bg=BG_MAIN), l.config(bg=BG_MAIN)))
+                    w.bind("<Button-1>",
+                           lambda e, n=item_name, wp=wired, wl=wireless, p=cfg_abs:
+                           self._do_preset_flash(n, wp, wl, p))
+
+        def _update_scrollregion():
+            bbox = canvas.bbox("all")
+            if bbox:
+                canvas.configure(scrollregion=(0, 0, bbox[2], bbox[3]))
+
+        def _close():
+            """Close this accordion section (used by _switch_tab to reset state)."""
+            if is_open[0]:
+                is_open[0] = False
+                items_frame.pack_forget()
+                arrow.config(text="▶")
+                canvas.after(1, _update_scrollregion)
+
+        def _toggle(e=None):
+            is_open[0] = not is_open[0]
+            if is_open[0]:
+                items_frame.pack(fill="x")
+                arrow.config(text="▼")
+            else:
+                items_frame.pack_forget()
+                arrow.config(text="▶")
+            canvas.after(1, _update_scrollregion)
+
+        # Register close callback so the tab reset can collapse all sections
+        if hasattr(self, "_accordion_closers"):
+            self._accordion_closers.append(_close)
+
+        def _scroll(e):
+            canvas.yview_scroll(-1 * (e.delta // 120), "units")
+
+        def _scroll_up(e):
+            canvas.yview_scroll(-1, "units")
+
+        def _scroll_down(e):
+            canvas.yview_scroll(1, "units")
+
+        # Forward scroll from every widget in the section up to the canvas
+        for w in (section, items_frame, hdr, arrow) + tuple(hdr.winfo_children()):
+            w.bind("<MouseWheel>", _scroll)
+            w.bind("<Button-4>",   _scroll_up)
+            w.bind("<Button-5>",   _scroll_down)
+
+        # Toggle binding only on header widgets (not section/items_frame)
+        for w in (hdr, arrow) + tuple(hdr.winfo_children()):
+            w.bind("<Button-1>", _toggle)
+
+    def _do_preset_flash(self, preset_name, wired_path, wireless_path, preset_cfg_path):
+        """Wired/wireless popup → flash firmware → XInput boot → config mode → apply preset → save."""
+        drive = find_rpi_rp2_drive()
+        if not drive:
+            return
+
+        choice = _ask_wired_or_wireless(self.root,
+                                        has_wired=bool(wired_path),
+                                        has_wireless=bool(wireless_path))
+        if not choice:
+            return
+        uf2_path = wired_path if choice == "wired" else wireless_path
+        if not uf2_path:
+            return
+
+        # ── Progress popup ────────────────────────────────────────────
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Installing Preset")
+        dlg.configure(bg=BG_CARD)
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+        dlg.protocol("WM_DELETE_WINDOW", lambda: None)   # block close during install
+
+        dlg_frame = tk.Frame(dlg, bg=BG_CARD)
+        dlg_frame.pack(fill="both", expand=True, padx=24, pady=20)
+
+        tk.Label(dlg_frame, text=f"Installing: {preset_name}",
+                 bg=BG_CARD, fg=TEXT_HEADER,
+                 font=(FONT_UI, 12, "bold")).pack(anchor="w", pady=(0, 12))
+
+        status_var = tk.StringVar(value="Starting…")
+        status_lbl = tk.Label(dlg_frame, textvariable=status_var,
+                              bg=BG_CARD, fg=ACCENT_BLUE,
+                              font=(FONT_UI, 9), anchor="w", wraplength=430, justify="left")
+        status_lbl.pack(anchor="w", pady=(0, 6))
+
+        detail_var = tk.StringVar(value="")
+        tk.Label(dlg_frame, textvariable=detail_var,
+                 bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8), anchor="w", wraplength=430, justify="left").pack(anchor="w")
+
+        close_btn = RoundedButton(dlg_frame, text="Close", command=dlg.destroy,
+                                  bg_color="#555560", btn_width=100, btn_height=30,
+                                  btn_font=(FONT_UI, 8, "bold"))
+        close_btn.pack(side="right", pady=(16, 0))
+        close_btn.set_state("disabled")
+
+        _center_window(dlg, self.root)
+        dlg.grab_set()
+
+        def set_status(msg, detail="", color=ACCENT_BLUE):
+            status_var.set(msg)
+            detail_var.set(detail)
+            status_lbl.config(fg=color)
+            dlg.update_idletasks()
+
+        def fail(msg, detail=""):
+            def _f():
+                self._busy = False
+                set_status(msg, detail, ACCENT_RED)
+                close_btn.set_state("normal")
+                dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+            self.root.after(0, _f)
+
+        def succeed(msg, detail=""):
+            def _f():
+                self._busy = False
+                set_status(msg, detail, ACCENT_GREEN)
+                close_btn.set_state("normal")
+                dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+            self.root.after(0, _f)
+
+        self._busy = True
+
+        def worker():
+            # ── Step 1 / 5: Flash firmware ────────────────────────
+            self.root.after(0, lambda: set_status(
+                "Step 1 / 5  —  Flashing firmware…",
+                f"Installing firmware for {preset_name}"))
+            try:
+                flash_uf2_with_reboot(uf2_path, drive)
+            except Exception as exc:
+                fail("Firmware flash failed.", str(exc))
+                return
+
+            # ── Step 2 / 5: Wait for XInput boot ─────────────────
+            self.root.after(0, lambda: set_status(
+                "Step 2 / 5  —  Waiting for controller to boot…",
+                "Up to 30 seconds after firmware loads"))
+            xinput_slot = None
+            deadline = time.time() + 30.0
+            while time.time() < deadline:
+                try:
+                    connected = xinput_get_connected()
+                    occ = [c for c in connected if c[1] in OCC_SUBTYPES]
+                    if occ:
+                        xinput_slot = occ[0][0]
+                        break
+                    if connected:
+                        xinput_slot = connected[0][0]
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.75)
+
+            if xinput_slot is None:
+                fail("Controller did not appear as an XInput device.",
+                     "Firmware was flashed. Apply the preset manually\n"
+                     "via Configure Controller → Import Configuration.")
+                return
+
+            time.sleep(2.0)   # let Windows fully enumerate
+
+            # ── Step 3 / 5: Enter config mode ────────────────────
+            self.root.after(0, lambda: set_status(
+                "Step 3 / 5  —  Entering configuration mode…",
+                "Sending config signal to controller"))
+            try:
+                for left, right in MAGIC_STEPS:
+                    xinput_send_vibration(xinput_slot, left, right)
+                    time.sleep(0.08)
+                xinput_send_vibration(xinput_slot, 0, 0)
+            except Exception as exc:
+                fail("Could not send config mode signal.", str(exc))
+                return
+
+            port = None
+            deadline = time.time() + 12.0
+            while time.time() < deadline:
+                port = PicoSerial.find_config_port()
+                if port:
+                    time.sleep(0.5)
+                    break
+                time.sleep(0.3)
+            if not port:
+                fail("Controller did not enter config mode.",
+                     "Firmware was flashed. Apply the preset manually\n"
+                     "via Configure Controller → Import Configuration.")
+                return
+
+            # ── Step 4 / 5: Apply preset config ──────────────────
+            self.root.after(0, lambda: set_status(
+                "Step 4 / 5  —  Applying preset configuration…",
+                f"Sending settings for {preset_name}"))
+            try:
+                pico = PicoSerial()
+                deadline = time.time() + 15.0
+                connected_ok = False
+                while time.time() < deadline:
+                    try:
+                        pico.connect(port)
+                        connected_ok = True
+                        break
+                    except PermissionError:
+                        self.root.after(0, lambda: set_status(
+                            "Step 4 / 5  —  Applying preset configuration…",
+                            "Waiting for Windows to release the COM port…"))
+                        time.sleep(1.5)
+                    except Exception as exc:
+                        fail("Could not open config port.", str(exc))
+                        return
+                if not connected_ok:
+                    fail("Config port access denied.", "Try re-plugging the controller.")
+                    return
+
+                for _ in range(3):
+                    if pico.ping():
+                        break
+                    time.sleep(0.3)
+                else:
+                    pico.disconnect()
+                    fail("Controller not responding in config mode.")
+                    return
+
+                _apply_preset_config(pico, preset_cfg_path)
+
+                # ── Step 5 / 5: Save ──────────────────────────────
+                self.root.after(0, lambda: set_status(
+                    "Step 5 / 5  —  Saving configuration…",
+                    "Writing settings to flash"))
+                pico.save()
+                pico.reboot()
+                pico.disconnect()
+            except Exception as exc:
+                fail("Failed to apply preset.", str(exc))
+                return
+
+            succeed(f"'{preset_name}' preset installed!",
+                    "Controller is now in play mode.")
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _build_tiles(self):
         """Build the firmware tile grid from available .uf2 files."""
@@ -2644,28 +3176,11 @@ class FlashFirmwareScreen:
                     drive = find_rpi_rp2_drive()
                     if not drive:
                         return
-                    board_id = get_bootsel_board_id(drive) or "RPI-RP2"
-                    is_pico_w = "RP2W" in board_id.upper()
-                    if is_pico_w:
-                        if wireless:
-                            self._do_flash(wireless, drive, "Wireless")
-                        else:
-                            # Wired-only firmware on a Pico W — flash it, note in popup
-                            self._do_flash(wired, drive, "Wired", no_wireless_note=True)
-                    else:
-                        if wired:
-                            self._do_flash(wired, drive, "Wired")
-                        else:
-                            # Wireless-only firmware on a standard Pico — confirm first
-                            ans = messagebox.askyesno(
-                                "Confirm Wireless Install",
-                                "OCC detected a Pico, not a Pico W.\n\n"
-                                "Are you sure you want to install Wireless firmware to this device?",
-                                icon="warning"
-                            )
-                            if not ans:
-                                return
-                            self._do_flash(wireless, drive, "Wireless")
+                    choice = _ask_wired_or_wireless(self.root, has_wired=bool(wired), has_wireless=bool(wireless))
+                    if choice == "wireless":
+                        self._do_flash(wireless, drive, "Wireless")
+                    elif choice == "wired":
+                        self._do_flash(wired, drive, "Wired")
 
                 def _rclick(e, wired=wired_path, wireless=wireless_path, dname=display_name):
                     self._on_tile_right_click(wired, wireless, dname, e.x_root, e.y_root)
@@ -2708,17 +3223,7 @@ class FlashFirmwareScreen:
             return
 
         def _flash_wireless():
-            board_id = get_bootsel_board_id(drive) or "RPI-RP2"
-            is_pico_w = "RP2W" in board_id.upper()
-            if not is_pico_w:
-                ans = messagebox.askyesno(
-                    "Confirm Wireless Install",
-                    "OCC detected a Pico, not a Pico W.\n\n"
-                    "Are you sure you want to install Wireless firmware to this device?",
-                    icon="warning"
-                )
-                if not ans:
-                    return
+            # User explicitly picked Wireless from context menu — just flash it
             self._do_flash(wireless_path, drive, "Wireless")
 
         menu = tk.Menu(self.root, tearoff=0, bg=BG_CARD, fg=TEXT,
@@ -2841,7 +3346,7 @@ class FlashFirmwareScreen:
         # Center over parent
         pw = self.root.winfo_width();  ph = self.root.winfo_height()
         px = self.root.winfo_rootx(); py = self.root.winfo_rooty()
-        dw = wait_dlg.winfo_width();  dh = wait_dlg.winfo_height()
+        dw = wait_dlg.winfo_reqwidth();  dh = wait_dlg.winfo_reqheight()
         wait_dlg.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
         wait_dlg.grab_set()
 
@@ -2878,7 +3383,7 @@ class FlashFirmwareScreen:
             done_dlg.update_idletasks()
             pw = self.root.winfo_width();  ph = self.root.winfo_height()
             px = self.root.winfo_rootx(); py = self.root.winfo_rooty()
-            dw = done_dlg.winfo_width();  dh = done_dlg.winfo_height()
+            dw = done_dlg.winfo_reqwidth();  dh = done_dlg.winfo_reqheight()
             done_dlg.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
 
             # Auto-close after 3 000 ms
@@ -2920,9 +3425,9 @@ class FlashFirmwareScreen:
             self._last_drive = drive
             self._refresh_device_combo()
         else:
-            # Drive gone — return to main menu
-            self._on_back()
-            return
+            if not self._busy:   # stay on screen during preset install
+                self._on_back()
+                return
         self._poll_job = self.root.after(self.POLL_MS, self._poll)
 
     # ── Show / Hide ───────────────────────────────────────────────
@@ -4394,10 +4899,8 @@ class EasyConfigScreen:
             dlg = tk.Toplevel(f.winfo_toplevel())
             dlg.title(f"LED #{led_idx+1} Color")
             dlg.configure(bg=BG_CARD)
-            dlg.geometry("335x400")
             dlg.resizable(False, False)
             dlg.transient(f.winfo_toplevel())
-            dlg.grab_set()
 
             inner = tk.Frame(dlg, bg=BG_CARD)
             inner.pack(fill="both", expand=True, padx=16, pady=12)
@@ -4505,6 +5008,8 @@ class EasyConfigScreen:
             RoundedButton(btn_row, text="Cancel", command=dlg.destroy,
                           bg_color="#555560", btn_width=80, btn_height=28,
                           btn_font=(FONT_UI, 8, "bold")).pack(side="left")
+            _center_window(dlg, f.winfo_toplevel())
+            dlg.grab_set()
             dlg.wait_window()
 
         # ══════════════════════════════════════════════════════════════
@@ -5438,8 +5943,8 @@ class EasyConfigScreen:
                 root_win = f.winfo_toplevel()
                 dlg.update_idletasks()
                 dlg.geometry(
-                    f"+{root_win.winfo_rootx()+(root_win.winfo_width()-dlg.winfo_width())//2}"
-                    f"+{root_win.winfo_rooty()+(root_win.winfo_height()-dlg.winfo_height())//2}")
+                    f"+{root_win.winfo_rootx()+(root_win.winfo_width()-dlg.winfo_reqwidth())//2}"
+                    f"+{root_win.winfo_rooty()+(root_win.winfo_height()-dlg.winfo_reqheight())//2}")
                 dlg.grab_set(); dlg.wait_window()
                 return result[0]
 
@@ -5646,7 +6151,7 @@ class EasyConfigScreen:
                 dlg.update_idletasks()
                 pw, ph = self.root.winfo_width(), self.root.winfo_height()
                 px, py = self.root.winfo_rootx(), self.root.winfo_rooty()
-                dw, dh = dlg.winfo_width(), dlg.winfo_height()
+                dw, dh = dlg.winfo_reqwidth(), dlg.winfo_reqheight()
                 dlg.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
                 dlg.grab_set()
                 self.root.wait_window(dlg)
@@ -5874,7 +6379,7 @@ class EasyConfigScreen:
         dlg.update_idletasks()
         pw, ph = self.root.winfo_width(), self.root.winfo_height()
         px, py = self.root.winfo_rootx(), self.root.winfo_rooty()
-        dw, dh = dlg.winfo_width(), dlg.winfo_height()
+        dw, dh = dlg.winfo_reqwidth(), dlg.winfo_reqheight()
         dlg.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
         dlg.grab_set()
         self.root.wait_window(dlg)
@@ -7976,10 +8481,8 @@ class MainMenu:
         dlg = tk.Toplevel(self.root)
         dlg.title("Backup & Update")
         dlg.configure(bg=BG_CARD)
-        dlg.geometry("460x220")
         dlg.resizable(False, False)
         dlg.transient(self.root)
-        dlg.grab_set()
         dlg.protocol("WM_DELETE_WINDOW", lambda: None)
 
         dlg_frame = tk.Frame(dlg, bg=BG_CARD)
@@ -8007,6 +8510,9 @@ class MainMenu:
                                   btn_font=(FONT_UI, 8, "bold"))
         close_btn.pack(side="right", pady=(16, 0))
         close_btn.set_state("disabled")
+
+        _center_window(dlg, self.root)
+        dlg.grab_set()
 
         def set_status(msg, detail="", color=ACCENT_BLUE):
             status_var.set(msg)
@@ -10451,10 +10957,8 @@ class App:
         dlg = tk.Toplevel(self.root)
         dlg.title(f"LED #{led_idx+1} Color")
         dlg.configure(bg=BG_CARD)
-        dlg.geometry("335x370")
         dlg.resizable(False, False)
         dlg.transient(self.root)
-        dlg.grab_set()
 
         f = tk.Frame(dlg, bg=BG_CARD)
         f.pack(fill="both", expand=True, padx=16, pady=12)
@@ -10577,6 +11081,8 @@ class App:
         RoundedButton(btn_row, text="Cancel", command=dlg.destroy,
                       bg_color="#555560", btn_width=80, btn_height=28,
                       btn_font=(FONT_UI, 8, "bold")).pack(side="left")
+        _center_window(dlg, self.root)
+        dlg.grab_set()
         dlg.wait_window()
 
     @staticmethod
@@ -11232,10 +11738,8 @@ class App:
         dlg = tk.Toplevel(self.root)
         dlg.title("Select Controller")
         dlg.configure(bg=BG_CARD)
-        dlg.geometry("340x240")
         dlg.resizable(False, False)
         dlg.transient(self.root)
-        dlg.grab_set()
 
         chosen = [None]
         frame = tk.Frame(dlg, bg=BG_CARD)
@@ -11253,6 +11757,8 @@ class App:
         RoundedButton(frame, text="Cancel", command=dlg.destroy,
                       bg_color="#555560", btn_width=120, btn_height=30,
                       btn_font=(FONT_UI, 8, "bold")).pack(pady=(10, 0))
+        _center_window(dlg, self.root)
+        dlg.grab_set()
         dlg.wait_window()
         return chosen[0]
 
@@ -11293,10 +11799,8 @@ class App:
         dlg = tk.Toplevel(self.root)
         dlg.title("Manual COM Port")
         dlg.configure(bg=BG_CARD)
-        dlg.geometry("440x170")
         dlg.resizable(False, False)
         dlg.transient(self.root)
-        dlg.grab_set()
 
         frame = tk.Frame(dlg, bg=BG_CARD)
         frame.pack(fill="both", expand=True, padx=16, pady=14)
@@ -11330,6 +11834,8 @@ class App:
         RoundedButton(btn_row, text="Cancel", command=dlg.destroy,
                       bg_color="#555560", btn_width=100, btn_height=30,
                       btn_font=(FONT_UI, 8, "bold")).pack(side="right")
+        _center_window(dlg, self.root)
+        dlg.grab_set()
         dlg.wait_window()
 
     # ── Config I/O ──────────────────────────────────────────
@@ -12713,10 +13219,8 @@ class App:
         dlg = tk.Toplevel(self.root)
         dlg.title("About")
         dlg.configure(bg=BG_CARD)
-        dlg.geometry("380x280")
         dlg.resizable(False, False)
         dlg.transient(self.root)
-        dlg.grab_set()
 
         frame = tk.Frame(dlg, bg=BG_CARD)
         frame.pack(fill="both", expand=True, padx=24, pady=20)
@@ -12735,6 +13239,8 @@ class App:
         RoundedButton(frame, text="OK", command=dlg.destroy,
                       bg_color=ACCENT_BLUE, btn_width=80, btn_height=28,
                       btn_font=(FONT_UI, 8, "bold")).pack(pady=(12, 0))
+        _center_window(dlg, self.root)
+        dlg.grab_set()
         dlg.wait_window()
 
 
@@ -13982,10 +14488,8 @@ class DrumApp:
         dlg = tk.Toplevel(self.root)
         dlg.title(f"LED #{led_idx+1} Color")
         dlg.configure(bg=BG_CARD)
-        dlg.geometry("335x370")
         dlg.resizable(False, False)
         dlg.transient(self.root)
-        dlg.grab_set()
 
         f = tk.Frame(dlg, bg=BG_CARD)
         f.pack(fill="both", expand=True, padx=16, pady=12)
@@ -14095,6 +14599,8 @@ class DrumApp:
         RoundedButton(btn_row2, text="Cancel", command=dlg.destroy,
                       bg_color="#555560", btn_width=80, btn_height=28,
                       btn_font=(FONT_UI, 8, "bold")).pack(side="left")
+        _center_window(dlg, self.root)
+        dlg.grab_set()
         dlg.wait_window()
 
     @staticmethod

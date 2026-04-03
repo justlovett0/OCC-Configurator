@@ -1,25 +1,20 @@
 /*
- * controller_bt.c - BLE Advertisement Broadcaster for Guitar Controller
+ * controller_bt.c - GATT Peripheral for Guitar Controller
  *
- * Broadcasts gamepad reports inside BLE advertisement manufacturer data.
- * The dongle passively scans and reads the report — no connection needed.
+ * Controller runs as a BLE peripheral with custom service 0xFFE0 /
+ * characteristic 0xFFE1. The dongle connects, subscribes to notifications,
+ * and receives 12-byte gamepad reports at ~250 Hz.
  *
- * This is the simplest and most reliable BLE data transfer on the CYW43:
- *   - No GATT server, no services, no characteristics, no subscriptions
- *   - No pairing, no security manager, no bonding
- *   - No connection state machine that can stall or fail
- *   - Just: advertise with data → scanner reads data
+ * Connected BLE uses all 37 data channels with frequency hopping and
+ * automatic ACK/retransmit — much better range than the old ADV_NONCONN_IND
+ * broadcast which used only 3 fixed advertising channels with no retransmit.
  *
- * The advertisement is updated on every call to controller_bt_send_report()
- * by stopping advertisements, updating the payload, and restarting them.
- * At ~250 Hz this gives excellent responsiveness.
- *
- * Identification: The dongle looks for:
- *   1. 16-bit service UUID 0xFFE0 in the advertisement
- *   2. Manufacturer Specific Data with company ID 0xFFFF and tag byte 0x47
+ * Identification: dongle scans for ADV_IND containing service UUID 0xFFE0,
+ * then connects, discovers 0xFFE1, and enables notifications.
  */
 
 #include "controller_bt.h"
+#include "occ_controller.h"   /* generated from occ_controller.gatt by compile_gatt.py */
 
 #include <string.h>
 #include <stdio.h>
@@ -28,145 +23,224 @@
 #include "pico/cyw43_arch.h"
 #include "btstack.h"
 
-// ── Identification constants (must match dongle_bt.c) ──
-#define OCC_SERVICE_UUID_16   0xFFE0    // 16-bit service UUID in advertisement
-#define OCC_COMPANY_ID        0xFFFF    // Manufacturer Specific Data company ID
-#define OCC_PROTOCOL_TAG      0x47      // 'G' for guitar controller
+#define OCC_SERVICE_UUID_16  0xFFE0
+#define DEVICE_NAME_BUF      21   /* 20 chars + NUL */
 
-// ────────────────────────────────────────────────────────────────────────
-// State
-// ────────────────────────────────────────────────────────────────────────
-
+/* ── Module state ── */
 static struct {
-    bool             active;           // Advertising is running
-    uint8_t          adv_data[31];     // Current advertisement payload
-    uint8_t          adv_data_len;
-    controller_report_t last_report;   // Last report (for comparison)
-    bool             hci_ready;        // HCI stack is powered on
+    bool                  hci_ready;
+    bool                  active;             /* advertising or connected */
+    hci_con_handle_t      con_handle;
+    bool                  notify_enabled;
+    bool                  send_pending;       /* request_can_send_now in flight */
+    controller_report_t   pending_report;     /* buffered for next CAN_SEND_NOW */
+    char                  device_name[DEVICE_NAME_BUF];
+    uint8_t               adv_data[31];
+    uint8_t               adv_data_len;
 } _ctrl;
 
-// ────────────────────────────────────────────────────────────────────────
-// Build advertisement payload with embedded report
-// ────────────────────────────────────────────────────────────────────────
-
-static void build_adv_data(const controller_report_t *report) {
+/* ── Build advertisement: Flags + Service UUID 0xFFE0 only ──
+ * Report data now travels via GATT notifications, not ad payload. */
+static void build_adv_data(void) {
     uint8_t *p = _ctrl.adv_data;
 
-    // AD: Flags — General Discoverable | BR/EDR Not Supported
-    *p++ = 0x02;                                        // length
-    *p++ = BLUETOOTH_DATA_TYPE_FLAGS;                   // type
-    *p++ = 0x06;                                        // value
+    /* Flags: LE General Discoverable, BR/EDR Not Supported */
+    *p++ = 0x02;
+    *p++ = BLUETOOTH_DATA_TYPE_FLAGS;
+    *p++ = 0x06;
 
-    // AD: Complete List of 16-bit Service UUIDs — 0xFFE0
-    // This is the primary identifier the dongle uses to filter scan results.
-    *p++ = 0x03;                                        // length
+    /* Complete 16-bit Service UUID list: 0xFFE0 */
+    *p++ = 0x03;
     *p++ = BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS;
-    *p++ = (uint8_t)(OCC_SERVICE_UUID_16 & 0xFF);      // UUID low byte
-    *p++ = (uint8_t)(OCC_SERVICE_UUID_16 >> 8);         // UUID high byte
-
-    // AD: Manufacturer Specific Data — company ID + tag + 12-byte report
-    // Total: 1 (type) + 2 (company) + 1 (tag) + 12 (report) = 16 data bytes
-    *p++ = 16;                                          // length (data bytes)
-    *p++ = BLUETOOTH_DATA_TYPE_MANUFACTURER_SPECIFIC_DATA;
-    *p++ = (uint8_t)(OCC_COMPANY_ID & 0xFF);            // Company ID low
-    *p++ = (uint8_t)(OCC_COMPANY_ID >> 8);              // Company ID high
-    *p++ = OCC_PROTOCOL_TAG;                            // Protocol tag
-    memcpy(p, report, sizeof(controller_report_t));     // 12-byte report
-    p += sizeof(controller_report_t);
+    *p++ = (uint8_t)(OCC_SERVICE_UUID_16 & 0xFF);
+    *p++ = (uint8_t)(OCC_SERVICE_UUID_16 >> 8);
 
     _ctrl.adv_data_len = (uint8_t)(p - _ctrl.adv_data);
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// Packet handler — just tracks HCI power state
-// ────────────────────────────────────────────────────────────────────────
+static void start_advertising(void) {
+    bd_addr_t null_addr;
+    memset(null_addr, 0, sizeof(null_addr));
+    gap_advertisements_set_data(_ctrl.adv_data_len, _ctrl.adv_data);
+    /* ADV_IND (0x00): connectable undirected — lets dongle initiate connection */
+    gap_advertisements_set_params(0x0020, 0x0020, 0x00,
+                                  0, null_addr, 0x07, 0x00);
+    gap_advertisements_enable(1);
+    _ctrl.active = true;
+}
 
-static void packet_handler(uint8_t packet_type, uint16_t channel,
-                           uint8_t *packet, uint16_t size) {
+/* ── ATT read callback — serves device name ── */
+static uint16_t att_read_callback(hci_con_handle_t con_handle,
+                                   uint16_t att_handle,
+                                   uint16_t offset,
+                                   uint8_t *buffer, uint16_t buffer_size) {
+    (void)con_handle;
+    if (att_handle == ATT_CHARACTERISTIC_GAP_DEVICE_NAME_01_VALUE_HANDLE) {
+        return att_read_callback_handle_blob(
+            (const uint8_t *)_ctrl.device_name,
+            (uint16_t)strlen(_ctrl.device_name),
+            offset, buffer, buffer_size);
+    }
+    return 0;
+}
+
+/* ── ATT write callback — CCCD subscription from dongle ── */
+static int att_write_callback(hci_con_handle_t con_handle,
+                               uint16_t att_handle,
+                               uint16_t transaction_mode,
+                               uint16_t offset,
+                               uint8_t *buffer, uint16_t buffer_size) {
+    (void)con_handle;
+    (void)transaction_mode;
+    (void)offset;
+    (void)buffer_size;
+    if (att_handle == ATT_CHARACTERISTIC_0xFFE1_01_CLIENT_CONFIGURATION_HANDLE) {
+        _ctrl.notify_enabled = (buffer[0] & 0x01) != 0;
+        printf("CTRL BT: Notifications %s\n",
+               _ctrl.notify_enabled ? "enabled" : "disabled");
+    }
+    return 0;
+}
+
+/* ── ATT packet handler — fires notification when radio is ready ── */
+static void att_packet_handler(uint8_t packet_type, uint16_t channel,
+                                uint8_t *packet, uint16_t size) {
     (void)channel;
     (void)size;
-
     if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != ATT_EVENT_CAN_SEND_NOW) return;
 
-    if (hci_event_packet_get_type(packet) == BTSTACK_EVENT_STATE) {
-        if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
-            _ctrl.hci_ready = true;
-            printf("CTRL BT: HCI ready, starting advertisements\n");
+    /* Snapshot what we're sending — pending_report may change before CAN_SEND_NOW fires */
+    controller_report_t just_sent = _ctrl.pending_report;
+    att_server_notify(_ctrl.con_handle,
+                      ATT_CHARACTERISTIC_0xFFE1_01_VALUE_HANDLE,
+                      (const uint8_t *)&just_sent,
+                      sizeof(controller_report_t));
 
-            // Set advertisement parameters
-            uint16_t adv_int_min = 0x0020;  // 20ms — fast for low latency
-            uint16_t adv_int_max = 0x0020;  // 20ms
-            uint8_t  adv_type    = 0x03;    // ADV_NONCONN_IND — non-connectable
-            bd_addr_t null_addr;
-            memset(null_addr, 0, 6);
-            gap_advertisements_set_params(adv_int_min, adv_int_max, adv_type,
-                                          0, null_addr, 0x07, 0x00);
-            gap_advertisements_set_data(_ctrl.adv_data_len, _ctrl.adv_data);
-            gap_advertisements_enable(1);
-            _ctrl.active = true;
-        }
+    /* If state changed while we were waiting (e.g. button tapped and released),
+     * request another send immediately so the transition isn't lost */
+    if (memcmp(&_ctrl.pending_report, &just_sent, sizeof(controller_report_t)) != 0) {
+        att_server_request_can_send_now_event(_ctrl.con_handle);
+        /* send_pending stays true */
+    } else {
+        _ctrl.send_pending = false;
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// Public API
-// ────────────────────────────────────────────────────────────────────────
+/* ── HCI event handler ── */
+static btstack_packet_callback_registration_t hci_cb;
+
+static void packet_handler(uint8_t packet_type, uint16_t channel,
+                            uint8_t *packet, uint16_t size) {
+    (void)channel;
+    (void)size;
+    if (packet_type != HCI_EVENT_PACKET) return;
+
+    switch (hci_event_packet_get_type(packet)) {
+
+        case BTSTACK_EVENT_STATE:
+            if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING) {
+                _ctrl.hci_ready = true;
+                printf("CTRL BT: HCI ready — starting advertising\n");
+                start_advertising();
+            }
+            break;
+
+        case HCI_EVENT_LE_META:
+            if (hci_event_le_meta_get_subevent_code(packet) ==
+                    HCI_SUBEVENT_LE_CONNECTION_COMPLETE) {
+                uint8_t status =
+                    hci_subevent_le_connection_complete_get_status(packet);
+                if (status == 0) {
+                    _ctrl.con_handle =
+                        hci_subevent_le_connection_complete_get_connection_handle(packet);
+                    printf("CTRL BT: Dongle connected, handle=0x%04x\n",
+                           _ctrl.con_handle);
+                    /* Dongle is the central — no Windows 15ms floor applies.
+                     * Request 7.5–15ms interval for low latency. */
+                    gap_request_connection_parameter_update(_ctrl.con_handle,
+                        6, 12,   /* 7.5ms–15ms (units of 1.25ms) */
+                        0,       /* no slave latency */
+                        40);     /* 400ms supervision timeout (units of 10ms) */
+                }
+            }
+            break;
+
+        case HCI_EVENT_DISCONNECTION_COMPLETE: {
+            uint16_t handle =
+                hci_event_disconnection_complete_get_connection_handle(packet);
+            if (handle == _ctrl.con_handle) {
+                printf("CTRL BT: Disconnected — restarting advertising\n");
+                _ctrl.con_handle     = HCI_CON_HANDLE_INVALID;
+                _ctrl.notify_enabled = false;
+                _ctrl.send_pending   = false;
+                start_advertising();
+            }
+            break;
+        }
+
+        default:
+            break;
+    }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Public API
+ * ────────────────────────────────────────────────────────────────────── */
 
 void controller_bt_init(const char *device_name) {
-    (void)device_name;  // Not used in advertisement-only mode
-
     memset(&_ctrl, 0, sizeof(_ctrl));
+    _ctrl.con_handle = HCI_CON_HANDLE_INVALID;
 
-    // Build initial advertisement with zeroed report
-    controller_report_t zero_report;
-    memset(&zero_report, 0, sizeof(zero_report));
-    build_adv_data(&zero_report);
+    const char *name = device_name ? device_name : "Guitar Controller";
+    strncpy(_ctrl.device_name, name, DEVICE_NAME_BUF - 1);
+    _ctrl.device_name[DEVICE_NAME_BUF - 1] = '\0';
 
-    // Minimal BTstack init — no L2CAP, no SM, no ATT server needed
+    build_adv_data();
+
     l2cap_init();
+    sm_init();
+    sm_set_io_capabilities(IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
+    sm_set_authentication_requirements(0);   /* no pairing/bonding */
 
-    // We still need a minimal ATT server for BTstack internals
-    static const uint8_t empty_profile[] = { 1, 0x00, 0x00 };
-    att_server_init(empty_profile, NULL, NULL);
+    /* profile_data[] generated from occ_controller.gatt by compile_gatt.py */
+    att_server_init(profile_data, att_read_callback, att_write_callback);
 
-    // Register HCI event handler
-    static btstack_packet_callback_registration_t hci_cb;
     hci_cb.callback = &packet_handler;
     hci_add_event_handler(&hci_cb);
 
-    // Power on — packet_handler will start advertising when HCI is ready
+    /* Separate ATT packet handler for CAN_SEND_NOW notifications */
+    att_server_register_packet_handler(att_packet_handler);
+
+    printf("CTRL BT: Init done — powering on HCI\n");
     hci_power_control(HCI_POWER_ON);
 }
 
 void controller_bt_start_sync(void) {
     if (!_ctrl.hci_ready) return;
-
-    // (Re)start advertising
-    gap_advertisements_set_data(_ctrl.adv_data_len, _ctrl.adv_data);
-    gap_advertisements_enable(1);
-    _ctrl.active = true;
-    printf("CTRL BT: Advertising started\n");
+    /* If connected, drop the connection so dongle can re-sync with another unit */
+    if (_ctrl.con_handle != HCI_CON_HANDLE_INVALID) {
+        gap_disconnect(_ctrl.con_handle);
+        /* Advertising restarts in the disconnect event handler */
+    } else {
+        start_advertising();
+    }
+    printf("CTRL BT: Sync requested\n");
 }
 
 void controller_bt_send_report(const controller_report_t *report) {
-    if (!_ctrl.hci_ready || !_ctrl.active) return;
-
-    // Only update advertisement if report data changed
-    // (avoids unnecessary HCI commands which could stall)
-    if (memcmp(report, &_ctrl.last_report, sizeof(controller_report_t)) == 0) {
+    if (!_ctrl.notify_enabled) return;
+    if (memcmp(report, &_ctrl.pending_report, sizeof(controller_report_t)) == 0)
         return;
-    }
-    memcpy(&_ctrl.last_report, report, sizeof(controller_report_t));
 
-    // Rebuild advertisement payload with new report data
-    build_adv_data(report);
+    memcpy(&_ctrl.pending_report, report, sizeof(controller_report_t));
+    if (_ctrl.send_pending) return;   /* already queued; latest data will be sent */
 
-    // Update the advertisement — BTstack handles stopping/restarting internally
-    gap_advertisements_set_data(_ctrl.adv_data_len, _ctrl.adv_data);
+    _ctrl.send_pending = true;
+    att_server_request_can_send_now_event(_ctrl.con_handle);
 }
 
 bool controller_bt_connected(void) {
-    // In broadcast mode, "connected" means "advertising and dongle can see us"
-    // We return true once advertising is active — the dongle is a passive scanner.
-    return _ctrl.active;
+    /* "connected" = GATT client subscribed and ready to receive reports */
+    return _ctrl.notify_enabled;
 }

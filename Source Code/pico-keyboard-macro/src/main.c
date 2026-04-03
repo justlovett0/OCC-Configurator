@@ -41,6 +41,7 @@
 #define ONBOARD_LED_PIN    25
 
 static macro_config_t g_config;
+static bool g_suspended = false;
 
 //--------------------------------------------------------------------
 // ASCII → HID keycode lookup
@@ -354,8 +355,6 @@ static void poll_buttons(uint32_t now_us) {
 //--------------------------------------------------------------------
 // TinyUSB mount callbacks (required)
 //--------------------------------------------------------------------
-
-static bool g_suspended = false;
 
 void tud_mount_cb(void)   {}
 void tud_umount_cb(void)  {}
