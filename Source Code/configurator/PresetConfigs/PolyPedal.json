@@ -1,0 +1,23 @@
+{
+  "device_type": "pedal",
+  "pedal0": "2",
+  "pedal1": "3",
+  "pedal2": "4",
+  "pedal3": "5",
+  "pedal0_map": "0",
+  "pedal1_map": "1",
+  "pedal2_map": "2",
+  "pedal3_map": "3",
+  "debounce": "5",
+  "adc0": "-1",
+  "adc0_axis": "0",
+  "adc0_invert": "0",
+  "adc0_min": "0",
+  "adc0_max": "4095",
+  "adc1": "-1",
+  "adc1_axis": "0",
+  "adc1_invert": "0",
+  "adc1_min": "0",
+  "adc1_max": "4095",
+  "device_name": "Pedal Controller"
+}

@@ -1,0 +1,14 @@
+// GATT profile for OCC Guitar Controller (wireless peripheral)
+// Generated header "occ_controller.h" is produced by compile_gatt.py
+// via the pico_btstack_make_gatt_header() CMake macro.
+//
+// Handles produced:
+//   ATT_CHARACTERISTIC_GAP_DEVICE_NAME_01_VALUE_HANDLE
+//   ATT_CHARACTERISTIC_0xFFE1_01_VALUE_HANDLE
+//   ATT_CHARACTERISTIC_0xFFE1_01_CLIENT_CONFIGURATION_HANDLE
+
+PRIMARY_SERVICE, GAP_SERVICE
+CHARACTERISTIC, GAP_DEVICE_NAME, READ | DYNAMIC,
+
+PRIMARY_SERVICE, 0xFFE0
+CHARACTERISTIC, 0xFFE1, NOTIFY,
