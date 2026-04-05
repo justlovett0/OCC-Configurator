@@ -8,7 +8,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/github/license/justlovett0/OCC-Configurator" />
-  <img src="https://img.shields.io/github/v/release/justlovett0/OCC-Configurator" />
+  <img src="https://img.shields.io/github/v/tag/justlovett0/OCC-Configurator" />
 </p>
 
 <p align="center">
