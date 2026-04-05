@@ -129,6 +129,10 @@ void config_set_defaults(guitar_config_t *config) {
     // Wireless default: Dongle mode (WIRELESS_DEFAULT_DONGLE = 0)
     config->wireless_default_mode = WIRELESS_DEFAULT_DONGLE;
 
+    // START hold-to-activate — off by default
+    config->start_hold_enabled = 0;
+    config->start_hold_ms      = 500;
+
     config->checksum = _calc_checksum(config);
 }
 

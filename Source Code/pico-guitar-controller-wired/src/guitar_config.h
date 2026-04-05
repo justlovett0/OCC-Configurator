@@ -10,6 +10,7 @@
  *      Bumped CONFIG_VERSION to force defaults reset on first boot after update.
  * v11: Added ema_alpha field for user-configurable analog smoothing strength.
  * v12: Added per-effect LED speed fields (loop_speed_ms, breathe_speed_ms, wave_speed_ms).
+ * v13: Added start_hold_enabled / start_hold_ms — optional hold-to-activate for START button.
  */
 
 #ifndef _GUITAR_CONFIG_H_
@@ -20,7 +21,7 @@
 #include "apa102_leds.h"
 
 #define CONFIG_MAGIC              0x47554954  // "GUIT"
-#define CONFIG_VERSION            12
+#define CONFIG_VERSION            13
 #define DEVICE_NAME_MAX           31          // + null terminator = 32 bytes
 
 // ── Device type identifier (sent as DEVTYPE: in GET_CONFIG response) ──
@@ -125,6 +126,10 @@ typedef struct __attribute__((packed)) {
     // Range active: 10–254. Stored 0 = level 0 = alpha 255 (no smoothing).
     // Default 90 = level 4 (responsive and stable).
     uint8_t  ema_alpha;             // EMA alpha; 0 stored means 255 (no smoothing)
+
+    // ── START button hold-to-activate ──
+    uint8_t  start_hold_enabled;    // 1 = require hold before START registers
+    uint16_t start_hold_ms;         // hold duration in ms (default 500)
 
     uint32_t checksum;
 } guitar_config_t;

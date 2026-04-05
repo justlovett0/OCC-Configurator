@@ -29,9 +29,9 @@ add_executable(pico_pedal_controller
     src/usb_descriptors.c
     src/xinput_driver.c
     src/xinput_host.c
+    src/hcd_pio_usb_debug.c
     src/pedal_config.c
     src/pedal_config_serial.c
-    ${PICO_TINYUSB_PATH}/src/portable/raspberrypi/pio_usb/hcd_pio_usb.c
 )
 
 # Include directories
@@ -65,6 +65,21 @@ target_compile_definitions(pico_pedal_controller PRIVATE
     BUILD_DATE_STR="${BUILD_DATE_STR}"
     PIO_USB_USE_TINYUSB=1
 )
+
+option(PEDAL_HOST_DEBUG "Enable pedal USB host CDC debug output" ON)
+if(PEDAL_HOST_DEBUG)
+    target_compile_definitions(pico_pedal_controller PRIVATE PEDAL_HOST_DEBUG=1)
+endif()
+
+# ── Debug LED support (troubleshooting only) ──
+# Displays USB host connection status on the APA102 LEDs (GP6=SCK, GP7=MOSI).
+# Change ON → OFF (or remove block) to revert. Zero APA102 code compiled when OFF.
+option(PEDAL_LED_DEBUG "Show USB host status on APA102 LEDs" ON)
+if(PEDAL_LED_DEBUG)
+    target_sources(pico_pedal_controller PRIVATE src/apa102_leds.c)
+    target_link_libraries(pico_pedal_controller hardware_spi hardware_dma)
+    target_compile_definitions(pico_pedal_controller PRIVATE PEDAL_LED_DEBUG=1)
+endif()
 
 # Disable default USB and UART stdio (we use USB for XInput/CDC)
 pico_enable_stdio_usb(pico_pedal_controller 0)

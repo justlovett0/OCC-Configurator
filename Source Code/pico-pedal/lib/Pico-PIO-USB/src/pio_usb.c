@@ -99,9 +99,6 @@ void __not_in_flash_func(pio_usb_bus_usb_transfer)(pio_port_t *pp,
   pp->pio_usb_tx->irq = IRQ_TX_ALL_MASK; // clear complete flag
 
   if (pp->low_speed) {
-    // For Low speed host, wait until EOP is fully sent. Otherwise, we can send another packet
-    // before inter-packet delay timeout, which is 2-bit time by USB specs.
-    // For Full speed, our overhead is probably enough without this additional wait.
     while (*pc <= PIO_USB_TX_ENCODED_DATA_COMP) {
       continue;
     }
@@ -163,9 +160,11 @@ static inline __force_inline bool pio_usb_bus_wait_for_rx_start(const pio_port_t
 
   // We're starting the timing somewhere in the current microsecond so always assume the first one
   // is less than a full microsecond. For example, a wait of 2 could actually be 1.1 microseconds.
-  // We will use 3 us (24 bit time) for Full speed and 12us (18 bit time) for Low speed.
+  // Use a slightly more tolerant timeout here. On RP2040-to-RP2040 links via
+  // PIO-USB, some devices respond late enough that the tighter window can miss
+  // the start of a valid EP0 DATA packet during enumeration.
   uint32_t start = get_time_us_32();
-  uint32_t timeout = pp->low_speed ? 12 : 3;
+  uint32_t timeout = pp->low_speed ? 16 : 8;
   while (get_time_us_32() - start <= timeout) {
     if ((pp->pio_usb_rx->irq & IRQ_RX_START_MASK) != 0) {
       return true;
@@ -180,10 +179,11 @@ uint8_t __no_inline_not_in_flash_func(pio_usb_bus_wait_handshake)(pio_port_t* pp
   }
 
   int16_t idx = 0;
-  // Timeout in seven microseconds. That is enough time to receive one byte at low speed.
+  // Use a more forgiving timeout while waiting for handshake bytes. This keeps
+  // the host from prematurely classifying a slightly-late response as "no data".
   // This is to detect packets without an EOP because the device was unplugged.
   uint32_t start = get_time_us_32();
-  while (get_time_us_32() - start <= 7) {
+  while (get_time_us_32() - start <= 100) {
     if (idx < 2 && pio_sm_get_rx_fifo_level(pp->pio_usb_rx, pp->sm_rx)) {
       uint8_t data = pio_sm_get(pp->pio_usb_rx, pp->sm_rx) >> 24;
       pp->usb_rx_buffer[idx++] = data;
@@ -216,23 +216,28 @@ int __no_inline_not_in_flash_func(pio_usb_bus_receive_packet_and_handshake)(
   const uint16_t rx_buf_len = sizeof(pp->usb_rx_buffer) / sizeof(pp->usb_rx_buffer[0]);
   int16_t idx = 0;
 
-  // Per USB Specs 7.1.18 for turnaround: We must wait at least 2 bit times for inter-packet delay.
+  // Per USB Specs 7.1.18 for turnaround: we must wait at least 2 bit times
+  // before transmitting the handshake.
   // This is essential for working with LS device specially when we overlocked the mcu.
   // Pre-calculate number of cycle per bit time
   // - Lowspeed: 1 bit time = (cpufreq / 1.5 Mhz) = clk_div_ls_tx.div_int*6Mhz / 1.5 Mhz = 4 * clk_div_ls_tx.div_int
   // - Fullspeed 1 bit time = (cpufreq / 12 Mhz) = clk_div_fs_tx.div_int*48Mhz / 12 Mhz = 4 * clk_div_fs_tx.div_int
-  // Since there is also overhead, we only wait 1.5 bit for LS and no wait for FS
+  // Use a later handshake inside the allowed 2-7 bit-time window. RP2040
+  // native USB devices appear sensitive to a too-early ACK here during EP0
+  // control reads.
   uint32_t turnaround_in_cycle;
   if (pp->low_speed) {
-    turnaround_in_cycle = 6 * pp->clk_div_ls_tx.div_int; // 1.5 bit time
+    turnaround_in_cycle = 20 * pp->clk_div_ls_tx.div_int; // ~5 bit times
   } else {
-    turnaround_in_cycle = 4 * pp->clk_div_fs_tx.div_int; // 1 bit time, but not used
+    turnaround_in_cycle = 20 * pp->clk_div_fs_tx.div_int; // ~5 bit times
   }
 
-  // Timeout in seven microseconds. That is enough time to receive one byte at low speed.
+  // Use a more forgiving per-byte timeout while receiving packets. The timeout
+  // resets on every byte, so this doesn't slow normal transfers much, but it
+  // helps enumeration survive slightly-late first bytes on EP0.
   // This is to detect packets without an EOP because the device was unplugged.
   uint32_t start = get_time_us_32();
-  while (get_time_us_32() - start <= 7) {
+  while (get_time_us_32() - start <= 20) {
     if (pio_sm_get_rx_fifo_level(pp->pio_usb_rx, pp->sm_rx)) {
       uint8_t data = pio_sm_get(pp->pio_usb_rx, pp->sm_rx) >> 24;
       if (idx < rx_buf_len) {
@@ -252,9 +257,7 @@ int __no_inline_not_in_flash_func(pio_usb_bus_receive_packet_and_handshake)(
     } else if ((pp->pio_usb_rx->irq & IRQ_RX_COMP_MASK) != 0) {
       // Exit since we've gotten an EOP.
       // Timing critical: per USB specs, handshake must be sent within 2-7 bit-time strictly
-      if (pp->low_speed) {
-        busy_wait_at_least_cycles(turnaround_in_cycle); // wait for turnaround for LS only
-      }
+      busy_wait_at_least_cycles(turnaround_in_cycle);
 
       if (handshake == USB_PID_ACK) {
         // Only ACK if crc matches
@@ -541,13 +544,17 @@ uint8_t __no_inline_not_in_flash_func(pio_usb_ll_encode_tx_data)(
 
 static inline __force_inline void prepare_tx_data(endpoint_t *ep) {
   uint16_t const xact_len = pio_usb_ll_get_transaction_len(ep);
+  static uint8_t const zlp_dummy = 0;
+  uint8_t const *payload = ep->app_buf ? ep->app_buf : &zlp_dummy;
   uint8_t buffer[PIO_USB_EP_SIZE + 4];
   buffer[0] = USB_SYNC;
   buffer[1] = (ep->data_id == 1) ? USB_PID_DATA1
                                  : USB_PID_DATA0; // USB_PID_SETUP also DATA0
-  memcpy(buffer + 2, ep->app_buf, xact_len);
+  if (xact_len) {
+    memcpy(buffer + 2, payload, xact_len);
+  }
 
-  uint16_t const crc16 = calc_usb_crc16(ep->app_buf, xact_len);
+  uint16_t const crc16 = calc_usb_crc16(payload, xact_len);
   buffer[2 + xact_len] = crc16 & 0xff;
   buffer[2 + xact_len + 1] = crc16 >> 8;
 

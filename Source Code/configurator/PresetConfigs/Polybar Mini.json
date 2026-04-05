@@ -18,6 +18,8 @@
   "whammy_mode": "analog",
   "whammy_pin": 28,
   "debounce": 5,
+  "start_hold_enabled": 0,
+  "start_hold_ms": 500,
   "ema_alpha": 140,
   "smooth_level": 2,
   "i2c_sda": 0,

@@ -26,12 +26,12 @@ void config_set_defaults(pedal_config_t *config) {
     config->magic   = CONFIG_MAGIC;
     config->version = CONFIG_VERSION;
 
-    // Default pedal button pins: GP2–GP5
-    // (GP0/GP1 reserved for PIO-USB D+/D-)
-    config->pin_buttons[0] = 2;
-    config->pin_buttons[1] = 3;
-    config->pin_buttons[2] = 4;
-    config->pin_buttons[3] = 5;
+    // Default pedal button pins: GP4–GP7
+    // (GP2/GP3 reserved for PIO-USB D+/D-)
+    config->pin_buttons[0] = 4;
+    config->pin_buttons[1] = 5;
+    config->pin_buttons[2] = 6;
+    config->pin_buttons[3] = 7;
 
     // Default mappings: Green, Red, Yellow, Blue frets
     config->button_mapping[0] = BTN_IDX_GREEN;

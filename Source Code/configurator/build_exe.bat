@@ -57,8 +57,8 @@ for /f "usebackq delims=" %%A in (`dir /b *.uf2 2^>nul`) do call :check_and_appe
 
 if not defined NUKE_FOUND (
     echo.
-    echo   WARNING: nuke.uf2 not found - Factory Reset will not work in the exe.
-    echo   Place nuke.uf2 next to this script and rebuild.
+    echo   WARNING: resetFW.uf2 not found - Factory Reset will not work in the exe.
+    echo   Place resetFW.uf2 next to this script and rebuild.
 ) else (
     echo   Bundling nuke: !NUKE_FOUND!
     set "NUKE_ARG=--add-data="!NUKE_FOUND!;.""
@@ -238,8 +238,8 @@ pause
 exit /b 0
 
 :check_and_append
-REM /i flag makes this case-insensitive: nuke.uf2, Nuke.UF2, NUKE.UF2 all match
-if /i "%~1"=="nuke.uf2" (
+REM /i flag makes this case-insensitive: resetFW.uf2, ResetFW.UF2, RESETFW.UF2 all match
+if /i "%~1"=="resetFW.uf2" (
     set "NUKE_FOUND=%~1"
     exit /b 0
 )

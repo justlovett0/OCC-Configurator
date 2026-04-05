@@ -132,6 +132,10 @@ void config_set_defaults(guitar_config_t *config) {
     // Analog smoothing — default is slider level 4 → alpha 90 (responsive but stable)
     config->ema_alpha = 90;
 
+    // START hold-to-activate — off by default
+    config->start_hold_enabled = 0;
+    config->start_hold_ms      = 500;
+
     config->checksum = _calc_checksum(config);
 }
 

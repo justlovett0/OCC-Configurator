@@ -232,8 +232,12 @@ static void send_config(const guitar_config_t *config) {
                     (unsigned)config->ema_alpha);
     pos += snprintf(buf + pos, sizeof(buf) - pos, "sync_pin=%d,",
                     (int)config->sync_pin);
-    pos += snprintf(buf + pos, sizeof(buf) - pos, "wireless_default_mode=%u",
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "wireless_default_mode=%u,",
                     (unsigned)config->wireless_default_mode);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "start_hold_enabled=%d,",
+                    (int)config->start_hold_enabled);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "start_hold_ms=%u",
+                    (unsigned)config->start_hold_ms);
     serial_writeln(buf);
 
     // Second line: LED basic config
@@ -647,6 +651,18 @@ static bool handle_set(guitar_config_t *config, const char *kv_str) {
         int v = atoi(val);
         if (v < 0 || v > 1) { serial_writeln("ERR:0 or 1"); return false; }
         config->wireless_default_mode = (uint8_t)v;
+        serial_writeln("OK"); return true;
+    }
+
+    // START button hold-to-activate
+    if (strcmp(key, "start_hold_enabled") == 0) {
+        config->start_hold_enabled = (atoi(val) != 0) ? 1 : 0;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "start_hold_ms") == 0) {
+        int v = atoi(val);
+        if (v < 0 || v > 5000) { serial_writeln("ERR:0-5000"); return false; }
+        config->start_hold_ms = (uint16_t)v;
         serial_writeln("OK"); return true;
     }
 

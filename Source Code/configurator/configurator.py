@@ -454,6 +454,33 @@ def _show_update_dialog(root, latest_version, download_url):
         webbrowser.open(download_url)
 
 
+def _make_flash_popup(root):
+    """Modal 'Flashing…' popup centered on root. Returns (popup, close_fn).
+    Used by all advanced-configurator _flash_firmware() methods."""
+    dlg = tk.Toplevel(root)
+    dlg.title("Flashing Firmware")
+    dlg.configure(bg=BG_CARD)
+    dlg.resizable(False, False)
+    dlg.transient(root)
+    dlg.protocol("WM_DELETE_WINDOW", lambda: None)   # user can't close mid-flash
+    tk.Label(dlg, text="⚡  Flashing firmware…\nplease wait",
+             bg=BG_CARD, fg=TEXT, font=(FONT_UI, 11),
+             justify="center", padx=32, pady=28).pack()
+    dlg.update_idletasks()
+    pw = root.winfo_width();  ph = root.winfo_height()
+    rx = root.winfo_rootx(); ry = root.winfo_rooty()
+    dw = dlg.winfo_reqwidth(); dh = dlg.winfo_reqheight()
+    dlg.geometry(f"+{rx + (pw - dw) // 2}+{ry + (ph - dh) // 2}")
+    dlg.grab_set()
+
+    def _close():
+        if dlg.winfo_exists():
+            dlg.grab_release()
+            dlg.destroy()
+
+    return dlg, _close
+
+
 #  ROUNDED BUTTON  (plain tk.Canvas — no Frame wrapper)
 
 class RoundedButton(tk.Canvas):
@@ -1313,7 +1340,7 @@ GP2040CE_PID = 0x4028
 # which maps to DEFAULT/GAMEPAD — hence the device rebooting as a controller.
 GP2040CE_WEBCONFIG_IP     = "192.168.7.1"
 GP2040CE_BOOTMODE_BOOTSEL = 2
-NUKE_UF2_FILENAME = "nuke.uf2"
+NUKE_UF2_FILENAME = "resetFW.uf2"
 
 # Maps DEVTYPE strings → substrings expected in the UF2 filename.
 # The first UF2 whose lowercase filename contains the substring wins.
@@ -1526,8 +1553,8 @@ def find_uf2_for_device_type(device_type):
     return files[0][1]
 
 
-def find_nuke_uf2():
-    """Search for nuke.uf2 (case-insensitive) alongside the exe/script."""
+def find_resetFW_uf2():
+    """Search for resetFW.uf2 (case-insensitive) alongside the exe/script."""
     search_dirs = []
     if getattr(sys, '_MEIPASS', None):
         search_dirs.append(sys._MEIPASS)
@@ -2622,7 +2649,7 @@ class FlashFirmwareScreen:
                  bg=BG_CARD, fg=TEXT_HEADER,
                  font=(FONT_UI, 10, "bold"), anchor="w").pack(anchor="w")
 
-        tk.Label(rst_text, text="Will use Nuke.uf2 and wipe storage.",
+        tk.Label(rst_text, text="Will use resetFW.uf2 and wipe storage.",
                  bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8), anchor="w").pack(anchor="w")
 
@@ -3323,6 +3350,9 @@ class FlashFirmwareScreen:
     # ── Flashing ──────────────────────────────────────────────────
 
     def _do_flash(self, uf2_path, drive, variant_label="", no_wireless_note=False):
+        # Go back to main menu before flashing — prevents stale config screen
+        if self._on_back:
+            self._on_back()
         # ── 1. Show a non-blocking "please wait" popup ──────────────
         wait_dlg = tk.Toplevel(self.root)
         wait_dlg.title("Flashing Firmware")
@@ -3399,10 +3429,10 @@ class FlashFirmwareScreen:
             messagebox.showwarning("Not Found",
                                    "No Pico in USB mode detected.")
             return
-        nuke = find_nuke_uf2()
-        if not nuke:
+        resetFW = find_resetFW_uf2()
+        if not resetFW:
             messagebox.showwarning("Missing File",
-                                   "nuke.uf2 not found.\n"
+                                   "resetFW.uf2 not found.\n"
                                    "Place it alongside this exe and try again.")
             return
         if not messagebox.askyesno("Factory Reset",
@@ -3411,7 +3441,7 @@ class FlashFirmwareScreen:
                                    "Continue?", icon="warning"):
             return
         try:
-            flash_uf2(nuke, drive)
+            flash_uf2(resetFW, drive)
         except Exception as e:
             messagebox.showerror("Reset Error", f"Failed:\n{e}")
 
@@ -6957,22 +6987,22 @@ class MainMenu:
         config_port  = PicoSerial.find_config_port()
         xinput_count = getattr(self, '_xinput_count', 0)
         xinput_label = getattr(self, '_xinput_device_label', 'Controller')
-        nuke         = find_nuke_uf2()
+        resetFW         = find_resetFW_uf2()
 
         if drive:
             self._rst_icon.config(text="●", fg=ACCENT_GREEN)
             self._rst_status.config(
                 text=f"Pico in USB mode  ·  {drive}", fg=ACCENT_GREEN)
-            if nuke:
+            if resetFW:
                 self._rst_detail.config(
-                    text="Will use Nuke.uf2 and wipe all storage.",
+                    text="Will use resetFW.uf2 and wipe all storage.",
                     fg=TEXT_DIM)
                 self._rst_btn.set_state("normal")
                 self._rst_btn._drive = drive
                 self._rst_btn._via   = "bootsel"
             else:
                 self._rst_detail.config(
-                    text="nuke.uf2 not found — place it alongside this exe.",
+                    text="resetFW.uf2 not found — place it alongside this exe.",
                     fg=ACCENT_ORANGE)
                 self._rst_btn.set_state("disabled")
 
@@ -6984,9 +7014,9 @@ class MainMenu:
             self._rst_status.config(
                 text=f"Controller in config mode  ·  {config_port}",
                 fg=ACCENT_GREEN)
-            if nuke:
+            if resetFW:
                 self._rst_detail.config(
-                    text="Will send BOOTSEL command, then wipe storage with Nuke.uf2.",
+                    text="Will send BOOTSEL command, then wipe storage with resetFW.uf2.",
                     fg=TEXT_DIM)
                 self._rst_btn.set_state("normal")
                 self._rst_btn._drive       = None
@@ -6994,7 +7024,7 @@ class MainMenu:
                 self._rst_btn._config_port = config_port
             else:
                 self._rst_detail.config(
-                    text="nuke.uf2 not found — place it alongside this exe.",
+                    text="resetFW.uf2 not found — place it alongside this exe.",
                     fg=ACCENT_ORANGE)
                 self._rst_btn.set_state("disabled")
 
@@ -7004,16 +7034,16 @@ class MainMenu:
             self._rst_status.config(
                 text=f"{xinput_label} detected via XInput  ({count} device{'s' if count > 1 else ''})",
                 fg=ACCENT_GREEN)
-            if nuke:
+            if resetFW:
                 self._rst_detail.config(
-                    text="Will send config signal, enter BOOTSEL, then wipe storage with Nuke.uf2.",
+                    text="Will send config signal, enter BOOTSEL, then wipe storage with resetFW.uf2.",
                     fg=TEXT_DIM)
                 self._rst_btn.set_state("normal")
                 self._rst_btn._drive = None
                 self._rst_btn._via   = "xinput"
             else:
                 self._rst_detail.config(
-                    text="nuke.uf2 not found — place it alongside this exe.",
+                    text="resetFW.uf2 not found — place it alongside this exe.",
                     fg=ACCENT_ORANGE)
                 self._rst_btn.set_state("disabled")
 
@@ -7920,31 +7950,31 @@ class MainMenu:
             log.append(f"  [send] Top-level exception: {exc}")
 
         if success:
-            nuke_path = find_nuke_uf2()
-            if nuke_path:
+            resetFW_path = find_resetFW_uf2()
+            if resetFW_path:
                 # Update status label so user knows what's happening
                 try:
                     self._ctrl_status.config(text="Waiting for RPI-RP2…", fg=ACCENT_ORANGE)
                     self._ctrl_detail.config(
-                        text="Will flash nuke.uf2 automatically when drive appears.", fg=TEXT_DIM)
+                        text="Will flash resetFW.uf2 automatically when drive appears.", fg=TEXT_DIM)
                 except Exception:
                     pass
 
-                def _nuke_watcher():
-                    """Background thread: flash nuke.uf2 the FIRST time RPI-RP2 appears."""
-                    nuke_flashed = False
+                def _resetFW_watcher():
+                    """Background thread: flash resetFW.uf2 the FIRST time RPI-RP2 appears."""
+                    resetFW_flashed = False
                     deadline = time.time() + 30.0   # wait up to 30 s
 
-                    while time.time() < deadline and not nuke_flashed:
+                    while time.time() < deadline and not resetFW_flashed:
                         drive = find_rpi_rp2_drive()
                         if drive:
-                            nuke_flashed = True   # set flag BEFORE writing so we only try once
+                            resetFW_flashed = True   # set flag BEFORE writing so we only try once
                             try:
-                                flash_uf2(nuke_path, drive)
+                                flash_uf2(resetFW_path, drive)
                                 self.root.after(0, lambda: _centered_dialog(
                                     self.root,
                                     "Firmware Switcher",
-                                    "nuke.uf2 flashed successfully!\n\n"
+                                    "resetFW.uf2 flashed successfully!\n\n"
                                     "The Pico will reboot clean.\n\n"   
 									"!!WAIT 10 seconds!! for software \n"
 									"to catch up. ALPHA BUGGINESS.\n\n"
@@ -7956,33 +7986,33 @@ class MainMenu:
                                 self.root.after(0, lambda e=exc: _centered_dialog(
                                     self.root,
                                     "Firmware Switcher",
-                                    f"RPI-RP2 found but nuke.uf2 flash failed:\n{e}",
+                                    f"RPI-RP2 found but resetFW.uf2 flash failed:\n{e}",
                                     kind="error"
                                 ))
                         else:
                             time.sleep(0.3)
 
-                    if not nuke_flashed:
+                    if not resetFW_flashed:
                         self.root.after(0, lambda: _centered_dialog(
                             self.root,
                             "Firmware Switcher",
                             "RPI-RP2 drive did not appear within 30 seconds.\n\n"
                             "Try unplugging and re-plugging the Pico while holding BOOTSEL,\n"
-                            "then manually copy nuke.uf2 to the drive.",
+                            "then manually copy resetFW.uf2 to the drive.",
                             kind="error"
                         ))
 
-                threading.Thread(target=_nuke_watcher, daemon=True).start()
+                threading.Thread(target=_resetFW_watcher, daemon=True).start()
 
             else:
-                # nuke.uf2 not found — fall back to the old informational dialog
+                # resetFW.uf2 not found — fall back to the old informational dialog
                 _centered_dialog(
                     self.root,
                     "Firmware Switcher",
                     "BOOTSEL command sent!\n\n"
                     "The device should reappear as an RPI-RP2 drive shortly.\n\n"
-                    "Note: nuke.uf2 was not found alongside this exe, so the\n"
-                    "automatic flash step was skipped. Place nuke.uf2 next to\n"
+                    "Note: resetFW.uf2 was not found alongside this exe, so the\n"
+                    "automatic flash step was skipped. Place resetFW.uf2 next to\n"
                     "the configurator to enable automatic memory wipe.",
                     kind="info"
                 )
@@ -8135,7 +8165,7 @@ class MainMenu:
 
     def _degp2040ceify(self):
         """Send the BOOTSEL reboot command to a GP2040-CE device via its
-        web configurator HTTP API, then watch for RPI-RP2 and flash nuke.uf2."""
+        web configurator HTTP API, then watch for RPI-RP2 and flash resetFW.uf2."""
         deadline = time.time() + 5.0
         while self._gp2040ce_scan_running and time.time() < deadline:
             time.sleep(0.1)
@@ -8159,29 +8189,29 @@ class MainMenu:
             success = self._gp2040ce_send_bootsel()
 
             if success:
-                nuke_path = find_nuke_uf2()
-                if nuke_path:
+                resetFW_path = find_resetFW_uf2()
+                if resetFW_path:
                     try:
                         self._ctrl_status.config(
                             text="Waiting for RPI-RP2…", fg=ACCENT_ORANGE)
                         self._ctrl_detail.config(
-                            text="Will flash nuke.uf2 automatically when drive appears.",
+                            text="Will flash resetFW.uf2 automatically when drive appears.",
                             fg=TEXT_DIM)
                     except Exception:
                         pass
 
-                    nuke_flashed = False
+                    resetFW_flashed = False
                     deadline2 = time.time() + 30.0
-                    while time.time() < deadline2 and not nuke_flashed:
+                    while time.time() < deadline2 and not resetFW_flashed:
                         drive = find_rpi_rp2_drive()
                         if drive:
-                            nuke_flashed = True
+                            resetFW_flashed = True
                             try:
-                                flash_uf2(nuke_path, drive)
+                                flash_uf2(resetFW_path, drive)
                                 self.root.after(0, lambda: _centered_dialog(
                                     self.root,
                                     "Firmware Switcher",
-                                    "nuke.uf2 flashed successfully!\n\n"
+                                    "resetFW.uf2 flashed successfully!\n\n"
                                     "The Pico will reboot clean.\n\n"
                                     "!!WAIT 10 seconds!! for software \n"
                                     "to catch up. ALPHA BUGGINESS.\n\n"
@@ -8193,19 +8223,19 @@ class MainMenu:
                                 self.root.after(0, lambda e=exc: _centered_dialog(
                                     self.root,
                                     "Firmware Switcher",
-                                    f"RPI-RP2 found but nuke.uf2 flash failed:\n{e}",
+                                    f"RPI-RP2 found but resetFW.uf2 flash failed:\n{e}",
                                     kind="error"
                                 ))
                         else:
                             time.sleep(0.3)
 
-                    if not nuke_flashed:
+                    if not resetFW_flashed:
                         self.root.after(0, lambda: _centered_dialog(
                             self.root,
                             "Firmware Switcher",
                             "RPI-RP2 drive did not appear within 30 seconds.\n\n"
                             "Try unplugging and re-plugging the Pico while holding BOOTSEL,\n"
-                            "then manually copy nuke.uf2 to the drive.",
+                            "then manually copy resetFW.uf2 to the drive.",
                             kind="error"
                         ))
                 else:
@@ -8214,8 +8244,8 @@ class MainMenu:
                         "Firmware Switcher",
                         "BOOTSEL command sent!\n\n"
                         "The device should reappear as an RPI-RP2 drive shortly.\n\n"
-                        "Note: nuke.uf2 was not found alongside this exe, so the\n"
-                        "automatic flash step was skipped. Place nuke.uf2 next to\n"
+                        "Note: resetFW.uf2 was not found alongside this exe, so the\n"
+                        "automatic flash step was skipped. Place resetFW.uf2 next to\n"
                         "the configurator to enable automatic memory wipe.",
                         kind="info"
                     ))
@@ -8888,11 +8918,11 @@ class MainMenu:
 
     def _do_factory_reset(self):
         """Factory reset — works from BOOTSEL drive, config mode, or XInput mode."""
-        nuke_path = find_nuke_uf2()
-        if not nuke_path:
+        resetFW_path = find_resetFW_uf2()
+        if not resetFW_path:
             messagebox.showerror("Factory Reset",
-                "nuke.uf2 not found.\n"
-                "Place nuke.uf2 alongside this exe and try again.")
+                "resetFW.uf2 not found.\n"
+                "Place resetFW.uf2 alongside this exe and try again.")
             return
 
         via = getattr(self._rst_btn, '_via', 'bootsel')
@@ -8908,7 +8938,7 @@ class MainMenu:
             confirmed = messagebox.askyesno(
                 "Factory Reset — Are you sure?",
                 "This will COMPLETELY ERASE all firmware and settings on the Pico.\n\n"
-                f"File: {os.path.basename(nuke_path)}\n"
+                f"File: {os.path.basename(resetFW_path)}\n"
                 f"Drive: {drive}\n\n"
                 "The Pico will be wiped. You will need to re-flash firmware afterwards.\n\n"
                 "Continue?",
@@ -8916,7 +8946,7 @@ class MainMenu:
             if not confirmed:
                 return
             try:
-                flash_uf2(nuke_path, drive)
+                flash_uf2(resetFW_path, drive)
                 messagebox.showinfo("Factory Reset Complete",
                     "Pico flash has been wiped.\n\n"
                     "To use the controller again, plug the Pico back in\n"
@@ -8934,10 +8964,10 @@ class MainMenu:
         confirmed = messagebox.askyesno(
             "Factory Reset — Are you sure?",
             "This will COMPLETELY ERASE all firmware and settings on the Pico.\n\n"
-            f"File: {os.path.basename(nuke_path)}\n"
+            f"File: {os.path.basename(resetFW_path)}\n"
             f"Detected via: {source_desc}\n\n"
             "The configurator will switch the Pico to BOOTSEL mode automatically,\n"
-            "then flash nuke.uf2 to wipe the device.\n\n"
+            "then flash resetFW.uf2 to wipe the device.\n\n"
             "You will need to re-flash firmware afterwards.\n\n"
             "Continue?",
             icon="warning")
@@ -8945,10 +8975,10 @@ class MainMenu:
             return
 
         self._rst_btn.set_state("disabled")
-        self._do_factory_reset_via_device(via, nuke_path)
+        self._do_factory_reset_via_device(via, resetFW_path)
 
-    def _do_factory_reset_via_device(self, via, nuke_path):
-        """Run the BOOTSEL → nuke flow in a background thread with a progress dialog."""
+    def _do_factory_reset_via_device(self, via, resetFW_path):
+        """Run the BOOTSEL → resetFW flow in a background thread with a progress dialog."""
 
         dlg = tk.Toplevel(self.root)
         dlg.title("Factory Reset")
@@ -9145,20 +9175,20 @@ class MainMenu:
                     "then run Factory Reset again."))
                 return
 
-            # ── Flash nuke.uf2 ────────────────────────────────────────────
+            # ── Flash resetFW.uf2 ────────────────────────────────────────────
             self.root.after(0, lambda: set_status(
-                f"{step_n}  —  Flashing nuke.uf2…",
+                f"{step_n}  —  Flashing resetFW.uf2…",
                 f"Writing to {drive}"))
             try:
-                flash_uf2(nuke_path, drive)
+                flash_uf2(resetFW_path, drive)
             except Exception as exc:
                 self.root.after(0, lambda e=exc: finish_err("Flash failed.", str(e)))
                 return
 
-            # nuke.uf2 keeps running after file copy — wait for drive to vanish
+            # resetFW.uf2 keeps running after file copy — wait for drive to vanish
             self.root.after(0, lambda: set_status(
                 f"{step_n}  —  Waiting for Pico to restart…",
-                "Nuke in progress — do not unplug"))
+                "ResetFW in progress — do not unplug"))
             deadline = time.time() + 10.0
             while time.time() < deadline:
                 if not find_rpi_rp2_drive():
@@ -9954,8 +9984,21 @@ class App:
             sq.create_rectangle(0,  r,  W,   H-r, fill=fc, outline=fc)
             sq.pack(side="left", padx=(0, 5))
         else:
-            # Spacer so non-fret rows align with fret rows (icon width + padx)
-            tk.Frame(row, bg=BG_CARD, width=19, height=1).pack(side="left")
+            _BUTTON_ICONS = {
+                "strum_up":   "^",
+                "strum_down": "v",
+                "start":      "+",
+                "select":     "-",
+                "guide":      "Ø",
+            }
+            icon_char = _BUTTON_ICONS.get(key)
+            if icon_char:
+                tk.Label(row, text=icon_char, bg=BG_CARD, fg="white",
+                         font=(FONT_UI, 9, "bold"), width=2,
+                         anchor="center").pack(side="left", padx=(0, 5))
+            else:
+                # Spacer so other rows align with fret rows (icon width + padx)
+                tk.Frame(row, bg=BG_CARD, width=19, height=1).pack(side="left")
 
         # Fixed character-width label keeps Pin:/dropdown aligned across all rows
         tk.Label(row, text=name, bg=BG_CARD, fg=TEXT, width=14,
@@ -12750,12 +12793,31 @@ class App:
             if not uf2:
                 return
 
+
+        # Send BOOTSEL now if in config mode — before hide() reboots to play mode.
+        # hide() checks self.pico.connected; if we disconnect first it skips reboot.
+        _booting_from_config = False
+        if self.pico.connected:
+            try:
+                self.pico.bootsel()
+                self.pico.disconnect()
+                _booting_from_config = True
+            except Exception:
+                pass
+
+        # Go to main menu immediately and show flash status popup
+        if self._on_back:
+            self._on_back()
+        _flash_popup, _close_flash_popup = _make_flash_popup(self.root)
         def _worker():
             # ── Step 1: get to BOOTSEL drive ────────────────────────────
             drive = find_rpi_rp2_drive()
 
             if not drive:
-                if self.pico.connected:
+                if _booting_from_config:
+                    # Already sent BOOTSEL before navigating away — wait for drive
+                    drive = self._wait_for_drive(12.0)
+                elif self.pico.connected:
                     # Config mode → send BOOTSEL directly
                     self.root.after(0, lambda: self._set_status(
                         "   Entering BOOTSEL mode...", ACCENT_ORANGE))
@@ -12872,7 +12934,12 @@ class App:
                     messagebox.showerror("Flash Error", e)
                 ])
 
-        threading.Thread(target=_worker, daemon=True).start()
+        def _worker_wrapper():
+            try:
+                _worker()
+            finally:
+                self.root.after(0, _close_flash_popup)
+        threading.Thread(target=_worker_wrapper, daemon=True).start()
 
     def _wait_for_drive(self, timeout=10.0):
         deadline = time.time() + timeout
@@ -15124,12 +15191,31 @@ class DrumApp:
             if not uf2:
                 return
 
+
+        # Send BOOTSEL now if in config mode — before hide() reboots to play mode.
+        # hide() checks self.pico.connected; if we disconnect first it skips reboot.
+        _booting_from_config = False
+        if self.pico.connected:
+            try:
+                self.pico.bootsel()
+                self.pico.disconnect()
+                _booting_from_config = True
+            except Exception:
+                pass
+
+        # Go to main menu immediately and show flash status popup
+        if self._on_back:
+            self._on_back()
+        _flash_popup, _close_flash_popup = _make_flash_popup(self.root)
         def _worker():
             # ── Step 1: get to BOOTSEL drive ────────────────────────────
             drive = find_rpi_rp2_drive()
 
             if not drive:
-                if self.pico.connected:
+                if _booting_from_config:
+                    # Already sent BOOTSEL before navigating away — wait for drive
+                    drive = self._wait_for_drive(12.0)
+                elif self.pico.connected:
                     # Config mode → send BOOTSEL directly
                     self.root.after(0, lambda: self._set_status(
                         "   Entering BOOTSEL mode...", ACCENT_ORANGE))
@@ -15244,7 +15330,12 @@ class DrumApp:
                     messagebox.showerror("Flash Error", e)
                 ])
 
-        threading.Thread(target=_worker, daemon=True).start()
+        def _worker_wrapper():
+            try:
+                _worker()
+            finally:
+                self.root.after(0, _close_flash_popup)
+        threading.Thread(target=_worker_wrapper, daemon=True).start()
 
     # ── Advanced > Enter BOOTSEL Mode ───────────────────────────────
 
@@ -16792,11 +16883,30 @@ class PedalApp:
             if not uf2:
                 return
 
+
+        # Send BOOTSEL now if in config mode — before hide() reboots to play mode.
+        # hide() checks self.pico.connected; if we disconnect first it skips reboot.
+        _booting_from_config = False
+        if self.pico.connected:
+            try:
+                self.pico.bootsel()
+                self.pico.disconnect()
+                _booting_from_config = True
+            except Exception:
+                pass
+
+        # Go to main menu immediately and show flash status popup
+        if self._on_back:
+            self._on_back()
+        _flash_popup, _close_flash_popup = _make_flash_popup(self.root)
         def _worker():
             drive = find_rpi_rp2_drive()
 
             if not drive:
-                if self.pico.connected:
+                if _booting_from_config:
+                    # Already sent BOOTSEL before navigating away — wait for drive
+                    drive = self._wait_for_drive(12.0)
+                elif self.pico.connected:
                     self.root.after(0, lambda: self._set_status(
                         "   Entering BOOTSEL mode...", ACCENT_ORANGE))
                     try:
@@ -16907,7 +17017,12 @@ class PedalApp:
                     messagebox.showerror("Flash Error", e)
                 ])
 
-        threading.Thread(target=_worker, daemon=True).start()
+        def _worker_wrapper():
+            try:
+                _worker()
+            finally:
+                self.root.after(0, _close_flash_popup)
+        threading.Thread(target=_worker_wrapper, daemon=True).start()
 
     # ── Advanced > Enter BOOTSEL Mode ───────────────────────────────
 
@@ -18343,11 +18458,30 @@ class RetroApp:
             if not uf2:
                 return
 
+
+        # Send BOOTSEL now if in config mode — before hide() reboots to play mode.
+        # hide() checks self.pico.connected; if we disconnect first it skips reboot.
+        _booting_from_config = False
+        if self.pico.connected:
+            try:
+                self.pico.bootsel()
+                self.pico.disconnect()
+                _booting_from_config = True
+            except Exception:
+                pass
+
+        # Go to main menu immediately and show flash status popup
+        if self._on_back:
+            self._on_back()
+        _flash_popup, _close_flash_popup = _make_flash_popup(self.root)
         def _worker():
             drive = find_rpi_rp2_drive()
 
             if not drive:
-                if self.pico.connected:
+                if _booting_from_config:
+                    # Already sent BOOTSEL before navigating away — wait for drive
+                    drive = self._wait_for_drive(12.0)
+                elif self.pico.connected:
                     self.root.after(0, lambda: self._set_status(
                         "   Entering BOOTSEL mode...", ACCENT_ORANGE))
                     try:
@@ -18459,7 +18593,12 @@ class RetroApp:
                     messagebox.showerror("Flash Error", e)
                 ])
 
-        threading.Thread(target=_worker, daemon=True).start()
+        def _worker_wrapper():
+            try:
+                _worker()
+            finally:
+                self.root.after(0, _close_flash_popup)
+        threading.Thread(target=_worker_wrapper, daemon=True).start()
 
     # ── Advanced > Enter BOOTSEL Mode ───────────────────────────────
 
@@ -19581,11 +19720,30 @@ class KeyMacroApp:
             if not uf2:
                 return
 
+
+        # Send BOOTSEL now if in config mode — before hide() reboots to play mode.
+        # hide() checks self.pico.connected; if we disconnect first it skips reboot.
+        _booting_from_config = False
+        if self.pico.connected:
+            try:
+                self.pico.bootsel()
+                self.pico.disconnect()
+                _booting_from_config = True
+            except Exception:
+                pass
+
+        # Go to main menu immediately and show flash status popup
+        if self._on_back:
+            self._on_back()
+        _flash_popup, _close_flash_popup = _make_flash_popup(self.root)
         def _worker():
             drive = find_rpi_rp2_drive()
 
             if not drive:
-                if self.pico.connected:
+                if _booting_from_config:
+                    # Already sent BOOTSEL before navigating away — wait for drive
+                    drive = self._wait_for_drive(12.0)
+                elif self.pico.connected:
                     self.root.after(0, lambda: self._set_status(
                         "   Entering BOOTSEL mode...", ACCENT_ORANGE))
                     try:
@@ -19641,7 +19799,12 @@ class KeyMacroApp:
                     messagebox.showerror("Flash Error", e)
                 ])
 
-        threading.Thread(target=_worker, daemon=True).start()
+        def _worker_wrapper():
+            try:
+                _worker()
+            finally:
+                self.root.after(0, _close_flash_popup)
+        threading.Thread(target=_worker_wrapper, daemon=True).start()
 
     # ── Advanced > Enter BOOTSEL Mode ───────────────────────────────
 
@@ -20057,21 +20220,37 @@ def main():
 
     root.title("OCC - Open Controller Configurator")
 
-    # ── Unified window geometry — set once, never changed by screens ──
-    w, h = 1180, 820
-    root.update_idletasks()   # ensure Tk has the real screen dimensions
-    sw = root.winfo_screenwidth()
-    sh = root.winfo_screenheight()
-    x = (sw - w) // 2
-    y = (sh - h) // 2
-    root.geometry(f"{w}x{h}+{x}+{y}")
-    root.resizable(False, False)   # fixed size on all axes
-
+    # ── DPI awareness + resolution scaling ───────────────────────────
+    # Must be set before querying screen size so winfo_screenheight()
+    # returns the true physical pixel count on high-DPI displays.
     if sys.platform == "win32":
         try:
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
         except Exception:
             pass
+
+    root.update_idletasks()   # ensure Tk has real screen dimensions
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
+
+    # Baseline is 1080p tall.  Clamp to 1.0 minimum so 1080p is unchanged.
+    _scale = max(1.0, sh / 1080)
+
+    # Tk's built-in scaling multiplier handles ALL font sizes automatically.
+    # Default Tk scaling is 1.0 at 96 DPI; we multiply by our factor.
+    _tk_base_scale = root.tk.call('tk', 'scaling')
+    root.tk.call('tk', 'scaling', _tk_base_scale * _scale)
+
+    # ── Unified window geometry — set once, never changed by screens ──
+    def _S(n):
+        """Scale a pixel dimension to the current display resolution."""
+        return max(1, round(n * _scale))
+
+    w, h = _S(1180), _S(820)
+    x = (sw - w) // 2
+    y = (sh - h) // 2
+    root.geometry(f"{w}x{h}+{x}+{y}")
+    root.resizable(False, False)   # fixed size on all axes
 
     # Apply custom .ico if one exists alongside the exe / script
     _ico = _find_icon()
@@ -20083,6 +20262,24 @@ def main():
 
     # Play startup sound immediately (async, non-blocking)
     play_startup_sound()
+
+    # ── Patch pixel-dimension globals to match display scale ─────────
+    # Only module-level constants used as pixel sizes need adjusting.
+    # Font sizes are handled automatically by tk.scaling() above.
+    # Character-width args (Label width=, Entry width=, etc.) are NOT touched.
+    if _scale > 1.0:
+        global _DD_HEIGHT, _DD_CHAR_PX, _DD_PAD
+        _DD_HEIGHT  = _S(30)
+        _DD_CHAR_PX = _S(7)
+        _DD_PAD     = _S(10)
+
+        FlashFirmwareScreen.TILE_IMG_H = _S(140)
+        FlashFirmwareScreen.TILE_LBL_H = _S(28)
+        FlashFirmwareScreen.TILE_PAD   = _S(10)
+
+        global _BTN_DISP_W, _BTN_DISP_H
+        _BTN_DISP_W = _S(90)
+        _BTN_DISP_H = _S(70)
 
     # ── Build lightweight screens first ─────────────────────────────
     # MainMenu, EasyConfig and FlashScreen are fast to construct.

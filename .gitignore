@@ -7,6 +7,7 @@ pushtorelease.bat
 OCC - Configurator.exe
 Z GitHub Shortcut.url
 Z Push-SRC.bat
+New Version Changes.txt
 
 # GSD planning & Claude internals
 .planning/

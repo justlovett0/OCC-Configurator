@@ -90,6 +90,7 @@ typedef struct {
 static debounce_state_t g_debounce[BTN_IDX_COUNT];
 static debounce_state_t g_debounce_tilt;
 static debounce_state_t g_debounce_whammy;
+static uint32_t g_start_hold_start_us = 0;  // tracks when START was first pressed
 
 // Track which inputs are currently pressed (for LED driver)
 static uint16_t g_pressed_mask;
@@ -400,6 +401,16 @@ static void read_all_inputs(input_state_t *state) {
     for (int i = 0; i < BTN_IDX_COUNT; i++) {
         bool raw = read_pin(g_config.pin_buttons[i]);
         bool is_pressed = debounce(&g_debounce[i], raw, now_us, debounce_us);
+        if (i == BTN_IDX_START && g_config.start_hold_enabled) {
+            if (raw) {
+                if (g_start_hold_start_us == 0)
+                    g_start_hold_start_us = now_us;
+                if ((now_us - g_start_hold_start_us) < (uint32_t)g_config.start_hold_ms * 1000u)
+                    is_pressed = false;
+            } else {
+                g_start_hold_start_us = 0;
+            }
+        }
         if (is_pressed) {
             buttons |= button_masks[i];
             pressed |= (1u << i);

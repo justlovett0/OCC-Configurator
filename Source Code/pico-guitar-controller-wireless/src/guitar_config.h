@@ -14,6 +14,7 @@
  *      controller defaults to Dongle mode or Bluetooth HID mode when no USB
  *      host is detected. Changed DEVICE_TYPE to "guitar_combined".
  * v14: Added per-effect LED speed fields (loop_speed_ms, breathe_speed_ms, wave_speed_ms).
+ * v15: Added start_hold_enabled / start_hold_ms — optional hold-to-activate for START button.
  */
 
 #ifndef _GUITAR_CONFIG_H_
@@ -24,7 +25,7 @@
 #include "apa102_leds.h"
 
 #define CONFIG_MAGIC              0x47554954  // "GUIT"
-#define CONFIG_VERSION            14
+#define CONFIG_VERSION            15
 #define DEVICE_NAME_MAX           31          // + null terminator = 32 bytes
 
 // ── Device type identifier (sent as DEVTYPE: in GET_CONFIG response) ──
@@ -129,6 +130,10 @@ typedef struct __attribute__((packed)) {
     // While in Dongle mode, holding GUIDE for 3 seconds reboots into BT HID
     // mode as a one-time override (does not change this stored setting).
     uint8_t  wireless_default_mode;
+
+    // ── START button hold-to-activate ──
+    uint8_t  start_hold_enabled;    // 1 = require hold before START registers
+    uint16_t start_hold_ms;         // hold duration in ms (default 500)
 
     uint32_t checksum;
 } guitar_config_t;

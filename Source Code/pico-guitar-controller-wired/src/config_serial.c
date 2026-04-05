@@ -225,8 +225,12 @@ static void send_config(const guitar_config_t *config) {
                     (unsigned)config->joy_deadzone);
     pos += snprintf(buf + pos, sizeof(buf) - pos, "device_name=%s,",
                     config->device_name);
-    pos += snprintf(buf + pos, sizeof(buf) - pos, "ema_alpha=%u",
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "ema_alpha=%u,",
                     (unsigned)config->ema_alpha);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "start_hold_enabled=%d,",
+                    (int)config->start_hold_enabled);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "start_hold_ms=%u",
+                    (unsigned)config->start_hold_ms);
     serial_writeln(buf);
 
     // Second line: LED basic config
@@ -624,6 +628,18 @@ static bool handle_set(guitar_config_t *config, const char *kv_str) {
         int v = atoi(val);
         if (v < 0 || v > 255) { serial_writeln("ERR:0-255"); return false; }
         config->ema_alpha = (uint8_t)v;
+        serial_writeln("OK"); return true;
+    }
+
+    // START button hold-to-activate
+    if (strcmp(key, "start_hold_enabled") == 0) {
+        config->start_hold_enabled = (atoi(val) != 0) ? 1 : 0;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "start_hold_ms") == 0) {
+        int v = atoi(val);
+        if (v < 0 || v > 5000) { serial_writeln("ERR:0-5000"); return false; }
+        config->start_hold_ms = (uint16_t)v;
         serial_writeln("OK"); return true;
     }
 

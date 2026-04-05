@@ -217,7 +217,7 @@ static void run_scan(void) {
             prev[pin] = !gpio_get((uint)pin);
     }
 
-    serial_writeln("SCAN:started");
+    serial_writeln("OK");
 
     char line[32];
     int  line_pos = 0;

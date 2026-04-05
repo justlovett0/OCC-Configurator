@@ -264,7 +264,7 @@ static void run_scan(pedal_config_t *config) {
             prev_state[pin] = !gpio_get(pin);
     }
 
-    serial_writeln("SCAN:started");
+    serial_writeln("OK");
 
     // Scan loop — report pin changes until STOP received
     char line[64];
@@ -367,12 +367,12 @@ void config_mode_main(pedal_config_t *config) {
     char line[256];
     int  line_pos = 0;
 
-    // Connection timeout — reboot if no data for 30s
-    uint32_t last_activity_ms = to_ms_since_boot(get_absolute_time());
+    // Pre-connection timeout — reboot if host never connects within 30s
+    uint32_t connect_start_ms = to_ms_since_boot(get_absolute_time());
     const uint32_t CONNECT_TIMEOUT_MS = 30000;
-    // Disconnect timeout — reboot if CDC disconnects for 5s
+    // Disconnect timeout — reboot if CDC drops for 5s after being connected
     uint32_t disconnect_start_ms = 0;
-    bool     was_connected = true;
+    bool     was_connected = false;
     const uint32_t DISCONNECT_TIMEOUT_MS = 5000;
 
     while (true) {
@@ -380,32 +380,31 @@ void config_mode_main(pedal_config_t *config) {
 
         uint32_t now_ms = to_ms_since_boot(get_absolute_time());
 
-        // Handle CDC disconnect
+        // Handle CDC disconnect / not-yet-connected
         if (!tud_cdc_connected()) {
-            if (was_connected) {
-                disconnect_start_ms = now_ms;
-                was_connected = false;
-            } else if ((now_ms - disconnect_start_ms) >= DISCONNECT_TIMEOUT_MS) {
-                // Disconnected too long — reboot to play mode
-                watchdog_reboot(0, 0, 10);
-                while (1) { tight_loop_contents(); }
+            if (!was_connected) {
+                // Never connected — boot back to play mode after timeout
+                if ((now_ms - connect_start_ms) > CONNECT_TIMEOUT_MS) {
+                    watchdog_reboot(0, 0, 10);
+                    while (1) { tight_loop_contents(); }
+                }
+            } else {
+                // Was connected, now dropped — short grace period then reboot
+                if (disconnect_start_ms == 0) disconnect_start_ms = now_ms;
+                else if ((now_ms - disconnect_start_ms) > DISCONNECT_TIMEOUT_MS) {
+                    watchdog_reboot(0, 0, 10);
+                    while (1) { tight_loop_contents(); }
+                }
             }
             continue;
         }
         was_connected = true;
-
-        // Connection activity timeout
-        if ((now_ms - last_activity_ms) >= CONNECT_TIMEOUT_MS) {
-            watchdog_reboot(0, 0, 10);
-            while (1) { tight_loop_contents(); }
-        }
+        disconnect_start_ms = 0;
 
         if (!tud_cdc_available()) continue;
 
         int c = tud_cdc_read_char();
         if (c < 0) continue;
-
-        last_activity_ms = now_ms;
 
         if (c == '\r' || c == '\n') {
             if (line_pos == 0) continue;

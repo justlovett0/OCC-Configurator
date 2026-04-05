@@ -23,7 +23,7 @@ dates = {}
 for f in os.listdir('.'):
     if not f.lower().endswith('.uf2'):
         continue
-    if f.lower() == 'nuke.uf2':
+    if f.lower() == 'resetfw.uf2':
         continue
 
     sidecar = f + '.date'
