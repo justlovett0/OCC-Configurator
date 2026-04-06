@@ -3,12 +3,12 @@
 </p>
 
 <p align="center">
-  Pico Music &amp; Conventional Controller Firmware with Windows Configurator
+  Pico Controller Firmware with a Configurator Application
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/github/license/justlovett0/OCC-Configurator" />
-  <img src="https://img.shields.io/github/v/release/justlovett0/OCC-Configurator" />
+  <img src="https://img.shields.io/github/v/tag/justlovett0/OCC-Configurator" />
 </p>
 
 <p align="center">
@@ -29,7 +29,7 @@
 
 ## Links
 
-[Releases](https://github.com/justlovett0/OCC-Configurator/releases) | [Source Code](https://github.com/justlovett0/OCC-Configurator)
+[Download OCC EXE](https://github.com/justlovett0/OCC-Configurator/releases) | [Source Code](https://github.com/justlovett0/OCC-Configurator/commits/master/)
 
 ## Features
 
@@ -51,14 +51,14 @@
 
 ## Firmware Variants
 
-| Firmware | Device Type | Protocol | Wireless | Config Mode | Multi-Controller |
-|----------|-------------|----------|----------|-------------|------------------|
-| Wired Guitar Controller | Guitar (XInput subtype 0x07) | USB XInput | No | CDC Serial | No |
-| Wired Drum Controller | Drum Kit (XInput subtype 0x08) | USB XInput | No | CDC Serial | No |
-| Wireless Guitar Controller | Guitar (XInput subtype 0x07) | USB XInput + BLE HID | Yes — BLE HID or Dongle | CDC Serial | No |
-| Wireless Dongle | Dongle (XInput subtype 0x0B) | USB XInput (relay) | Yes — BLE central | None | No (1 controller) |
-| Wireless Dongle 4-Channel | Dongle (XInput subtype 0x0B) | USB XInput (relay) | Yes — BLE central | None | Yes (up to 4) |
-| Keyboard Macro Pad | USB HID Keyboard | USB HID | No | CDC Serial (always-on) | No |
+| Firmware | Device Type | Protocol | Wireless | Config Mode |
+|----------|-------------|----------|----------|-------------|
+| Wired Guitar Controller | Guitar (XInput subtype 0x07) | USB XInput | No | CDC Serial |
+| Wired Drum Controller | Drum Kit (XInput subtype 0x08) | USB XInput | No | CDC Serial |
+| Wireless Guitar Controller | Guitar (XInput subtype 0x07) | USB XInput + BLE HID | Yes — BLE HID or Dongle | CDC Serial |
+| Wireless Dongle | Dongle (XInput subtype 0x0B) | USB XInput (relay) | Yes — BLE central | None |
+| Wireless Dongle 4-Channel | Dongle (XInput subtype 0x0B) | USB XInput (relay) | Yes — BLE central | None |
+| Keyboard Macro Pad | USB HID Keyboard | USB HID | No | CDC Serial (always-on) |
 
 ## Getting Started
 
@@ -77,7 +77,7 @@ For new users, I recommend you use the **Easy Config** wizard for guided step-by
 
 Requires: Pico SDK, CMake, ARM GCC toolchain, Ninja.
 
-Each firmware folder contains a `build.bat` that builds that variant individually. To build all five variants and package them into the configurator EXE in one step:
+Each firmware folder contains a `build.bat` that builds that variant individually. To build all firmware variants and package them into the configurator EXE in one step:
 
 ```
 Source Code\build_all_and_package.bat
@@ -85,7 +85,7 @@ Source Code\build_all_and_package.bat
 
 ### Configurator
 
-Requires: Python 3.8+, pyserial (`pip install -r requirements.txt`).
+Requires: Python 3.8+, pyserial.
 
 To build the standalone EXE:
 
