@@ -12,6 +12,8 @@
 #include <stdio.h>
 
 bool g_config_mode = false;
+bool g_hid_mode    = false;
+bool g_kb_mode     = false;
 
 // Custom device name — set from config before tusb_init()
 const char *g_device_name = "Guitar Controller";
@@ -54,8 +56,187 @@ static const tusb_desc_device_t cdc_device_desc = {
     .bNumConfigurations = 1,
 };
 
+// ====================================================================
+//  HID MODE DESCRIPTORS (PS3 / macOS / Linux)
+//
+//  27-byte report mimics PS3 DualShock 2 layout used by GH Les Paul:
+//    Byte 0: status (constant 0x00)
+//    Byte 1: buttons 1-8  (select, L3, R3, start, up, right, down, left)
+//    Byte 2: buttons 9-16 (L2, R2, L1, R1, tri, circle, cross, square)
+//    Bytes 3-6: LX, LY, RX, RY axes (0x80 = center)
+//    Bytes 7-26: reserved
+// ====================================================================
+
+static const tusb_desc_device_t hid_device_desc = {
+    .bLength            = sizeof(tusb_desc_device_t),
+    .bDescriptorType    = TUSB_DESC_DEVICE,
+    .bcdUSB             = 0x0200,
+    .bDeviceClass       = 0x00,          // defined at interface level
+    .bDeviceSubClass    = 0x00,
+    .bDeviceProtocol    = 0x00,
+    .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
+    .idVendor           = HID_MODE_VID,
+    .idProduct          = HID_MODE_PID,
+    .bcdDevice          = 0x0100,
+    .iManufacturer      = 1,
+    .iProduct           = 2,
+    .iSerialNumber      = 3,
+    .bNumConfigurations = 1,
+};
+
+static const uint8_t hid_report_desc[] = {
+    0x05, 0x01,           // Usage Page (Generic Desktop)
+    0x09, 0x05,           // Usage (Game Pad)
+    0xA1, 0x01,           // Collection (Application)
+
+    // Byte 0: status — constant padding
+    0x15, 0x00,           //   Logical Minimum (0)
+    0x26, 0xFF, 0x00,     //   Logical Maximum (255)
+    0x75, 0x08,           //   Report Size (8)
+    0x95, 0x01,           //   Report Count (1)
+    0x81, 0x03,           //   Input (Const, Variable, Absolute)
+
+    // Bytes 1-2: 16 buttons (select/L3/R3/start/up/right/down/left, L2/R2/L1/R1/tri/circle/cross/square)
+    0x05, 0x09,           //   Usage Page (Button)
+    0x19, 0x01,           //   Usage Minimum (Button 1)
+    0x29, 0x10,           //   Usage Maximum (Button 16)
+    0x15, 0x00,           //   Logical Minimum (0)
+    0x25, 0x01,           //   Logical Maximum (1)
+    0x75, 0x01,           //   Report Size (1)
+    0x95, 0x10,           //   Report Count (16)
+    0x81, 0x02,           //   Input (Data, Variable, Absolute)
+
+    // Bytes 3-6: 4 axes (LX, LY, RX, RY — RY = whammy)
+    0x05, 0x01,           //   Usage Page (Generic Desktop)
+    0x09, 0x30,           //   Usage (X)
+    0x09, 0x31,           //   Usage (Y)
+    0x09, 0x32,           //   Usage (Z)
+    0x09, 0x35,           //   Usage (Rz)
+    0x15, 0x00,           //   Logical Minimum (0)
+    0x26, 0xFF, 0x00,     //   Logical Maximum (255)
+    0x75, 0x08,           //   Report Size (8)
+    0x95, 0x04,           //   Report Count (4)
+    0x81, 0x02,           //   Input (Data, Variable, Absolute)
+
+    // Bytes 7-26: 20 reserved bytes
+    0x75, 0x08,           //   Report Size (8)
+    0x95, 0x14,           //   Report Count (20)
+    0x81, 0x03,           //   Input (Const, Variable, Absolute)
+
+    0xC0,                 // End Collection
+};
+
+#define HID_DESC_CONFIG_TOTAL  34
+
+static const uint8_t hid_config_desc[] = {
+    // Configuration Descriptor (9)
+    0x09, TUSB_DESC_CONFIGURATION,
+    HID_DESC_CONFIG_TOTAL, 0x00,  // wTotalLength = 34
+    0x01,                          // bNumInterfaces = 1
+    0x01,                          // bConfigurationValue = 1
+    0x00,                          // iConfiguration
+    0x80, 0xFA,                    // bus powered, 500 mA
+
+    // Interface Descriptor (9)
+    0x09, TUSB_DESC_INTERFACE,
+    0x00,                          // bInterfaceNumber = 0
+    0x00,                          // bAlternateSetting = 0
+    0x01,                          // bNumEndpoints = 1 (IN only)
+    TUSB_CLASS_HID,                // 0x03
+    0x00,                          // bInterfaceSubClass
+    0x00,                          // bInterfaceProtocol
+    0x00,                          // iInterface
+
+    // HID Descriptor (9)
+    0x09, 0x21,                    // bLength=9, bDescriptorType=HID
+    0x11, 0x01,                    // bcdHID = 1.11
+    0x00,                          // bCountryCode
+    0x01,                          // bNumDescriptors = 1
+    0x22,                          // bDescriptorType = Report
+    sizeof(hid_report_desc), 0x00, // wDescriptorLength
+
+    // Endpoint IN (7)
+    0x07, TUSB_DESC_ENDPOINT,
+    0x81,                          // EP1 IN
+    TUSB_XFER_INTERRUPT,           // interrupt transfer
+    0x40, 0x00,                    // wMaxPacketSize = 64
+    0x08,                          // bInterval = 8ms
+};
+
+// ====================================================================
+//  KEYBOARD MODE DESCRIPTORS (Fortnite Festival — orange held at boot)
+//
+//  Standard HID boot keyboard. OS identifies it by class/protocol,
+//  not VID/PID — we use OCC VID with a dedicated keyboard PID.
+// ====================================================================
+
+static const tusb_desc_device_t hid_kb_device_desc = {
+    .bLength            = sizeof(tusb_desc_device_t),
+    .bDescriptorType    = TUSB_DESC_DEVICE,
+    .bcdUSB             = 0x0200,
+    .bDeviceClass       = 0x00,          // defined at interface level
+    .bDeviceSubClass    = 0x00,
+    .bDeviceProtocol    = 0x00,
+    .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
+    .idVendor           = 0x2E8A,        // OCC VID
+    .idProduct          = 0xF012,        // keyboard mode PID
+    .bcdDevice          = 0x0100,
+    .iManufacturer      = 1,
+    .iProduct           = 2,
+    .iSerialNumber      = 3,
+    .bNumConfigurations = 1,
+};
+
+static const uint8_t hid_kb_report_desc[] = { TUD_HID_REPORT_DESC_KEYBOARD() };
+
+#define HID_KB_DESC_CONFIG_TOTAL  34
+
+static const uint8_t hid_kb_config_desc[] = {
+    // Configuration Descriptor (9)
+    0x09, TUSB_DESC_CONFIGURATION,
+    HID_KB_DESC_CONFIG_TOTAL, 0x00,
+    0x01,                          // bNumInterfaces = 1
+    0x01,                          // bConfigurationValue = 1
+    0x00,                          // iConfiguration
+    0x80, 0xFA,                    // bus powered, 500 mA
+
+    // Interface Descriptor (9)
+    0x09, TUSB_DESC_INTERFACE,
+    0x00,                          // bInterfaceNumber = 0
+    0x00,                          // bAlternateSetting = 0
+    0x01,                          // bNumEndpoints = 1 (IN only)
+    TUSB_CLASS_HID,                // 0x03
+    0x01,                          // bInterfaceSubClass = Boot
+    0x01,                          // bInterfaceProtocol = Keyboard
+    0x00,                          // iInterface
+
+    // HID Descriptor (9)
+    0x09, 0x21,                    // bLength=9, bDescriptorType=HID
+    0x11, 0x01,                    // bcdHID = 1.11
+    0x00,                          // bCountryCode
+    0x01,                          // bNumDescriptors = 1
+    0x22,                          // bDescriptorType = Report
+    sizeof(hid_kb_report_desc), 0x00,
+
+    // Endpoint IN (7)
+    0x07, TUSB_DESC_ENDPOINT,
+    0x81,                          // EP1 IN
+    TUSB_XFER_INTERRUPT,
+    0x08, 0x00,                    // wMaxPacketSize = 8 (standard keyboard report)
+    0x01,                          // bInterval = 1ms (low latency for gameplay)
+};
+
+uint8_t const* tud_hid_descriptor_report_cb(uint8_t instance) {
+    (void)instance;
+    if (g_kb_mode) return hid_kb_report_desc;
+    return hid_report_desc;   // PS3 gamepad
+}
+
 uint8_t const* tud_descriptor_device_cb(void) {
-    return (uint8_t const *)(g_config_mode ? &cdc_device_desc : &xinput_device_desc);
+    if (g_config_mode) return (uint8_t const *)&cdc_device_desc;
+    if (g_kb_mode)     return (uint8_t const *)&hid_kb_device_desc;
+    if (g_hid_mode)    return (uint8_t const *)&hid_device_desc;
+    return (uint8_t const *)&xinput_device_desc;
 }
 
 // ====================================================================
@@ -124,7 +305,10 @@ static const uint8_t cdc_config_desc[] = {
 
 uint8_t const* tud_descriptor_configuration_cb(uint8_t index) {
     (void)index;
-    return g_config_mode ? cdc_config_desc : xinput_config_desc;
+    if (g_config_mode) return cdc_config_desc;
+    if (g_kb_mode)     return hid_kb_config_desc;
+    if (g_hid_mode)    return hid_config_desc;
+    return xinput_config_desc;
 }
 
 // ====================================================================
@@ -154,7 +338,7 @@ uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
         case 1:  return _make_string_desc(g_device_name);
         case 2:  return _make_string_desc(g_config_mode
                         ? "Guitar Controller Config Mode"
-                        : g_device_name);
+                        : g_device_name);   // HID mode uses same device name as XInput
         case 3: {
             static char serial[32];
             pico_unique_board_id_t id;

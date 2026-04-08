@@ -418,6 +418,39 @@ void apa102_all_off(const led_config_t *cfg) {
     spi_write_blocking(LED_SPI_INST, buf, pos);
 }
 
+void apa102_flash_all_color(const led_config_t *cfg, uint8_t r, uint8_t g, uint8_t b) {
+    if (!spi_initialized) return;
+    uint8_t count = cfg->count;
+    if (count == 0) return;
+    if (count > MAX_LEDS) count = MAX_LEDS;
+
+    wait_for_dma();
+
+    // Temp config: same count/brightness as user's config, all LEDs set to (r,g,b)
+    led_config_t tmp;
+    memcpy(&tmp, cfg, sizeof(led_config_t));
+    for (int i = 0; i < count; i++) {
+        tmp.colors[i].r = r;
+        tmp.colors[i].g = g;
+        tmp.colors[i].b = b;
+    }
+
+    uint8_t brightness[MAX_LEDS];
+    uint8_t brt = (cfg->base_brightness > 0) ? cfg->base_brightness : 8;
+    for (int i = 0; i < MAX_LEDS; i++)
+        brightness[i] = (i < count) ? brt : 0;
+
+    for (int flash_idx = 0; flash_idx < 3; flash_idx++) {
+        uint16_t len = build_frame(led_buf[0], &tmp, brightness);
+        spi_write_blocking(LED_SPI_INST, led_buf[0], len);
+        sleep_ms(800);
+        apa102_all_off(cfg);
+        if (flash_idx < 2) {
+            sleep_ms(800);
+        }
+    }
+}
+
 void apa102_flash_led(const led_config_t *cfg, uint8_t led_idx, uint8_t blink_count) {
     uint8_t count = cfg->count;
     if (count == 0) return;

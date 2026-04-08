@@ -1,0 +1,19 @@
+<Project Sdk="WixToolset.Sdk/6.0.2">
+  <PropertyGroup>
+    <OutputType>Bundle</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputName>OCCBridgeSetup</OutputName>
+    <DefineConstants>
+      ProductVersion=$(Version);
+      OccBridgeMsi=$(OccBridgeMsi);
+      ViGEmInstaller=$(ViGEmInstaller);
+      HidHideInstaller=$(HidHideInstaller);
+      OccBridgeIcon=$(MSBuildProjectDirectory)\..\OCCBridgeSquare.ico
+    </DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Bal.wixext" Version="6.0.2" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" />
+  </ItemGroup>
+</Project>

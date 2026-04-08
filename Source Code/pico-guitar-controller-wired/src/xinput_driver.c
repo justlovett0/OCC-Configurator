@@ -30,6 +30,7 @@ static struct {
     uint8_t ep_out;
     bool    mounted;
     bool    tx_busy;
+    bool    led_report_seen;   // set when Windows/Linux XInput LED OUT report arrives
     uint8_t out_buf[XINPUT_EP_MAX_PACKET];
 } _xinput;
 
@@ -165,6 +166,15 @@ static bool xinput_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result
         // *** Check for magic vibration sequence ***
         check_magic(_xinput.out_buf, xferred_len);
 
+        // *** Detect XInput LED report (byte[0]=0x01, byte[1]=0x03) ***
+        // Windows and Linux xpad both send this within ~500ms of enumeration.
+        // PS3 never sends it — absence signals non-XInput host.
+        if (xferred_len >= 2 &&
+            _xinput.out_buf[0] == 0x01 &&
+            _xinput.out_buf[1] == 0x03) {
+            _xinput.led_report_seen = true;
+        }
+
         // Rearm OUT endpoint
         usbd_edpt_xfer(rhport, _xinput.ep_out, _xinput.out_buf, sizeof(_xinput.out_buf));
     }
@@ -220,4 +230,8 @@ bool xinput_magic_detected(void) {
         return true;
     }
     return false;
+}
+
+bool xinput_led_report_seen(void) {
+    return _xinput.led_report_seen;
 }

@@ -772,6 +772,13 @@ class KeyMacroApp:
             if not uf2:
                 return
 
+        # Warn before flashing wireless firmware — prevents accidental wireless flash on non-wireless Picos
+        if os.path.basename(uf2).startswith("Wireless_"):
+            if not messagebox.askyesno(
+                "Firmware Mismatch",
+                "Wired firmware is currently installed.\n\n"
+                "Are you sure you want to install wireless firmware?"):
+                return
 
         # Send BOOTSEL now if in config mode — before hide() reboots to play mode.
         # hide() checks self.pico.connected; if we disconnect first it skips reboot.

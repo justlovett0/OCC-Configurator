@@ -17,6 +17,10 @@ bool xinput_ready(void);
 // Calling this clears the flag.
 bool xinput_magic_detected(void);
 
+// Returns true if the Windows/Linux XInput LED control report (byte[0]=0x01)
+// was received. Signals that the host speaks XInput — used for PS3 auto-detection.
+bool xinput_led_report_seen(void);
+
 //--------------------------------------------------------------------
 // Diagnostics
 //--------------------------------------------------------------------

@@ -12,6 +12,8 @@
 #include <stdio.h>
 
 bool g_config_mode = false;
+bool g_hid_mode    = false;
+bool g_kb_mode     = false;
 
 // Custom device name — set from config before tusb_init()
 const char *g_device_name = "Guitar Controller";
@@ -54,8 +56,140 @@ static const tusb_desc_device_t cdc_device_desc = {
     .bNumConfigurations = 1,
 };
 
+// ====================================================================
+//  HID MODE DESCRIPTORS (USB PS3 guitar)
+// ====================================================================
+
+static const tusb_desc_device_t hid_device_desc = {
+    .bLength            = sizeof(tusb_desc_device_t),
+    .bDescriptorType    = TUSB_DESC_DEVICE,
+    .bcdUSB             = 0x0200,
+    .bDeviceClass       = 0x00,
+    .bDeviceSubClass    = 0x00,
+    .bDeviceProtocol    = 0x00,
+    .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
+    .idVendor           = HID_MODE_VID,
+    .idProduct          = HID_MODE_PID,
+    .bcdDevice          = 0x0100,
+    .iManufacturer      = 1,
+    .iProduct           = 2,
+    .iSerialNumber      = 3,
+    .bNumConfigurations = 1,
+};
+
+static const uint8_t hid_report_desc[] = {
+    0x05, 0x01,
+    0x09, 0x05,
+    0xA1, 0x01,
+    0x15, 0x00,
+    0x26, 0xFF, 0x00,
+    0x75, 0x08,
+    0x95, 0x01,
+    0x81, 0x03,
+    0x05, 0x09,
+    0x19, 0x01,
+    0x29, 0x10,
+    0x15, 0x00,
+    0x25, 0x01,
+    0x75, 0x01,
+    0x95, 0x10,
+    0x81, 0x02,
+    0x05, 0x01,
+    0x09, 0x30,
+    0x09, 0x31,
+    0x09, 0x32,
+    0x09, 0x35,
+    0x15, 0x00,
+    0x26, 0xFF, 0x00,
+    0x75, 0x08,
+    0x95, 0x04,
+    0x81, 0x02,
+    0x75, 0x08,
+    0x95, 0x14,
+    0x81, 0x03,
+    0xC0,
+};
+
+#define HID_DESC_CONFIG_TOTAL  34
+
+static const uint8_t hid_config_desc[] = {
+    0x09, TUSB_DESC_CONFIGURATION,
+    HID_DESC_CONFIG_TOTAL, 0x00,
+    0x01, 0x01, 0x00, 0x80, 0xFA,
+    0x09, TUSB_DESC_INTERFACE,
+    0x00, 0x00, 0x01,
+    TUSB_CLASS_HID,
+    0x00, 0x00, 0x00,
+    0x09, 0x21,
+    0x11, 0x01,
+    0x00,
+    0x01,
+    0x22,
+    sizeof(hid_report_desc), 0x00,
+    0x07, TUSB_DESC_ENDPOINT,
+    0x81,
+    TUSB_XFER_INTERRUPT,
+    0x40, 0x00,
+    0x08,
+};
+
+// ====================================================================
+//  KEYBOARD MODE DESCRIPTORS (USB Fortnite keyboard)
+// ====================================================================
+
+static const tusb_desc_device_t hid_kb_device_desc = {
+    .bLength            = sizeof(tusb_desc_device_t),
+    .bDescriptorType    = TUSB_DESC_DEVICE,
+    .bcdUSB             = 0x0200,
+    .bDeviceClass       = 0x00,
+    .bDeviceSubClass    = 0x00,
+    .bDeviceProtocol    = 0x00,
+    .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
+    .idVendor           = 0x2E8A,
+    .idProduct          = 0xF012,
+    .bcdDevice          = 0x0100,
+    .iManufacturer      = 1,
+    .iProduct           = 2,
+    .iSerialNumber      = 3,
+    .bNumConfigurations = 1,
+};
+
+static const uint8_t hid_kb_report_desc[] = { TUD_HID_REPORT_DESC_KEYBOARD() };
+
+#define HID_KB_DESC_CONFIG_TOTAL  34
+
+static const uint8_t hid_kb_config_desc[] = {
+    0x09, TUSB_DESC_CONFIGURATION,
+    HID_KB_DESC_CONFIG_TOTAL, 0x00,
+    0x01, 0x01, 0x00, 0x80, 0xFA,
+    0x09, TUSB_DESC_INTERFACE,
+    0x00, 0x00, 0x01,
+    TUSB_CLASS_HID,
+    0x01, 0x01, 0x00,
+    0x09, 0x21,
+    0x11, 0x01,
+    0x00,
+    0x01,
+    0x22,
+    sizeof(hid_kb_report_desc), 0x00,
+    0x07, TUSB_DESC_ENDPOINT,
+    0x81,
+    TUSB_XFER_INTERRUPT,
+    0x08, 0x00,
+    0x01,
+};
+
+uint8_t const* tud_hid_descriptor_report_cb(uint8_t instance) {
+    (void)instance;
+    if (g_kb_mode) return hid_kb_report_desc;
+    return hid_report_desc;
+}
+
 uint8_t const* tud_descriptor_device_cb(void) {
-    return (uint8_t const *)(g_config_mode ? &cdc_device_desc : &xinput_device_desc);
+    if (g_config_mode) return (uint8_t const *)&cdc_device_desc;
+    if (g_kb_mode)     return (uint8_t const *)&hid_kb_device_desc;
+    if (g_hid_mode)    return (uint8_t const *)&hid_device_desc;
+    return (uint8_t const *)&xinput_device_desc;
 }
 
 // ====================================================================
@@ -124,7 +258,10 @@ static const uint8_t cdc_config_desc[] = {
 
 uint8_t const* tud_descriptor_configuration_cb(uint8_t index) {
     (void)index;
-    return g_config_mode ? cdc_config_desc : xinput_config_desc;
+    if (g_config_mode) return cdc_config_desc;
+    if (g_kb_mode)     return hid_kb_config_desc;
+    if (g_hid_mode)    return hid_config_desc;
+    return xinput_config_desc;
 }
 
 // ====================================================================

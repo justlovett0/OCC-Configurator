@@ -5,12 +5,13 @@ from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT
                          TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
                          DIGITAL_PINS, DIGITAL_PIN_LABELS)
 from .fonts import FONT_UI, APP_VERSION
-from .widgets import RoundedButton, HelpButton, HelpDialog, CustomDropdown, _help_text, _help_placeholder
+from .widgets import (RoundedButton, HelpButton, HelpDialog, CustomDropdown,
+                       LiveBarGraph, CalibratedBarGraph, _help_text, _help_placeholder)
 from .serial_comms import PicoSerial
 from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
                               get_bundled_fw_date_str, find_rpi_rp2_drive)
-from .xinput_utils import XINPUT_AVAILABLE
+from .xinput_utils import XINPUT_AVAILABLE, ERROR_SUCCESS
 from .utils import _centered_dialog, _center_window, _make_flash_popup, _find_preset_configs
 class RetroApp:
     """Retro Controller configurator screen."""
@@ -92,8 +93,13 @@ class RetroApp:
         self._rt_analog_frame = None
         self._lt_pin_combo    = None
         self._rt_pin_combo    = None
-        self._lt_monitor_bar  = None
-        self._rt_monitor_bar  = None
+        self._lt_live_bar     = None
+        self._rt_live_bar     = None
+        self._lt_cal_bar      = None
+        self._rt_cal_bar      = None
+        self._lt_monitor_btn  = None
+        self._rt_monitor_btn  = None
+        self._monitor_prefix  = None
         self._lt_detect_btn   = None
         self._rt_detect_btn   = None
 
@@ -506,52 +512,132 @@ class RetroApp:
         ema_var    = self._lt_ema    if prefix == "lt" else self._rt_ema
         invert_var = self._lt_invert if prefix == "lt" else self._rt_invert
 
-        # Min slider
-        min_row = tk.Frame(analog_frame, bg=BG_CARD)
-        min_row.pack(fill="x", padx=10, pady=(4, 2))
-        tk.Label(min_row, text="Min:", bg=BG_CARD, fg=TEXT_DIM,
-                 font=(FONT_UI, 8), width=14, anchor="w").pack(side="left")
-        ttk.Scale(min_row, from_=0, to=4095, orient="horizontal",
-                  variable=min_var, length=300).pack(side="left", padx=(0, 6))
-        tk.Label(min_row, textvariable=min_var,
-                 bg=BG_CARD, fg=TEXT, font=(FONT_UI, 8), width=5).pack(side="left")
+        min_str = tk.StringVar(value=str(min_var.get()))
+        max_str = tk.StringVar(value=str(max_var.get()))
 
-        # Max slider
-        max_row = tk.Frame(analog_frame, bg=BG_CARD)
-        max_row.pack(fill="x", padx=10, pady=(0, 2))
-        tk.Label(max_row, text="Max:", bg=BG_CARD, fg=TEXT_DIM,
-                 font=(FONT_UI, 8), width=14, anchor="w").pack(side="left")
-        ttk.Scale(max_row, from_=0, to=4095, orient="horizontal",
-                  variable=max_var, length=300).pack(side="left", padx=(0, 6))
-        tk.Label(max_row, textvariable=max_var,
-                 bg=BG_CARD, fg=TEXT, font=(FONT_UI, 8), width=5).pack(side="left")
+        # ── Monitor row: button + raw ADC bar ────────────────────────
+        monitor_row = tk.Frame(analog_frame, bg=BG_CARD)
+        monitor_row.pack(fill="x", padx=10, pady=(8, 2))
 
-        # EMA alpha slider (0-100 percent)
+        monitor_btn = RoundedButton(
+            monitor_row, text="Monitor", btn_width=72, btn_height=24,
+            bg_color="#555560", btn_font=(FONT_UI, 7, "bold"),
+            command=lambda p=prefix: self._toggle_trigger_monitor(p))
+        monitor_btn.pack(side="left", padx=(0, 8))
+        self._all_widgets.append(monitor_btn)
+
+        live_bar = LiveBarGraph(
+            monitor_row, label="Raw ADC", width=340, height=26,
+            min_marker_var=min_var, max_marker_var=max_var, invert_var=None)
+        live_bar.pack(side="left")
+
+        # Redraw markers when min/max change
+        min_var.trace_add("write", lambda *_: live_bar.redraw_markers())
+        max_var.trace_add("write", lambda *_: live_bar.redraw_markers())
+
+        # ── Calibrated output bar ─────────────────────────────────────
+        cal_row = tk.Frame(analog_frame, bg=BG_CARD)
+        cal_row.pack(fill="x", padx=10, pady=(2, 2))
+
+        cal_bar = CalibratedBarGraph(
+            cal_row, label="Calibrated", width=340, height=22,
+            min_var=min_var, max_var=max_var,
+            invert_var=invert_var, ema_alpha_var=None)
+        cal_bar.pack(side="left", padx=(80, 0))   # indent to align with live bar
+
+        # Redraw calibrated bar on any sensitivity or invert change
+        min_var.trace_add("write",    lambda *_: cal_bar._draw())
+        max_var.trace_add("write",    lambda *_: cal_bar._draw())
+        invert_var.trace_add("write", lambda *_: cal_bar._draw())
+
+        # ── Min / Max entry + Set buttons ────────────────────────────
+        sens_row = tk.Frame(analog_frame, bg=BG_CARD)
+        sens_row.pack(fill="x", padx=10, pady=(6, 2))
+
+        tk.Label(sens_row, text="Min:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 4))
+        min_entry = tk.Entry(sens_row, textvariable=min_str, width=5,
+                             bg=BG_INPUT, fg=TEXT, insertbackground=TEXT,
+                             font=(FONT_UI, 8), bd=1, relief="solid")
+        min_entry.pack(side="left", padx=(0, 4))
+        min_entry.bind("<Return>", lambda _e: self._on_trigger_sens_entry(
+            min_str, min_var, max_var, "min"))
+        min_entry.bind("<FocusOut>", lambda _e: self._on_trigger_sens_entry(
+            min_str, min_var, max_var, "min"))
+        self._all_widgets.append(min_entry)
+
+        set_min_btn = RoundedButton(
+            sens_row, text="Set Min", btn_width=58, btn_height=20,
+            bg_color="#555560", btn_font=(FONT_UI, 7, "bold"),
+            command=lambda p=prefix: self._set_trigger_sens(p, "min"))
+        set_min_btn.pack(side="left", padx=(0, 12))
+        self._all_widgets.append(set_min_btn)
+
+        tk.Label(sens_row, text="Max:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 4))
+        max_entry = tk.Entry(sens_row, textvariable=max_str, width=5,
+                             bg=BG_INPUT, fg=TEXT, insertbackground=TEXT,
+                             font=(FONT_UI, 8), bd=1, relief="solid")
+        max_entry.pack(side="left", padx=(0, 4))
+        max_entry.bind("<Return>", lambda _e: self._on_trigger_sens_entry(
+            max_str, max_var, min_var, "max"))
+        max_entry.bind("<FocusOut>", lambda _e: self._on_trigger_sens_entry(
+            max_str, max_var, min_var, "max"))
+        self._all_widgets.append(max_entry)
+
+        set_max_btn = RoundedButton(
+            sens_row, text="Set Max", btn_width=58, btn_height=20,
+            bg_color="#555560", btn_font=(FONT_UI, 7, "bold"),
+            command=lambda p=prefix: self._set_trigger_sens(p, "max"))
+        set_max_btn.pack(side="left", padx=(0, 12))
+        self._all_widgets.append(set_max_btn)
+
+        reset_btn = RoundedButton(
+            sens_row, text="Reset", btn_width=48, btn_height=20,
+            bg_color="#555560", btn_font=(FONT_UI, 7, "bold"),
+            command=lambda mn=min_var, mx=max_var, inv=invert_var,
+                           mns=min_str, mxs=max_str: (
+                mn.set(0), mx.set(4095), inv.set(False),
+                mns.set("0"), mxs.set("4095")))
+        reset_btn.pack(side="left")
+        self._all_widgets.append(reset_btn)
+
+        # Keep entry boxes in sync when vars change (e.g. loaded from config)
+        min_var.trace_add("write", lambda *_: min_str.set(str(min_var.get())))
+        max_var.trace_add("write", lambda *_: max_str.set(str(max_var.get())))
+
+        # ── Invert checkbox ───────────────────────────────────────────
+        inv_row = tk.Frame(analog_frame, bg=BG_CARD)
+        inv_row.pack(fill="x", padx=10, pady=(4, 2))
+        invert_cb = tk.Checkbutton(inv_row, text="Invert axis", variable=invert_var,
+                                   bg=BG_CARD, fg=TEXT, selectcolor=BG_INPUT,
+                                   activebackground=BG_CARD, activeforeground=TEXT,
+                                   font=(FONT_UI, 9))
+        invert_cb.pack(side="left")
+        self._all_widgets.append(invert_cb)
+
+        # ── EMA smoothing slider (0-100%) ─────────────────────────────
         ema_row = tk.Frame(analog_frame, bg=BG_CARD)
-        ema_row.pack(fill="x", padx=10, pady=(0, 2))
+        ema_row.pack(fill="x", padx=10, pady=(2, 8))
         tk.Label(ema_row, text="Smoothing %:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8), width=14, anchor="w").pack(side="left")
-        ttk.Scale(ema_row, from_=0, to=100, orient="horizontal",
-                  variable=ema_var, length=300).pack(side="left", padx=(0, 6))
+        ema_scale = ttk.Scale(ema_row, from_=0, to=100, orient="horizontal",
+                              variable=ema_var, length=240)
+        ema_scale.pack(side="left", padx=(0, 6))
         tk.Label(ema_row, textvariable=ema_var,
                  bg=BG_CARD, fg=TEXT, font=(FONT_UI, 8), width=5).pack(side="left")
+        self._all_widgets.append(ema_scale)
 
-        # Invert checkbox
-        inv_row = tk.Frame(analog_frame, bg=BG_CARD)
-        inv_row.pack(fill="x", padx=10, pady=(0, 6))
-        tk.Checkbutton(inv_row, text="Invert axis", variable=invert_var,
-                       bg=BG_CARD, fg=TEXT, selectcolor=BG_INPUT,
-                       activebackground=BG_CARD, activeforeground=TEXT,
-                       font=(FONT_UI, 9)).pack(side="left")
-
-        # Monitor bar placeholder (Plan 03 wires a LiveBarGraph here)
-        monitor_placeholder = tk.Frame(analog_frame, bg=BG_CARD, height=24)
-        monitor_placeholder.pack(fill="x", padx=10, pady=(0, 4))
+        # ── Store refs ────────────────────────────────────────────────
         if prefix == "lt":
-            self._lt_monitor_bar  = monitor_placeholder
+            self._lt_live_bar     = live_bar
+            self._lt_cal_bar      = cal_bar
+            self._lt_monitor_btn  = monitor_btn
             self._lt_analog_frame = analog_frame
         else:
-            self._rt_monitor_bar  = monitor_placeholder
+            self._rt_live_bar     = live_bar
+            self._rt_cal_bar      = cal_bar
+            self._rt_monitor_btn  = monitor_btn
             self._rt_analog_frame = analog_frame
 
     def _on_trigger_pin_combo(self, pin_var, combo, prefix):
@@ -694,6 +780,7 @@ class RetroApp:
                 "Connect to the retro controller before saving.")
             return
         try:
+            self._stop_trigger_monitoring()
             self._push_all_values()
             self.pico.save()
             self._set_status("   Saved — rebooting to play mode...", ACCENT_GREEN)
@@ -726,6 +813,7 @@ class RetroApp:
         if self.pico.connected:
             self._set_status("   Saving configuration...", ACCENT_ORANGE)
             try:
+                self._stop_trigger_monitoring()
                 self._push_all_values()
                 self.pico.save()
                 self.pico.reboot()
@@ -738,6 +826,7 @@ class RetroApp:
             self._on_back()
 
     def _on_close(self):
+        self._stop_trigger_monitoring()
         if self.pico.connected:
             try:
                 self.pico.reboot()
@@ -753,6 +842,7 @@ class RetroApp:
 
     def hide(self):
         self._scroll_canvas.unbind_all("<MouseWheel>")
+        self._stop_trigger_monitoring()
         if self.pico.connected:
             try:
                 self.pico.reboot()
@@ -1076,9 +1166,155 @@ class RetroApp:
 
         threading.Thread(target=_thread, daemon=True).start()
 
-    def _stop_monitor(self):
-        """Placeholder for monitor stop — implemented in Plan 03."""
+    def _toggle_trigger_monitor(self, prefix):
+        """Start or stop live ADC monitoring for a trigger."""
+        if self._monitoring:
+            self._stop_trigger_monitoring()
+            return
+
+        if not self.pico.connected:
+            return
+
+        mode = self._mode_lt.get() if prefix == "lt" else self._mode_rt.get()
+        if mode != 1:
+            messagebox.showinfo("Monitor", f"{prefix.upper()} is not in Analog mode.")
+            return
+
+        pin = self._pin_lt.get() if prefix == "lt" else self._pin_rt.get()
+        if pin == -1:
+            messagebox.showinfo("Monitor", f"No pin selected for {prefix.upper()} trigger.")
+            return
+
+        live_bar = self._lt_live_bar if prefix == "lt" else self._rt_live_bar
+        cal_bar  = self._lt_cal_bar  if prefix == "lt" else self._rt_cal_bar
+        mon_btn  = self._lt_monitor_btn if prefix == "lt" else self._rt_monitor_btn
+
+        self._monitoring      = True
+        self._monitor_prefix  = prefix
+        mon_btn._label = "Stop"
+        mon_btn._bg    = ACCENT_RED
+        mon_btn._render(ACCENT_RED)
+
+        if cal_bar is not None:
+            cal_bar.reset_ema()
+
+        def _monitor_thread():
+            try:
+                self.pico.start_monitor_adc(pin)
+                while self._monitoring:
+                    val, _ = self.pico.drain_monitor_latest(0.05)
+                    if val is not None:
+                        if live_bar is not None:
+                            self.root.after(0, lambda v=val: live_bar.set_value(v))
+                        if cal_bar is not None:
+                            self.root.after(0, lambda v=val: cal_bar.set_raw(v))
+            except Exception as exc:
+                self.root.after(0, lambda e=str(exc): self._on_trigger_monitor_error(e))
+
+        self._monitor_thread = threading.Thread(target=_monitor_thread, daemon=True)
+        self._monitor_thread.start()
+
+    def _stop_trigger_monitoring(self):
+        """Stop any active trigger monitor session."""
+        if not self._monitoring:
+            return
         self._monitoring = False
+
+        try:
+            self.pico.stop_monitor()
+        except Exception:
+            pass
+
+        if self._monitor_thread and self._monitor_thread.is_alive():
+            self._monitor_thread.join(timeout=0.3)
+
+        self.pico.flush_input()
+
+        # Reset monitor button for whichever trigger was active
+        prefix  = self._monitor_prefix
+        mon_btn = (self._lt_monitor_btn if prefix == "lt" else self._rt_monitor_btn) if prefix else None
+        if mon_btn is not None:
+            mon_btn._label = "Monitor"
+            mon_btn._bg    = "#555560"
+            mon_btn._render("#555560")
+
+    def _on_trigger_monitor_error(self, msg):
+        self._monitoring = False
+        prefix  = self._monitor_prefix
+        mon_btn = (self._lt_monitor_btn if prefix == "lt" else self._rt_monitor_btn) if prefix else None
+        if mon_btn is not None:
+            mon_btn._label = "Monitor"
+            mon_btn._bg    = "#555560"
+            mon_btn._render("#555560")
+        messagebox.showerror("Monitor Error", msg)
+
+    def _one_shot_trigger_read(self, prefix):
+        """Read one live ADC value for a trigger without staying in monitor mode."""
+        if not self.pico.connected:
+            return None
+
+        mode = self._mode_lt.get() if prefix == "lt" else self._mode_rt.get()
+        if mode != 1:
+            return None
+        pin = self._pin_lt.get() if prefix == "lt" else self._pin_rt.get()
+        if pin == -1:
+            messagebox.showinfo("Monitor", f"No pin selected for {prefix.upper()} trigger.")
+            return None
+
+        if self._monitoring:
+            self._stop_trigger_monitoring()
+
+        try:
+            self.pico.start_monitor_adc(pin)
+            val, _ = self.pico.drain_monitor_latest(0.3)
+            self.pico.stop_monitor()
+            self.pico.flush_input()
+            return val
+        except Exception as exc:
+            messagebox.showerror("Monitor Error", f"Could not read {prefix.upper()}: {exc}")
+            try:
+                self.pico.stop_monitor()
+            except Exception:
+                pass
+            self.pico.flush_input()
+            return None
+
+    def _set_trigger_sens(self, prefix, which):
+        """Snap min or max calibration point to the current live ADC reading."""
+        live_bar = self._lt_live_bar if prefix == "lt" else self._rt_live_bar
+
+        if self._monitoring and self._monitor_prefix == prefix and live_bar is not None:
+            live_val = live_bar._value
+        else:
+            live_val = self._one_shot_trigger_read(prefix)
+            if live_val is None:
+                return
+
+        min_var = self._lt_min if prefix == "lt" else self._rt_min
+        max_var = self._lt_max if prefix == "lt" else self._rt_max
+
+        if which == "min":
+            clamped = max(0, min(live_val, max_var.get() - 1))
+            min_var.set(clamped)
+        else:
+            clamped = min(4095, max(live_val, min_var.get() + 1))
+            max_var.set(clamped)
+
+    def _on_trigger_sens_entry(self, str_var, int_var, other_var, which):
+        """Validate a typed min/max entry and clamp against the other bound."""
+        try:
+            v = int(str_var.get().strip())
+        except ValueError:
+            str_var.set(str(int_var.get()))
+            return
+        v = max(0, min(4095, v))
+        if which == "min" and v >= other_var.get():
+            v = other_var.get() - 1
+        elif which == "max" and v <= other_var.get():
+            v = other_var.get() + 1
+        v = max(0, min(4095, v))
+        int_var.set(v)
+        str_var.set(str(v))
 
     # ── Advanced > Flash Firmware ────────────────────────────────────
 
@@ -1090,6 +1326,13 @@ class RetroApp:
             if not uf2:
                 return
 
+        # Warn before flashing wireless firmware — prevents accidental wireless flash on non-wireless Picos
+        if os.path.basename(uf2).startswith("Wireless_"):
+            if not messagebox.askyesno(
+                "Firmware Mismatch",
+                "Wired firmware is currently installed.\n\n"
+                "Are you sure you want to install wireless firmware?"):
+                return
 
         # Send BOOTSEL now if in config mode — before hide() reboots to play mode.
         # hide() checks self.pico.connected; if we disconnect first it skips reboot.

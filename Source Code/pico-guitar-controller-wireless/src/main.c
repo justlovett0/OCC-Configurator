@@ -1,12 +1,13 @@
 /*
  * main.c - Pico W Combined Wireless Guitar Controller Firmware
  *
- * Supports wired USB XInput, wireless Dongle mode, and wireless Bluetooth HID.
+ * Supports wired USB XInput / PS3 HID / keyboard, plus wireless Dongle mode
+ * and wireless Bluetooth HID.
  *
  * Boot flow:
  *   1. Check watchdog scratch[0] → USB CDC config mode (unchanged from before)
  *   2. Initialize USB and wait up to USB_MOUNT_TIMEOUT_MS:
- *      - If a USB host enumerates → USB XInput play mode (wired, configurator works)
+ *      - If a USB host enumerates → selected USB play mode
  *      - If timeout expires with no host → wireless mode
  *   3. Wireless mode selection (when no USB host):
  *      a. Check watchdog scratch[1]:
@@ -27,6 +28,8 @@
  *   - Plug in USB → wired mode → configurator detects it normally
  *   - Magic vibration sequence (USB) → config mode reboot
  *   - SELECT held at boot → config mode (fallback for no-USB scenarios)
+ *   - YELLOW held at boot + USB host → USB PS3 HID
+ *   - ORANGE held at boot + USB host → USB keyboard
  */
 
 #include <stdio.h>
@@ -98,6 +101,8 @@ static uint16_t g_pressed_mask;
 // I2C tilt baseline
 static uint16_t g_i2c_tilt_baseline = 2048;
 static bool     g_i2c_tilt_ready = false;
+static bool     g_usb_ps3_requested = false;
+static bool     g_usb_kb_requested  = false;
 
 //--------------------------------------------------------------------
 // CYW43 LED wrappers (Pico W onboard LED)
@@ -251,6 +256,17 @@ static inline bool is_led_spi_pin(int8_t pin) {
 static inline bool is_picow_reserved(int8_t pin) {
     // Pico W: GPIO23, 24, 25, 29 are used by CYW43 chip
     return (pin == 23 || pin == 24 || pin == 25 || pin == 29);
+}
+
+static bool boot_override_button_held(int8_t pin) {
+    if (pin < 0 || pin > 28) return false;
+    if (is_picow_reserved(pin)) return false;
+    if (is_led_spi_pin(pin)) return false;
+    gpio_init(pin);
+    gpio_set_dir(pin, GPIO_IN);
+    gpio_pull_up(pin);
+    sleep_ms(5);
+    return !gpio_get(pin);
 }
 
 static void init_gpio_pin(int8_t pin) {
@@ -549,6 +565,68 @@ static void build_xinput_report(xinput_report_t *report) {
     report->right_stick_y = inp.right_stick_y;
 }
 
+typedef struct __attribute__((packed)) {
+    uint8_t status;
+    uint8_t buttons1;
+    uint8_t buttons2;
+    uint8_t lx;
+    uint8_t ly;
+    uint8_t rx;
+    uint8_t ry;
+    uint8_t reserved[20];
+} ps3_report_t;
+
+static void build_ps3_report(ps3_report_t *ps3) {
+    input_state_t inp;
+    read_all_inputs(&inp);
+    memset(ps3, 0, sizeof(*ps3));
+    uint16_t b = inp.buttons;
+
+    if (b & XINPUT_BTN_BACK)        ps3->buttons1 |= 0x01;
+    if (b & XINPUT_BTN_START)       ps3->buttons1 |= 0x08;
+    if (b & XINPUT_BTN_DPAD_UP)     ps3->buttons1 |= 0x10;
+    if (b & XINPUT_BTN_DPAD_RIGHT)  ps3->buttons1 |= 0x20;
+    if (b & XINPUT_BTN_DPAD_DOWN)   ps3->buttons1 |= 0x40;
+    if (b & XINPUT_BTN_DPAD_LEFT)   ps3->buttons1 |= 0x80;
+
+    if (b & XINPUT_BTN_LEFT_SHOULDER) ps3->buttons2 |= 0x04;
+    if (b & XINPUT_BTN_Y)             ps3->buttons2 |= 0x10;
+    if (b & XINPUT_BTN_B)             ps3->buttons2 |= 0x20;
+    if (b & XINPUT_BTN_A)             ps3->buttons2 |= 0x40;
+    if (b & XINPUT_BTN_X)             ps3->buttons2 |= 0x80;
+
+    if (inp.right_stick_y > 16000)
+        ps3->buttons2 |= 0x08;
+
+    ps3->lx = 0x80;
+    ps3->ly = 0x80;
+    ps3->rx = 0x80;
+
+    {
+        uint16_t w = (uint16_t)((int32_t)inp.right_stick_x + 32768);
+        ps3->ry = (uint8_t)(0x80 + (w >> 9));
+    }
+}
+
+static void build_usb_keyboard_report(void) {
+    input_state_t inp;
+    read_all_inputs(&inp);
+
+    uint8_t keys[6] = {0};
+    uint8_t n = 0;
+    uint16_t b = inp.buttons;
+    if ((b & GUITAR_BTN_GREEN)                               && n < 6) keys[n++] = HID_KEY_D;
+    if ((b & GUITAR_BTN_RED)                                 && n < 6) keys[n++] = HID_KEY_F;
+    if ((b & GUITAR_BTN_YELLOW)                              && n < 6) keys[n++] = HID_KEY_J;
+    if ((b & GUITAR_BTN_BLUE)                                && n < 6) keys[n++] = HID_KEY_K;
+    if ((b & GUITAR_BTN_ORANGE)                              && n < 6) keys[n++] = HID_KEY_L;
+    if ((b & (GUITAR_BTN_STRUM_UP | GUITAR_BTN_STRUM_DOWN)) && n < 6) keys[n++] = HID_KEY_SPACE;
+    if ((b & GUITAR_BTN_START)                               && n < 6) keys[n++] = HID_KEY_RETURN;
+    if ((b & GUITAR_BTN_SELECT)                              && n < 6) keys[n++] = HID_KEY_ESCAPE;
+    if (inp.right_stick_y > 16000                            && n < 6) keys[n++] = HID_KEY_S;
+    tud_hid_keyboard_report(0, 0, keys);
+}
+
 static void build_wireless_dongle_report(controller_report_t *report) {
     input_state_t inp;
     read_all_inputs(&inp);
@@ -582,6 +660,20 @@ void tud_umount_cb(void)  { g_usb_mounted = false; }
 void tud_suspend_cb(bool remote_wakeup_en) { (void)remote_wakeup_en; }
 void tud_resume_cb(void)  {}
 
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
+                                hid_report_type_t report_type,
+                                uint8_t *buffer, uint16_t reqlen) {
+    (void)instance; (void)report_id; (void)report_type;
+    memset(buffer, 0, reqlen);
+    return reqlen;
+}
+
+void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
+                            hid_report_type_t report_type,
+                            uint8_t const *buffer, uint16_t bufsize) {
+    (void)instance; (void)report_id; (void)report_type; (void)buffer; (void)bufsize;
+}
+
 //--------------------------------------------------------------------
 // SELECT held at boot → config mode fallback
 //--------------------------------------------------------------------
@@ -604,6 +696,31 @@ static bool check_select_held_at_boot(void) {
     return held;
 }
 
+static led_config_t g_aligned_leds;
+
+static void apa102_flash_boot_mode(uint8_t r, uint8_t g, uint8_t b) {
+    if (!g_aligned_leds.enabled) return;
+    led_config_t tmp;
+    memcpy(&tmp, &g_aligned_leds, sizeof(led_config_t));
+    uint8_t n = (tmp.count > 0) ? tmp.count : MAX_LEDS;
+    for (int i = 0; i < n && i < MAX_LEDS; i++) {
+        tmp.colors[i].r = r;
+        tmp.colors[i].g = g;
+        tmp.colors[i].b = b;
+    }
+    uint8_t brightness[MAX_LEDS] = {0};
+    uint8_t brt = (tmp.base_brightness > 0) ? tmp.base_brightness : 5;
+    for (int i = 0; i < n && i < MAX_LEDS; i++) brightness[i] = brt;
+    for (int flash_idx = 0; flash_idx < 3; flash_idx++) {
+        apa102_update(&tmp, brightness);
+        sleep_ms(800);
+        apa102_all_off(&tmp);
+        if (flash_idx < 2) {
+            sleep_ms(800);
+        }
+    }
+}
+
 //--------------------------------------------------------------------
 // Pairing status LED blink helper
 //
@@ -615,8 +732,6 @@ static bool check_select_held_at_boot(void) {
 // Call apa102_update_from_inputs() once connected to restore the
 // user's configured color scheme.
 //--------------------------------------------------------------------
-
-static led_config_t g_aligned_leds;   // declared here so apa102_blink_pairing can use it
 
 static void apa102_blink_pairing(uint8_t r, uint8_t g, uint8_t b) {
     if (!g_aligned_leds.enabled) return;
@@ -695,6 +810,11 @@ int main(void) {
 
     config_load(&g_config);
 
+    g_hid_mode = false;
+    g_kb_mode = false;
+    g_usb_ps3_requested = false;
+    g_usb_kb_requested = false;
+
     // Set custom device name for USB string descriptors
     if (g_config.device_name[0] != '\0') {
         g_device_name = g_config.device_name;
@@ -730,6 +850,14 @@ int main(void) {
     bool bt_override     = check_scratch_bt_override();
     bool dongle_override = !bt_override && check_scratch_dongle_override();
 
+    // Manual USB-only boot overrides are sampled before tusb_init so the host
+    // enumerates the requested USB personality immediately.
+    g_usb_ps3_requested = boot_override_button_held(g_config.pin_buttons[BTN_IDX_YELLOW]);
+    g_usb_kb_requested  = boot_override_button_held(g_config.pin_buttons[BTN_IDX_ORANGE]);
+    if (g_usb_kb_requested) g_usb_ps3_requested = false;
+    g_hid_mode = g_usb_ps3_requested;
+    g_kb_mode  = g_usb_kb_requested;
+
     // ── Step 3: Try USB XInput first ──
     // Always start TinyUSB and give a real USB host time to enumerate.
     g_config_mode = false;
@@ -758,6 +886,15 @@ int main(void) {
         }
     }
 
+    if (!g_usb_mounted) {
+        g_hid_mode = false;
+        g_kb_mode = false;
+        if (g_usb_ps3_requested || g_usb_kb_requested) {
+            bt_override = false;
+            dongle_override = false;
+        }
+    }
+
     // ── Step 4: Initialize shared play-mode hardware ──
     init_play_mode_hardware();
 
@@ -765,13 +902,18 @@ int main(void) {
 
     if (g_usb_mounted) {
         // ═══════════════════════════════════════════════════════════════
-        // USB XINPUT PLAY MODE — Wired controller
-        // A USB host enumerated us. Run as XInput gamepad.
-        // Configurator detects this, sends magic vibration → config mode.
+        // USB PLAY MODE
+        // A USB host enumerated us. Run as XInput, PS3 HID, or keyboard
+        // depending on the startup override buttons sampled before tusb_init().
         // ═══════════════════════════════════════════════════════════════
         picow_led_set(true);
+        if (g_hid_mode)
+            apa102_flash_boot_mode(255, 80, 255);
+        else if (g_kb_mode)
+            apa102_flash_boot_mode(255, 80, 0);
 
         xinput_report_t report;
+        ps3_report_t ps3_report;
         uint64_t last_report_us = 0;
         uint64_t last_led_us = 0;
 
@@ -779,7 +921,7 @@ int main(void) {
             tud_task();
             if (g_cyw43_initialized) cyw43_arch_poll();
 
-            if (xinput_magic_detected()) {
+            if (!g_hid_mode && !g_kb_mode && xinput_magic_detected()) {
                 request_config_mode_reboot();
             }
 
@@ -787,7 +929,15 @@ int main(void) {
 
             if (now_us - last_report_us >= REPORT_INTERVAL_US) {
                 last_report_us = now_us;
-                if (xinput_ready()) {
+                if (g_kb_mode) {
+                    if (tud_hid_ready())
+                        build_usb_keyboard_report();
+                } else if (g_hid_mode) {
+                    if (tud_hid_ready()) {
+                        build_ps3_report(&ps3_report);
+                        tud_hid_report(0, &ps3_report, sizeof(ps3_report));
+                    }
+                } else if (xinput_ready()) {
                     build_xinput_report(&report);
                     xinput_send_report(&report);
                 }

@@ -86,4 +86,8 @@ void apa102_all_off(const led_config_t *cfg);
 // Blinks LED at index `led_idx` with color from config, count times
 void apa102_flash_led(const led_config_t *cfg, uint8_t led_idx, uint8_t count);
 
+// Flash all LEDs once in a solid color, then turn off.
+// Blocking — used for boot-mode indication (PS3 = green, KB = orange).
+void apa102_flash_all_color(const led_config_t *cfg, uint8_t r, uint8_t g, uint8_t b);
+
 #endif /* _APA102_LEDS_H_ */

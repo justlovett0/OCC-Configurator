@@ -135,6 +135,8 @@ class PicoSerial:
                 cfg[k.strip()] = v.strip()
         for _ in range(3):
             line = self.ser.readline().decode("ascii", errors="replace").strip()
+            if not line:
+                break  # timeout = no more lines (e.g. retro controller has no LEDs)
             if line.startswith("LED:"):
                 for kv in line[4:].split(","):
                     kv = kv.strip()

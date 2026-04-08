@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+</PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OccBridge.Core\OccBridge.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Prerequisites\ViGEmBus_1.22.0.exe" />
+    <EmbeddedResource Include="Prerequisites\HidHide_1.5.230.exe" />
+  </ItemGroup>
+
+</Project>

@@ -33,8 +33,8 @@ extern "C" {
 #define CFG_TUD_CDC_RX_BUFSIZE    256
 #define CFG_TUD_CDC_TX_BUFSIZE    256
 
-// All other built-in classes disabled
-#define CFG_TUD_HID               0
+// HID enabled for USB PS3 and USB keyboard boot personalities
+#define CFG_TUD_HID               1
 #define CFG_TUD_MSC               0
 #define CFG_TUD_MIDI              0
 #define CFG_TUD_VENDOR            0

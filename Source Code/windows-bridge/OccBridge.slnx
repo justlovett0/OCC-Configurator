@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="OccBridge.App/OccBridge.App.csproj" />
+  <Project Path="OccBridge.Bundle/OccBridge.Bundle.wixproj" />
+  <Project Path="OccBridge.Core/OccBridge.Core.csproj" />
+  <Project Path="OccBridge.Install/OccBridge.Install.csproj" />
+  <Project Path="OccBridge.Package/OccBridge.Package.wixproj" />
+</Solution>

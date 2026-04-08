@@ -1,22 +1,22 @@
-import sys, os, time, threading
+import sys, os, time, threading, json
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
                          TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
                          CONFIG_MODE_VID, CONFIG_MODE_PIDS, ALTERNATEFW_VID, ALTERNATEFW_PID,
                          GP2040CE_VID, GP2040CE_PID, GP2040CE_WEBCONFIG_IP,
                          GP2040CE_BOOTMODE_BOOTSEL, XINPUT_SUBTYPE_TO_DEVTYPE,
-                         OCC_SUBTYPES, DONGLE_XINPUT_SUBTYPES,
+                         OCC_SUBTYPES, DONGLE_XINPUT_SUBTYPES, MAX_LEDS, LED_INPUT_NAMES,
                          _ALTERNATEFW_CMD_JUMP_BOOTLOADER, _ALTERNATEFW_BM_REQUEST_TYPE)
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import RoundedButton, CustomDropdown, HelpDialog, HelpButton, _help_text, _help_placeholder
 from .serial_comms import PicoSerial
 from .firmware_utils import (find_rpi_rp2_drive, find_rpi_rp2_drive_info,
-                              get_bundled_fw_date_str, parse_fw_date,
+                              get_bundled_fw_date, get_bundled_fw_date_str, parse_fw_date,
                               flash_uf2, flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_resetFW_uf2,
                               find_uf2_for_device_type)
-from .xinput_utils import XINPUT_AVAILABLE, xinput_get_connected, MAGIC_STEPS, xinput_send_vibration
+from .xinput_utils import XINPUT_AVAILABLE, xinput_get_connected, MAGIC_STEPS, xinput_send_vibration, ERROR_SUCCESS
 from .utils import _centered_dialog, _center_window, _find_preset_configs
 
 class MainMenu:
@@ -2098,7 +2098,10 @@ class MainMenu:
         dlg.protocol("WM_DELETE_WINDOW", lambda: None)
 
         dlg_frame = tk.Frame(dlg, bg=BG_CARD)
-        dlg_frame.pack(fill="both", expand=True, padx=24, pady=20)
+        dlg_frame.pack(fill="both", expand=True, padx=24, pady=(20, 32))
+
+        # Force a minimum dialog width so long status messages aren't clipped
+        tk.Frame(dlg_frame, bg=BG_CARD, width=520, height=1).pack()
 
         tk.Label(dlg_frame, text="Backup & Update",
                  bg=BG_CARD, fg=TEXT_HEADER,
@@ -2130,6 +2133,10 @@ class MainMenu:
             status_var.set(msg)
             detail_var.set(detail)
             status_lbl.config(fg=color)
+            # Reset geometry so the window re-fits its content on every update.
+            # Without this the window locks to its initial size ("Starting…")
+            # and longer messages (e.g. backup file paths) get clipped vertically.
+            dlg.geometry("")
             dlg.update_idletasks()
 
         def worker():
@@ -2295,19 +2302,66 @@ class MainMenu:
                     break
                 time.sleep(0.5)
 
-            # For config-mode entry we can wait directly for the CDC port to
-            # reappear instead of going through XInput — faster and more reliable.
+            # After a fresh flash the Pico always boots into XInput (play) mode
+            # first — it does NOT come back in config mode directly.
+            # So for both entry paths we need to:
+            #   1. Wait for the device to reappear via XInput
+            #   2. Send the magic vibration sequence to switch it to config mode
+            #   3. Wait for the config-mode serial port
             if via == 'config':
                 port2 = None
-                deadline = time.time() + 20.0
-                while time.time() < deadline:
-                    port2 = PicoSerial.find_config_port()
-                    if port2:
-                        time.sleep(0.5)
-                        break
-                    time.sleep(0.3)
+
+                if XINPUT_AVAILABLE:
+                    # Wait for the controller to reappear as an XInput device
+                    xinput_slot2 = None
+                    self.root.after(0, lambda: set_status(
+                        f"{step_reboot}  —  Waiting for controller to reboot…",
+                        "Pico is flashing and rebooting (up to 30s)"))
+                    deadline = time.time() + 30.0
+                    while time.time() < deadline:
+                        try:
+                            connected = xinput_get_connected()
+                            occ_back = [c for c in connected if c[1] in OCC_SUBTYPES]
+                            if occ_back:
+                                xinput_slot2 = occ_back[0][0]
+                                break
+                        except Exception:
+                            pass
+                        time.sleep(0.75)
+
+                    if xinput_slot2 is not None:
+                        self.root.after(0, lambda: set_status(
+                            f"{step_reboot}  —  Controller detected, switching to config mode…",
+                            "Sending config signal via XInput"))
+                        time.sleep(2.0)   # give Windows time to fully enumerate
+                        try:
+                            for left, right in MAGIC_STEPS:
+                                xinput_send_vibration(xinput_slot2, left, right)
+                                time.sleep(0.08)
+                            xinput_send_vibration(xinput_slot2, 0, 0)
+                        except Exception:
+                            pass
+                        deadline = time.time() + 10.0
+                        while time.time() < deadline:
+                            port2 = PicoSerial.find_config_port()
+                            if port2:
+                                time.sleep(0.5)
+                                break
+                            time.sleep(0.3)
+
                 if not port2:
-                    fail("Controller did not return to play mode.",
+                    # Fallback: some devices may re-enter config mode on their own
+                    # (e.g. if the config button is held), so give it one more chance.
+                    deadline = time.time() + 15.0
+                    while time.time() < deadline:
+                        port2 = PicoSerial.find_config_port()
+                        if port2:
+                            time.sleep(0.5)
+                            break
+                        time.sleep(0.3)
+
+                if not port2:
+                    fail("Controller did not return to config mode after update.",
                          f"Firmware was flashed successfully.\n"
                          f"Backup saved to:\n{backup_path}\n\n"
                          "Import it manually via Configure Controller → Import Configuration.")
@@ -2406,16 +2460,21 @@ class MainMenu:
                          f"Import it manually. Error: {last_exc or 'Access denied'}")
                     return
 
-                for _ in range(3):
+                for _ in range(5):
                     if pico2.ping():
                         break
-                    time.sleep(0.3)
+                    time.sleep(0.5)
                 else:
                     pico2.disconnect()
                     fail("Controller did not respond after update.",
                          f"Backup saved to:\n{backup_path}\n\n"
                          "Import it manually via Configure Controller → Import Configuration.")
                     return
+
+                # Flush any startup chatter the firmware may have sent, then
+                # give it a moment to fully initialise before sending SET commands.
+                pico2.flush_input()
+                time.sleep(1.5)
 
                 _SKIP_KEYS = {"device_type", "led_colors_raw", "led_map_raw"}
                 for key, val in raw_cfg.items():
@@ -2454,7 +2513,24 @@ class MainMenu:
                             except Exception:
                                 pass
 
-                pico2.save()
+                # save() raises ValueError if it gets anything other than "OK".
+                # Retry a few times with a short delay in case the firmware is
+                # still processing the last SET command when SAVE arrives.
+                save_ok = False
+                for _attempt in range(3):
+                    try:
+                        pico2.save()
+                        save_ok = True
+                        break
+                    except Exception:
+                        time.sleep(0.5)
+                if not save_ok:
+                    pico2.disconnect()
+                    fail("Configuration was pushed but could not be saved.",
+                         f"Firmware was flashed successfully.\n"
+                         f"Backup saved to:\n{backup_path}\n\n"
+                         "Import it manually via Configure Controller → Import Configuration.")
+                    return
                 pico2.reboot()
                 pico2.disconnect()
             except Exception as exc:
@@ -2834,4 +2910,3 @@ class MainMenu:
             self.root.after_cancel(self._poll_job)
             self._poll_job = None
         self.frame.pack_forget()
-

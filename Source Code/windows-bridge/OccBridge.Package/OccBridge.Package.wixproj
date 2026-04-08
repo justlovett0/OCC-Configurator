@@ -1,0 +1,14 @@
+<Project Sdk="WixToolset.Sdk/6.0.2">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <OutputName>OccBridge.Package</OutputName>
+    <DefineConstants>
+      ProductVersion=$(Version);
+      OccBridgeAppExe=$(OccBridgeAppExe);
+      OccBridgeInstallExe=$(OccBridgeInstallExe);
+      OccBridgeIcon=$(MSBuildProjectDirectory)\..\OCCBridgeSquare.ico
+    </DefineConstants>
+  </PropertyGroup>
+</Project>

@@ -4,11 +4,9 @@ from .constants import (BG_CARD, BG_INPUT, TEXT, TEXT_DIM, ACCENT_BLUE,
                          ACCENT_RED, GITHUB_REPO, RELEASES_PAGE)
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import RoundedButton
+
+# Scans PresetConfigs/ for <json> files; missing device_type = shows on all screens
 def _find_preset_configs(device_types=None):
-    """Scan PresetConfigs/ for .json files matching the given device types.
-    device_types: set of strings e.g. {"guitar_alternate", "drum_kit"}, or None for all.
-    Returns list of (display_name, filepath) sorted by filename.
-    JSONs without a device_type field show on all screens."""
     search_dirs = []
     if getattr(sys, '_MEIPASS', None):
         search_dirs.append(os.path.join(sys._MEIPASS, "PresetConfigs"))
@@ -41,12 +39,10 @@ def _find_preset_configs(device_types=None):
         results.append((os.path.splitext(fname)[0], fpath))
     return results
     
-#  CENTERED DIALOG HELPER
+# Centered dialog helpers
 
+# Center dlg over root; call before grab_set/wait
 def _center_window(dlg, root):
-    """Center *dlg* Toplevel over the *root* window.
-    Call after all widgets have been added to dlg but before grab_set/wait.
-    """
     dlg.update_idletasks()
     dw = dlg.winfo_reqwidth()
     dh = dlg.winfo_reqheight()
@@ -59,12 +55,8 @@ def _center_window(dlg, root):
     dlg.geometry(f"{dw}x{dh}+{x}+{y}")
 
 
+# Modal dialog (info, yesno, error); returns True/False or None
 def _centered_dialog(parent, title, message, kind="info"):
-    """Show a modal dialog centered over *parent*.
-
-    kind can be "info", "yesno", or "error".
-    Returns True/False for "yesno", None otherwise.
-    """
     dlg = tk.Toplevel(parent)
     dlg.title(title)
     dlg.configure(bg=BG_CARD)
@@ -124,11 +116,8 @@ def _centered_dialog(parent, title, message, kind="info"):
     return result[0]
 
 
+# Pick wired vs wireless firmware; greys out unavailable types
 def _ask_wired_or_wireless(parent, has_wired=True, has_wireless=True):
-    """Modal dialog to pick Wired or Wireless firmware.
-    Unavailable variants are shown greyed out.
-    Returns 'wired', 'wireless', or None if cancelled.
-    """
     dlg = tk.Toplevel(parent)
     dlg.title("Select Firmware Type")
     dlg.configure(bg=BG_CARD)
@@ -180,12 +169,10 @@ def _ask_wired_or_wireless(parent, has_wired=True, has_wireless=True):
     return result[0]
 
 
-# ── Update check ──────────────────────────────────────────────────────────────
+# Update check
 
+# Fetch latest tag/URL; tries /releases/latest then fallback to /tags
 def _fetch_latest_release():
-    """Returns (tag_str, html_url) or (None, None) on any failure.
-    Tries /releases/latest first (published releases), falls back to /tags
-    for repos that only use git tags without formal releases."""
     import urllib.request, json
     headers = {"User-Agent": "OCC-Configurator"}
 
@@ -201,7 +188,7 @@ def _fetch_latest_release():
     except Exception:
         pass
 
-    # Fall back to tags list (covers repos using tags without formal releases)
+    # Fall back to tags list
     try:
         url = f"https://api.github.com/repos/{GITHUB_REPO}/tags"
         req = urllib.request.Request(url, headers=headers)
@@ -216,16 +203,16 @@ def _fetch_latest_release():
 
     return None, None
 
+# Check if latest version > current (dot-separated)
 def _version_is_newer(latest, current):
-    """True if latest > current (X.XX dot-separated)."""
     try:
         return tuple(int(x) for x in latest.split(".")) > \
                tuple(int(x) for x in current.split("."))
     except Exception:
         return False
 
+# Notify user of update; opens browser on OK
 def _show_update_dialog(root, latest_version, download_url):
-    """Prompt user about available update and open browser if they accept."""
     import tkinter.messagebox as mb
     import webbrowser
     msg = (
@@ -238,9 +225,8 @@ def _show_update_dialog(root, latest_version, download_url):
         webbrowser.open(download_url)
 
 
+# Flashing overlay; returns (dlg, close_fn)
 def _make_flash_popup(root):
-    """Modal 'Flashing…' popup centered on root. Returns (popup, close_fn).
-    Used by all advanced-configurator _flash_firmware() methods."""
     dlg = tk.Toplevel(root)
     dlg.title("Flashing Firmware")
     dlg.configure(bg=BG_CARD)

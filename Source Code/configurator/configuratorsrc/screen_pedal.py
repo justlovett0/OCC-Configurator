@@ -11,7 +11,7 @@ from .serial_comms import PicoSerial
 from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
                               get_bundled_fw_date_str, find_rpi_rp2_drive)
-from .xinput_utils import XINPUT_AVAILABLE
+from .xinput_utils import XINPUT_AVAILABLE, ERROR_SUCCESS
 from .utils import _centered_dialog, _center_window, _make_flash_popup, _find_preset_configs
 class PedalApp:
     """
@@ -1186,6 +1186,13 @@ class PedalApp:
             if not uf2:
                 return
 
+        # Warn before flashing wireless firmware — prevents accidental wireless flash on non-wireless Picos
+        if os.path.basename(uf2).startswith("Wireless_"):
+            if not messagebox.askyesno(
+                "Firmware Mismatch",
+                "Wired firmware is currently installed.\n\n"
+                "Are you sure you want to install wireless firmware?"):
+                return
 
         # Send BOOTSEL now if in config mode — before hide() reboots to play mode.
         # hide() checks self.pico.connected; if we disconnect first it skips reboot.

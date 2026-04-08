@@ -9,10 +9,12 @@
 #include <stdbool.h>
 
 //--------------------------------------------------------------------
-// Global mode flag — set before tusb_init(), selects descriptor set
+// Global mode flags — set before tusb_init(), select descriptor set
 //--------------------------------------------------------------------
 
 extern bool g_config_mode;
+extern bool g_hid_mode;   // HID mode (PS3 / macOS / Linux without XInput driver)
+extern bool g_kb_mode;    // HID keyboard mode (Fortnite Festival) — orange held at boot
 
 // Custom device name — set from config before tusb_init()
 extern const char *g_device_name;
@@ -67,6 +69,14 @@ extern const char *g_device_name;
 #define MAGIC_STEP2_RIGHT        0x4B
 
 #define WATCHDOG_CONFIG_MAGIC    0xC0F16000
+#define WATCHDOG_HID_MAGIC       0x48494400   // "HID\0" — scratch[1] for HID mode
+
+//--------------------------------------------------------------------
+// HID Mode (PS3 / macOS / Linux) — GH Les Paul PS3
+//--------------------------------------------------------------------
+
+#define HID_MODE_VID             0x12BA   // RedOctane / Activision
+#define HID_MODE_PID             0x0100   // GH Les Paul for PS3
 
 //--------------------------------------------------------------------
 // XInput Button bit masks (bytes 2-3 of report, little-endian uint16)

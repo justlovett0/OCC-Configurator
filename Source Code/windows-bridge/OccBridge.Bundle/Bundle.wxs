@@ -1,0 +1,65 @@
+<Wix
+  xmlns="http://wixtoolset.org/schemas/v4/wxs"
+  xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+  xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Bundle
+    Name="OCC Bridge Setup"
+    Manufacturer="Open Controller"
+    Version="$(ProductVersion)"
+    UpgradeCode="72EA82E4-239C-44FE-9ADF-08D5B7B35D49"
+    IconSourceFile="$(OccBridgeIcon)"
+    DisableModify="yes">
+
+    <util:RegistrySearch
+      Id="ViGEmBusInstalledSearch"
+      Root="HKLM"
+      Key="SYSTEM\CurrentControlSet\Services\ViGEmBus"
+      Value="Start"
+      Result="exists"
+      Variable="VIGEMBUS_PRESENT" />
+
+    <util:RegistrySearch
+      Id="HidHideInstalledSearch"
+      Root="HKLM"
+      Key="SYSTEM\CurrentControlSet\Services\HidHide"
+      Value="Start"
+      Result="exists"
+      Variable="HIDHIDE_PRESENT" />
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+        Theme="rtfLicense"
+        LicenseFile="BundleLicense.rtf" />
+    </BootstrapperApplication>
+
+    <Chain>
+      <ExePackage
+        Id="ViGEmBus"
+        DisplayName="ViGEm Bus Driver"
+        SourceFile="$(ViGEmInstaller)"
+        DetectCondition="VIGEMBUS_PRESENT = 1"
+        Permanent="yes"
+        PerMachine="yes"
+        Vital="yes"
+        Compressed="yes" />
+
+      <ExePackage
+        Id="HidHide"
+        DisplayName="HidHide"
+        SourceFile="$(HidHideInstaller)"
+        DetectCondition="HIDHIDE_PRESENT = 1"
+        Permanent="yes"
+        PerMachine="yes"
+        Vital="no"
+        Compressed="yes" />
+
+      <MsiPackage
+        Id="OccBridgePackage"
+        DisplayName="OCC Bridge"
+        SourceFile="$(OccBridgeMsi)"
+        Visible="no"
+        Compressed="yes" />
+    </Chain>
+  </Bundle>
+</Wix>

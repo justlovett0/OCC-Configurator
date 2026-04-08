@@ -103,6 +103,14 @@ static bool check_scratch_config_mode(void) {
     return false;
 }
 
+static bool check_scratch_hid_mode(void) {
+    if (watchdog_hw->scratch[1] == WATCHDOG_HID_MAGIC) {
+        watchdog_hw->scratch[1] = 0;
+        return true;
+    }
+    return false;
+}
+
 static void request_config_mode_reboot(void) {
     // Turn off LEDs before rebooting
     led_config_t tmp;
@@ -111,6 +119,62 @@ static void request_config_mode_reboot(void) {
     watchdog_hw->scratch[0] = WATCHDOG_CONFIG_MAGIC;
     watchdog_reboot(0, 0, 10);
     while (1) { tight_loop_contents(); }
+}
+
+static void request_hid_mode_reboot(void) {
+    watchdog_hw->scratch[1] = WATCHDOG_HID_MAGIC;
+    watchdog_reboot(0, 0, 10);
+    while (1) { tight_loop_contents(); }
+}
+
+//--------------------------------------------------------------------
+// PS3 / HID report
+//
+// 27-byte report matching PS3 DualShock 2 layout.
+// GH World Tour drum mapping:
+//   Byte 1: select=0x01, start=0x08, up/right/down/left d-pad
+//   Byte 2: bass(kick)=L2(0x01), green cym=R2(0x02), yellow cym=L1(0x04),
+//           blue cym=R1(0x08), yellow pad=tri(0x10), red pad=circle(0x20),
+//           green pad=cross(0x40), blue pad=square(0x80)
+//--------------------------------------------------------------------
+
+typedef struct __attribute__((packed)) {
+    uint8_t status;
+    uint8_t buttons1;
+    uint8_t buttons2;
+    uint8_t lx;
+    uint8_t ly;
+    uint8_t rx;
+    uint8_t ry;
+    uint8_t reserved[20];
+} ps3_report_t;
+
+static void convert_to_ps3_drum(ps3_report_t *ps3, const xinput_report_t *xi) {
+    memset(ps3, 0, sizeof(*ps3));
+    uint16_t b = xi->buttons;
+
+    // Byte 1: select, start, d-pad
+    if (b & XINPUT_BTN_BACK)        ps3->buttons1 |= 0x01; // select
+    if (b & XINPUT_BTN_START)       ps3->buttons1 |= 0x08; // start
+    if (b & XINPUT_BTN_DPAD_UP)     ps3->buttons1 |= 0x10; // d-pad up
+    if (b & XINPUT_BTN_DPAD_RIGHT)  ps3->buttons1 |= 0x20; // d-pad right
+    if (b & XINPUT_BTN_DPAD_DOWN)   ps3->buttons1 |= 0x40; // d-pad down
+    if (b & XINPUT_BTN_DPAD_LEFT)   ps3->buttons1 |= 0x80; // d-pad left
+
+    // Byte 2: drums and cymbals
+    if (b & XINPUT_BTN_LEFT_THUMB)    ps3->buttons2 |= 0x01; // bass/kick    → L2
+    if (b & XINPUT_BTN_RIGHT_THUMB)   ps3->buttons2 |= 0x02; // green cymbal → R2
+    if (b & XINPUT_BTN_LEFT_SHOULDER) ps3->buttons2 |= 0x04; // yellow cym   → L1
+    if (b & XINPUT_BTN_RIGHT_SHOULDER)ps3->buttons2 |= 0x08; // blue cymbal  → R1
+    if (b & XINPUT_BTN_Y)             ps3->buttons2 |= 0x10; // yellow drum  → triangle
+    if (b & XINPUT_BTN_B)             ps3->buttons2 |= 0x20; // red drum     → circle
+    if (b & XINPUT_BTN_A)             ps3->buttons2 |= 0x40; // green drum   → cross
+    if (b & XINPUT_BTN_X)             ps3->buttons2 |= 0x80; // blue drum    → square
+
+    ps3->lx = 0x80;
+    ps3->ly = 0x80;
+    ps3->rx = 0x80;
+    ps3->ry = 0x80;
 }
 
 //--------------------------------------------------------------------
@@ -178,10 +242,37 @@ static void build_report(xinput_report_t *report) {
 // TinyUSB callbacks
 //--------------------------------------------------------------------
 
-void tud_mount_cb(void)   {}
-void tud_umount_cb(void)  {}
+static bool     _hid_detecting       = false;
+static uint32_t _hid_detect_start_ms = 0;
+
+void tud_mount_cb(void) {
+    if (!g_hid_mode && !g_config_mode) {
+        _hid_detecting       = true;
+        _hid_detect_start_ms = to_ms_since_boot(get_absolute_time());
+    }
+}
+
+void tud_umount_cb(void) {
+    watchdog_hw->scratch[1] = 0;
+    _hid_detecting = false;
+}
+
 void tud_suspend_cb(bool remote_wakeup_en) { (void)remote_wakeup_en; }
 void tud_resume_cb(void)  {}
+
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
+                                hid_report_type_t report_type,
+                                uint8_t *buffer, uint16_t reqlen) {
+    (void)instance; (void)report_id; (void)report_type;
+    memset(buffer, 0, reqlen);
+    return reqlen;
+}
+
+void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
+                            hid_report_type_t report_type,
+                            uint8_t const *buffer, uint16_t bufsize) {
+    (void)instance; (void)report_id; (void)report_type; (void)buffer; (void)bufsize;
+}
 
 //--------------------------------------------------------------------
 // Onboard LED
@@ -214,6 +305,7 @@ int main(void) {
     config_load(&g_config);
 
     bool enter_config = check_scratch_config_mode();
+    bool enter_hid    = check_scratch_hid_mode();
 
     if (g_config.device_name[0] != '\0')
         g_device_name = g_config.device_name;
@@ -233,6 +325,7 @@ int main(void) {
     } else {
         // ── Play mode ────────────────────────────────────────────────
         g_config_mode = false;
+        g_hid_mode    = enter_hid;
         gpio_put(ONBOARD_LED_PIN, true);
 
         // Init APA102 LED strip BEFORE GPIO init so SPI pins are
@@ -253,6 +346,7 @@ int main(void) {
         tusb_init();
 
         xinput_report_t report;
+        ps3_report_t    ps3_report;
         uint64_t last_report_us = 0;
         uint64_t last_led_us    = 0;
 
@@ -262,11 +356,28 @@ int main(void) {
             if (xinput_magic_detected())
                 request_config_mode_reboot();
 
+            // ── HID auto-detection ───────────────────────────────────────────
+            if (_hid_detecting) {
+                if (xinput_led_report_seen()) {
+                    _hid_detecting = false;
+                } else if (to_ms_since_boot(get_absolute_time()) - _hid_detect_start_ms > 3000) {
+                    _hid_detecting = false;
+                    request_hid_mode_reboot();
+                }
+            }
+
             uint64_t now_us = time_us_64();
 
             if (now_us - last_report_us >= REPORT_INTERVAL_US) {
                 last_report_us = now_us;
-                if (xinput_ready()) {
+
+                if (g_hid_mode) {
+                    build_report(&report);
+                    if (tud_hid_ready()) {
+                        convert_to_ps3_drum(&ps3_report, &report);
+                        tud_hid_report(0, &ps3_report, sizeof(ps3_report));
+                    }
+                } else if (xinput_ready()) {
                     build_report(&report);
                     xinput_send_report(&report);
                 }

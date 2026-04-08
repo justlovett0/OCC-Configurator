@@ -16,7 +16,7 @@ from .serial_comms import PicoSerial
 from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
                               get_bundled_fw_date_str, find_rpi_rp2_drive)
-from .xinput_utils import XINPUT_AVAILABLE
+from .xinput_utils import XINPUT_AVAILABLE, ERROR_SUCCESS
 from .utils import (_centered_dialog, _center_window, _make_flash_popup,
                      _find_preset_configs, _ask_wired_or_wireless)
 class App:
@@ -1418,8 +1418,12 @@ class App:
                  bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left", padx=(8, 0))
 
     def _make_led_section(self):
-        _card, inner = self._make_collapsible_card(
-            "LED STRIP  (APA102 / SK9822 / Dotstar)", collapsed=True)
+        card = self._make_card()
+        inner = tk.Frame(card, bg=BG_CARD)
+        inner.pack(fill="x", padx=12, pady=10)
+        tk.Label(inner, text="LED STRIP  (APA102 / SK9822 / Dotstar)",
+                 bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="w", pady=(0, 4))
         tk.Label(inner, text="Wire SCK (CI) → GP6, MOSI (DI) → GP3. Chain LEDs in series. "
                  "VCC → VBUS (5V), GND → GND. "
                  "WARNING: GP3 and GP6 are reserved for LEDs when enabled — "
@@ -3558,6 +3562,25 @@ class App:
             if not uf2:
                 return
 
+        # Warn if flashing mismatched firmware family (wired ↔ wireless)
+        _selected_base = os.path.basename(uf2)
+        _current_is_wired = getattr(self, "_loaded_device_type", None) not in ("guitar_combined",)
+        _flashing_wireless = _selected_base.startswith("Wireless_")
+        _flashing_wired    = _selected_base.startswith("Wired_")
+
+        if _current_is_wired and _flashing_wireless:
+            if not messagebox.askyesno(
+                "Firmware Mismatch",
+                "Wired firmware is currently installed.\n\n"
+                "Are you sure you want to install wireless firmware?"):
+                return
+
+        if not _current_is_wired and _flashing_wired:
+            if not messagebox.askyesno(
+                "Firmware Mismatch",
+                "Wireless firmware is currently installed.\n\n"
+                "Are you sure you want to install wired firmware?"):
+                return
 
         # Send BOOTSEL now if in config mode — before hide() reboots to play mode.
         # hide() checks self.pico.connected; if we disconnect first it skips reboot.

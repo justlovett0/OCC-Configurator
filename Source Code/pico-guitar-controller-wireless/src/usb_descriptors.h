@@ -9,10 +9,12 @@
 #include <stdbool.h>
 
 //--------------------------------------------------------------------
-// Global mode flag — set before tusb_init(), selects descriptor set
+// Global mode flags — set before tusb_init(), select descriptor set
 //--------------------------------------------------------------------
 
 extern bool g_config_mode;
+extern bool g_hid_mode;   // USB PS3 HID mode
+extern bool g_kb_mode;    // USB keyboard mode
 
 // Custom device name — set from config before tusb_init()
 extern const char *g_device_name;
@@ -73,6 +75,13 @@ extern const char *g_device_name;
 // Both are cleared after reading on the next boot.
 #define WATCHDOG_BT_OVERRIDE_MAGIC      0xB700B100
 #define WATCHDOG_DONGLE_OVERRIDE_MAGIC  0xD0676C00
+
+//--------------------------------------------------------------------
+// HID Mode (USB PS3 guitar)
+//--------------------------------------------------------------------
+
+#define HID_MODE_VID             0x12BA
+#define HID_MODE_PID             0x0100
 
 //--------------------------------------------------------------------
 // XInput Button bit masks (bytes 2-3 of report, little-endian uint16)

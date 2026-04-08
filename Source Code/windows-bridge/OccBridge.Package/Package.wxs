@@ -1,0 +1,54 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="OCC Bridge"
+    Manufacturer="Open Controller"
+    Version="$(ProductVersion)"
+    UpgradeCode="CAECF30D-F649-4CF7-8AF6-BFB39E6FD8C7"
+    Scope="perMachine">
+
+    <MediaTemplate EmbedCab="yes" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of OCC Bridge is already installed." />
+    <Icon Id="OccBridgeProductIcon" SourceFile="$(OccBridgeIcon)" />
+    <Property Id="ARPPRODUCTICON" Value="OccBridgeProductIcon" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="OCCROOTFOLDER" Name="OCC">
+        <Directory Id="INSTALLFOLDER" Name="OccBridge" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProgramMenuDir" Name="OCC Bridge" />
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="OCC Bridge" Level="1">
+      <ComponentRef Id="OccBridgeAppComponent" />
+      <ComponentRef Id="OccBridgeInstallComponent" />
+      <ComponentRef Id="OccBridgeShortcutComponent" />
+    </Feature>
+
+    <Component Id="OccBridgeAppComponent" Directory="INSTALLFOLDER" Guid="*">
+      <File Id="OccBridgeAppExe" Source="$(OccBridgeAppExe)" KeyPath="yes" />
+    </Component>
+
+    <Component Id="OccBridgeInstallComponent" Directory="INSTALLFOLDER" Guid="*">
+      <File Id="OccBridgeInstallExe" Source="$(OccBridgeInstallExe)" KeyPath="yes" />
+    </Component>
+
+    <Component Id="OccBridgeShortcutComponent" Directory="ProgramMenuDir" Guid="*">
+      <Shortcut
+        Id="OccBridgeStartMenuShortcut"
+        Name="OCC Bridge"
+        Target="[INSTALLFOLDER]OccBridge.App.exe"
+        WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveProgramMenuDir" On="uninstall" />
+      <RegistryValue
+        Root="HKCU"
+        Key="Software\Open Controller\OCC Bridge"
+        Name="Installed"
+        Type="integer"
+        Value="1"
+        KeyPath="yes" />
+    </Component>
+  </Package>
+</Wix>

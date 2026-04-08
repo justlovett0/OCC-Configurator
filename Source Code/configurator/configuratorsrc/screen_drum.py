@@ -12,7 +12,7 @@ from .serial_comms import PicoSerial
 from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
                               get_bundled_fw_date_str, find_rpi_rp2_drive)
-from .xinput_utils import XINPUT_AVAILABLE
+from .xinput_utils import XINPUT_AVAILABLE, ERROR_SUCCESS
 from .utils import (_centered_dialog, _center_window, _make_flash_popup, _find_preset_configs)
 class DrumApp:
     """
@@ -237,32 +237,62 @@ class DrumApp:
             bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9))
         self._status_lbl.pack(anchor="w", padx=14, pady=(8, 6))
 
-        # ── Scrollable content area ──────────────────────────────────
-        scroll_outer = tk.Frame(outer, bg=BG_MAIN)
-        scroll_outer.pack(fill="both", expand=True, padx=12)
+        # ── Tab bar ──────────────────────────────────────────────────
+        tab_bar = tk.Frame(outer, bg=BG_MAIN)
+        tab_bar.pack(fill="x")
+        _TAB_NAMES = ["Pads & Controls", "D-Pad", "Lighting"]
+        self._tab_labels = []
+        for _i, _name in enumerate(_TAB_NAMES):
+            _lbl = tk.Label(tab_bar, text=_name, bg=BG_MAIN, fg=TEXT_DIM,
+                            font=(FONT_UI, 10, "bold"), padx=18, pady=10,
+                            cursor="hand2")
+            _lbl.pack(side="left")
+            _lbl.bind("<Button-1>", lambda e, idx=_i: self._switch_tab(idx))
+            self._tab_labels.append(_lbl)
+        tk.Frame(outer, bg=BORDER, height=1).pack(fill="x")
 
-        self._scroll_canvas = tk.Canvas(scroll_outer, bg=BG_MAIN,
-                                         highlightthickness=0, bd=0)
-        self._scrollbar = ttk.Scrollbar(scroll_outer, orient="vertical",
-                                         command=self._on_yview)
-        self.content = tk.Frame(self._scroll_canvas, bg=BG_MAIN)
+        # ── Scrollable area — one slot per tab ───────────────────────
+        scroll_outer = tk.Frame(outer, bg=BG_MAIN)
+        scroll_outer.pack(fill="both", expand=True)
+
+        self._tab_slots   = []
+        self._tab_widgets = []
+        for _ in range(3):
+            _slot    = tk.Frame(scroll_outer, bg=BG_MAIN)
+            _canvas  = tk.Canvas(_slot, bg=BG_MAIN, highlightthickness=0, bd=0)
+            _sb      = ttk.Scrollbar(_slot, orient="vertical", command=self._on_yview)
+            _content = tk.Frame(_canvas, bg=BG_MAIN)
+            _content.bind("<Configure>", self._on_content_configure)
+            _win = _canvas.create_window((0, 0), window=_content, anchor="nw")
+            _canvas.configure(yscrollcommand=_sb.set)
+            _canvas.pack(side="left", fill="both", expand=True)
+            _sb.pack(side="right", fill="y")
+            _canvas.bind("<Configure>", self._on_canvas_resize)
+            self._tab_slots.append(_slot)
+            self._tab_widgets.append((_canvas, _sb, _content, _win))
+
+        # Build Tab 0: Pads & Controls
+        self._set_active_tab_refs(0)
+        self._make_device_name_section()
+        self._make_drum_pads_section()
+        self._make_drum_debounce_section()
+
+        # Build Tab 1: D-Pad
+        self._set_active_tab_refs(1)
+        self._make_drum_dpad_section()
+
+        # Build Tab 2: Lighting
+        self._set_active_tab_refs(2)
+        self._make_drum_led_section()
+
+        # Activate tab 0 as default
+        self._active_tab = 0
+        self._tab_slots[0].pack(fill="both", expand=True)
+        self._set_active_tab_refs(0)
         self._scroll_enabled   = True
         self._scroll_animating = False
         self._scroll_target    = None
-
-        self.content.bind("<Configure>", self._on_content_configure)
-        self._content_window = self._scroll_canvas.create_window(
-            (0, 0), window=self.content, anchor="nw")
-        self._scroll_canvas.configure(yscrollcommand=self._scrollbar.set)
-        self._scroll_canvas.pack(side="left", fill="both", expand=True)
-        self._scrollbar.pack(side="right", fill="y")
-        self._scroll_canvas.bind("<Configure>", self._on_canvas_resize)
-
-        # ── Sections ─────────────────────────────────────────────────
-        self._make_device_name_section()
-        self._make_drum_pins_section()
-        self._make_drum_led_section()
-        self._make_drum_debounce_section()
+        self._update_tab_styling()
 
         # ── Bottom action bar ─────────────────────────────────────────
         bottom = tk.Frame(outer, bg=BG_MAIN)
@@ -288,6 +318,37 @@ class DrumApp:
         self._save_btn.set_state("disabled")
 
         self._set_controls_enabled(False)
+
+    # ── Tab management ───────────────────────────────────────────────
+
+    def _set_active_tab_refs(self, idx):
+        """Point self.content / canvas / scrollbar at the given tab slot."""
+        canvas, sb, content, win = self._tab_widgets[idx]
+        self._scroll_canvas  = canvas
+        self._scrollbar      = sb
+        self.content         = content
+        self._content_window = win
+
+    def _switch_tab(self, idx):
+        """Switch visible tab, update scroll refs and styling."""
+        if idx == self._active_tab:
+            return
+        self._tab_slots[self._active_tab].pack_forget()
+        self._tab_slots[idx].pack(fill="both", expand=True)
+        self._scroll_target    = None
+        self._scroll_animating = False
+        self._scroll_enabled   = True
+        self._active_tab = idx
+        self._set_active_tab_refs(idx)
+        self._update_tab_styling()
+        self._update_scroll_state()
+
+    def _update_tab_styling(self):
+        for i, lbl in enumerate(self._tab_labels):
+            if i == self._active_tab:
+                lbl.config(bg=BG_CARD, fg=TEXT)
+            else:
+                lbl.config(bg=BG_MAIN, fg=TEXT_DIM)
 
     # ── Scroll helpers ───────────────────────────────────────────────
 
@@ -476,7 +537,7 @@ class DrumApp:
 
     # ── Section: Drum Pin Mapping ─────────────────────────────────────
 
-    def _make_drum_pins_section(self):
+    def _make_drum_pads_section(self):
         card = self._make_card()
         inner = tk.Frame(card, bg=BG_CARD)
         inner.pack(fill="x", padx=12, pady=10)
@@ -492,7 +553,8 @@ class DrumApp:
                  justify="left", anchor="w").pack(fill="x", pady=(0, 8))
 
         for key, label, dot_color in self.DRUM_BUTTON_DEFS:
-            # Section separators
+            if key == "dpad_up":
+                break
             if key == "foot_pedal":
                 tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(6, 4))
                 tk.Label(inner, text="FOOT PEDAL", bg=BG_CARD, fg=TEXT_DIM,
@@ -501,11 +563,24 @@ class DrumApp:
                 tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(6, 4))
                 tk.Label(inner, text="START / SELECT", bg=BG_CARD, fg=TEXT_DIM,
                          font=(FONT_UI, 8, "bold")).pack(anchor="w", pady=(0, 4))
-            elif key == "dpad_up":
-                tk.Frame(inner, bg=BORDER, height=1).pack(fill="x", pady=(6, 4))
-                tk.Label(inner, text="D-PAD", bg=BG_CARD, fg=TEXT_DIM,
-                         font=(FONT_UI, 8, "bold")).pack(anchor="w", pady=(0, 4))
             self._make_drum_pin_row(inner, key, label, dot_color)
+
+    def _make_drum_dpad_section(self):
+        card = self._make_card()
+        inner = tk.Frame(card, bg=BG_CARD)
+        inner.pack(fill="x", padx=12, pady=10)
+
+        tk.Label(inner, text="D-PAD", bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="w")
+        tk.Label(inner,
+                 text="Assign GPIO pins to D-Pad directions.",
+                 bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(anchor="w", pady=(0, 8))
+
+        dpad_keys = {"dpad_up", "dpad_down", "dpad_left", "dpad_right"}
+        for key, label, dot_color in self.DRUM_BUTTON_DEFS:
+            if key in dpad_keys:
+                self._make_drum_pin_row(inner, key, label, dot_color)
 
     def _make_drum_pin_row(self, parent, key, label, dot_color):
         self._drum_pin_vars[key] = tk.IntVar(value=0)
@@ -651,8 +726,12 @@ class DrumApp:
     # ── Section: LED Strip (mirrors guitar App) ───────────────────────
 
     def _make_drum_led_section(self):
-        _card, inner = self._make_collapsible_card(
-            "LED STRIP  (APA102 / SK9822 / Dotstar)", collapsed=True)
+        card = self._make_card()
+        inner = tk.Frame(card, bg=BG_CARD)
+        inner.pack(fill="x", padx=12, pady=10)
+        tk.Label(inner, text="LED STRIP  (APA102 / SK9822 / Dotstar)",
+                 bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="w", pady=(0, 4))
 
         tk.Label(inner,
                  text="Wire SCK (CI) → GP6, MOSI (DI) → GP3. Chain LEDs in series. "
@@ -1637,6 +1716,13 @@ class DrumApp:
             if not uf2:
                 return
 
+        # Warn before flashing wireless firmware — prevents accidental wireless flash on non-wireless Picos
+        if os.path.basename(uf2).startswith("Wireless_"):
+            if not messagebox.askyesno(
+                "Firmware Mismatch",
+                "Wired firmware is currently installed.\n\n"
+                "Are you sure you want to install wireless firmware?"):
+                return
 
         # Send BOOTSEL now if in config mode — before hide() reboots to play mode.
         # hide() checks self.pico.connected; if we disconnect first it skips reboot.

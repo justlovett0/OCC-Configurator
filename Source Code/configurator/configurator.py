@@ -304,6 +304,7 @@ def main():
           return
       menu.hide()
       screen.show()
+      root.update()   # flush layout + WM_PAINT so canvas widgets render before serial blocks
       screen._connect_serial(port)
 
   def go_to_configurator(port):

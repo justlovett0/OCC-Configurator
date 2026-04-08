@@ -82,6 +82,14 @@ static bool check_scratch_config_mode(void) {
     return false;
 }
 
+static bool check_scratch_hid_mode(void) {
+    if (watchdog_hw->scratch[1] == WATCHDOG_HID_MAGIC) {
+        watchdog_hw->scratch[1] = 0;
+        return true;
+    }
+    return false;
+}
+
 static void request_config_mode_reboot(void) {
     // Turn off LEDs before rebooting (use aligned copy)
     led_config_t tmp;
@@ -90,6 +98,66 @@ static void request_config_mode_reboot(void) {
     watchdog_hw->scratch[0] = WATCHDOG_CONFIG_MAGIC;
     watchdog_reboot(0, 0, 10);
     while (1) { tight_loop_contents(); }
+}
+
+static void request_hid_mode_reboot(void) {
+    watchdog_hw->scratch[1] = WATCHDOG_HID_MAGIC;
+    watchdog_reboot(0, 0, 10);
+    while (1) { tight_loop_contents(); }
+}
+
+//--------------------------------------------------------------------
+// PS3 / HID report
+//
+// 27-byte report matching PS3 DualShock 2 layout used by GH Les Paul.
+// Byte 1 buttons: select=0x01, l3=0x02, r3=0x04, start=0x08,
+//                 up=0x10, right=0x20, down=0x40, left=0x80
+// Byte 2 buttons: l2=0x01, r2=0x02, l1=0x04, r1=0x08,
+//                 tri=0x10, circle=0x20, cross=0x40, square=0x80
+//--------------------------------------------------------------------
+
+typedef struct __attribute__((packed)) {
+    uint8_t status;       // byte 0: 0x00
+    uint8_t buttons1;     // byte 1: select/L3/R3/start/up/right/down/left
+    uint8_t buttons2;     // byte 2: L2/R2/L1/R1/tri/circle/cross/square
+    uint8_t lx;           // byte 3: left stick X  (0x80 = center)
+    uint8_t ly;           // byte 4: left stick Y  (0x80 = center)
+    uint8_t rx;           // byte 5: right stick X (0x80 = center)
+    uint8_t ry;           // byte 6: right stick Y / whammy (0x80 = rest)
+    uint8_t reserved[20]; // bytes 7-26
+} ps3_report_t;
+
+static void convert_to_ps3_guitar(ps3_report_t *ps3, const xinput_report_t *xi) {
+    memset(ps3, 0, sizeof(*ps3));
+    uint16_t b = xi->buttons;
+
+    // Byte 1: select, start, strum up/down, d-pad
+    if (b & XINPUT_BTN_BACK)        ps3->buttons1 |= 0x01; // select
+    if (b & XINPUT_BTN_START)       ps3->buttons1 |= 0x08; // start
+    if (b & XINPUT_BTN_DPAD_UP)     ps3->buttons1 |= 0x10; // strum up / d-pad up
+    if (b & XINPUT_BTN_DPAD_RIGHT)  ps3->buttons1 |= 0x20; // d-pad right
+    if (b & XINPUT_BTN_DPAD_DOWN)   ps3->buttons1 |= 0x40; // strum down / d-pad down
+    if (b & XINPUT_BTN_DPAD_LEFT)   ps3->buttons1 |= 0x80; // d-pad left
+
+    // Byte 2: frets and tilt
+    if (b & XINPUT_BTN_LEFT_SHOULDER) ps3->buttons2 |= 0x04; // orange → L1
+    if (b & XINPUT_BTN_Y)             ps3->buttons2 |= 0x10; // yellow → triangle
+    if (b & XINPUT_BTN_B)             ps3->buttons2 |= 0x20; // red    → circle
+    if (b & XINPUT_BTN_A)             ps3->buttons2 |= 0x40; // green  → cross
+    if (b & XINPUT_BTN_X)             ps3->buttons2 |= 0x80; // blue   → square
+
+    // Tilt → R1 (star power button on PS3 GH)
+    if (xi->right_stick_y > 16000)
+        ps3->buttons2 |= 0x08; // r1
+
+    // Sticks at center
+    ps3->lx = 0x80;
+    ps3->ly = 0x80;
+    ps3->rx = 0x80;
+
+    // Whammy: XInput right_stick_x (-32768=rest → 0x80, +32767=max → 0xFF)
+    uint16_t w = (uint16_t)((int32_t)xi->right_stick_x + 32768); // 0..65535
+    ps3->ry = (uint8_t)(0x80 + (w >> 9));
 }
 
 //--------------------------------------------------------------------
@@ -158,6 +226,15 @@ static void init_i2c_tilt(void) {
         if (good > 0)
             g_i2c_tilt_baseline = (uint16_t)(sum / good);
     }
+}
+
+static bool boot_override_button_held(int8_t pin) {
+    if (pin < 0 || pin > 28) return false;
+    gpio_init(pin);
+    gpio_set_dir(pin, GPIO_IN);
+    gpio_pull_up(pin);
+    sleep_ms(5);                 // settle time for pull-up
+    return !gpio_get(pin);       // active-low
 }
 
 //--------------------------------------------------------------------
@@ -415,10 +492,62 @@ static void build_report(xinput_report_t *report) {
 // TinyUSB callbacks
 //--------------------------------------------------------------------
 
-void tud_mount_cb(void)   {}
-void tud_umount_cb(void)  {}
+// HID auto-detection state: start timer on USB mount, watch for XInput LED report.
+// If 3 seconds pass with no LED report → non-XInput host (PS3/macOS/Linux) → reboot HID.
+static bool     _hid_detecting      = false;
+static uint32_t _hid_detect_start_ms = 0;
+
+//--------------------------------------------------------------------
+// Keyboard report (Fortnite Festival layout)
+//--------------------------------------------------------------------
+
+static void build_kb_report(const xinput_report_t *xi) {
+    uint8_t keys[6] = {0};
+    uint8_t n = 0;
+    uint16_t b = xi->buttons;
+    if ((b & GUITAR_BTN_GREEN)                               && n < 6) keys[n++] = HID_KEY_D;
+    if ((b & GUITAR_BTN_RED)                                 && n < 6) keys[n++] = HID_KEY_F;
+    if ((b & GUITAR_BTN_YELLOW)                              && n < 6) keys[n++] = HID_KEY_J;
+    if ((b & GUITAR_BTN_BLUE)                                && n < 6) keys[n++] = HID_KEY_K;
+    if ((b & GUITAR_BTN_ORANGE)                              && n < 6) keys[n++] = HID_KEY_L;
+    if ((b & (GUITAR_BTN_STRUM_UP | GUITAR_BTN_STRUM_DOWN)) && n < 6) keys[n++] = HID_KEY_SPACE;
+    if ((b & GUITAR_BTN_START)                               && n < 6) keys[n++] = HID_KEY_RETURN;
+    if ((b & GUITAR_BTN_SELECT)                              && n < 6) keys[n++] = HID_KEY_ESCAPE;
+    if (xi->right_stick_y > 16000                            && n < 6) keys[n++] = HID_KEY_S;
+    tud_hid_keyboard_report(0, 0, keys);
+}
+
+void tud_mount_cb(void) {
+    // Start detection window only in XInput play mode — not in kb or config mode
+    if (!g_hid_mode && !g_kb_mode && !g_config_mode) {
+        _hid_detecting       = true;
+        _hid_detect_start_ms = to_ms_since_boot(get_absolute_time());
+    }
+}
+
+void tud_umount_cb(void) {
+    // Clear HID scratch so next plug re-detects (matters for externally powered devices)
+    watchdog_hw->scratch[1] = 0;
+    _hid_detecting = false;
+}
+
 void tud_suspend_cb(bool remote_wakeup_en) { (void)remote_wakeup_en; }
 void tud_resume_cb(void)  {}
+
+// Required by TinyUSB HID class driver
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id,
+                                hid_report_type_t report_type,
+                                uint8_t *buffer, uint16_t reqlen) {
+    (void)instance; (void)report_id; (void)report_type;
+    memset(buffer, 0, reqlen);
+    return reqlen;
+}
+
+void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
+                            hid_report_type_t report_type,
+                            uint8_t const *buffer, uint16_t bufsize) {
+    (void)instance; (void)report_id; (void)report_type; (void)buffer; (void)bufsize;
+}
 
 //--------------------------------------------------------------------
 // Onboard LED
@@ -451,6 +580,18 @@ int main(void) {
     config_load(&g_config);
 
     bool enter_config = check_scratch_config_mode();
+    bool enter_hid    = check_scratch_hid_mode();
+
+    // Manual boot overrides: read fret pins before tusb_init so a held button
+    // can force a mode immediately on plug-in with no reboot round-trip.
+    // Orange = Fortnite Festival keyboard mode.
+    // Yellow = PS3 HID mode.
+    bool enter_kb = false;
+    if (!enter_config) {
+        enter_hid = enter_hid || boot_override_button_held(g_config.pin_buttons[BTN_IDX_YELLOW]);
+        enter_kb  = boot_override_button_held(g_config.pin_buttons[BTN_IDX_ORANGE]);
+        if (enter_kb) enter_hid = false;         // keyboard override takes priority if both are held
+    }
 
     // Set custom device name for USB string descriptors
     if (g_config.device_name[0] != '\0') {
@@ -470,6 +611,8 @@ int main(void) {
         }
     } else {
         g_config_mode = false;
+        g_hid_mode    = enter_hid;
+        g_kb_mode     = enter_kb;
         gpio_put(ONBOARD_LED_PIN, true);
 
         // Initialize APA102 LED strip BEFORE GPIO init
@@ -480,6 +623,11 @@ int main(void) {
 
         if (aligned_leds.enabled) {
             apa102_init();
+            // Boot-mode color flash: purple = PS3 HID, orange = Fortnite Festival/keyboard mode
+            if (g_hid_mode)
+                apa102_flash_all_color(&aligned_leds, 255, 80, 255);
+            else if (g_kb_mode)
+                apa102_flash_all_color(&aligned_leds, 255, 80, 0);
         }
 
         // Initialize I2C tilt (ADXL345 or LIS3DH) BEFORE GPIO init
@@ -502,20 +650,45 @@ int main(void) {
         tusb_init();
 
         xinput_report_t report;
+        ps3_report_t    ps3_report;
         uint64_t last_report_us = 0;
-        uint64_t last_led_us = 0;
+        uint64_t last_led_us    = 0;
 
         while (true) {
             tud_task();
-            if (xinput_magic_detected()) {
+
+            if (xinput_magic_detected())
                 request_config_mode_reboot();
+
+            // ── HID auto-detection ───────────────────────────────────────────
+            // After USB mount, wait up to 3s for the XInput LED control report
+            // (byte[0]=0x01) that Windows and Linux xpad always send. If it never
+            // arrives, assume PS3 / non-XInput host and reboot into HID mode.
+            if (_hid_detecting) {
+                if (xinput_led_report_seen()) {
+                    _hid_detecting = false;   // confirmed XInput host, stay as-is
+                } else if (to_ms_since_boot(get_absolute_time()) - _hid_detect_start_ms > 3000) {
+                    _hid_detecting = false;
+                    request_hid_mode_reboot();
+                }
             }
 
             uint64_t now_us = time_us_64();
 
             if (now_us - last_report_us >= REPORT_INTERVAL_US) {
                 last_report_us = now_us;
-                if (xinput_ready()) {
+
+                if (g_kb_mode) {
+                    build_report(&report);   // reads hardware, keeps g_pressed_mask for LEDs
+                    if (tud_hid_ready())
+                        build_kb_report(&report);
+                } else if (g_hid_mode) {
+                    build_report(&report);
+                    if (tud_hid_ready()) {
+                        convert_to_ps3_guitar(&ps3_report, &report);
+                        tud_hid_report(0, &ps3_report, sizeof(ps3_report));
+                    }
+                } else if (xinput_ready()) {
                     build_report(&report);
                     xinput_send_report(&report);
                 }
