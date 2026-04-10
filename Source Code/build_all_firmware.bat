@@ -81,16 +81,16 @@ echo.
 :: ------------------------------------------------------------
 :: 5. Wireless Dongle
 :: ------------------------------------------------------------
-echo [5/7] Building pico-dongle...
-cd /d "%SRC%pico-dongle"
-%BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
-if errorlevel 1 (
-    echo ERROR: pico-dongle build FAILED.
-    goto :error
-)
-
+::echo [5/7] Building pico-dongle...
+::cd /d "%SRC%pico-dongle"
+::%BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
+::if errorlevel 1 (
+::    echo ERROR: pico-dongle build FAILED.
+::    goto :error
+::)
+::
 echo Copying Wireless Dongle firmware...
-copy /Y "build\pico_guitar_dongle.uf2" "%CONFIGURATOR%\Wireless_Dongle.uf2"
+::copy /Y "build\pico_guitar_dongle.uf2" "%CONFIGURATOR%\Wireless_Dongle.uf2"
 echo   OK
 echo.
 

@@ -67,11 +67,13 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "hardware/gpio.h"
+#include "hardware/sync.h"
 #include "tusb.h"
 
 #include "usb_descriptors.h"
 #include "xinput_driver.h"
 #include "dongle_bt.h"
+#include "dongle_bindings.h"
 #include "apa102_leds.h"
 
 /* ── Timing constants ──────────────────────────────────────────────── */
@@ -142,6 +144,19 @@ static uint8_t     g_desired_num_ctrl = 0;
  */
 static bool slot_allocated[DONGLE_MAX_CONTROLLERS]    = {false};
 static bool slot_was_connected[DONGLE_MAX_CONTROLLERS] = {false};
+static volatile bool slot_binding_save_pending[DONGLE_MAX_CONTROLLERS] = {false};
+static dongle_binding_t pending_slot_binding[DONGLE_MAX_CONTROLLERS];
+
+static void process_pending_binding_saves(void) {
+    for (uint8_t s = 0; s < DONGLE_MAX_CONTROLLERS; s++) {
+        if (!slot_binding_save_pending[s]) continue;
+        uint32_t irq = save_and_disable_interrupts();
+        dongle_binding_t binding = pending_slot_binding[s];
+        slot_binding_save_pending[s] = false;
+        restore_interrupts(irq);
+        dongle_bindings_save_slot(s, &binding);
+    }
+}
 
 /* ────────────────────────────────────────────────────────────────── */
 /* APA102 LED update                                                  */
@@ -368,12 +383,15 @@ static void usb_connection_task(void) {
 /* from interrupt context on a single-core M0+.                      */
 /* ────────────────────────────────────────────────────────────────── */
 
-static void on_bind_complete(uint8_t slot, const uint8_t mac[BLE_MAC_LEN]) {
-    (void)mac;
+static void on_bind_complete(uint8_t slot, uint8_t addr_type, const uint8_t mac[BLE_MAC_LEN]) {
 
     /* Mark the slot as allocated so auto-rebind logic knows it exists */
     slot_allocated[slot]    = true;
     slot_was_connected[slot] = true;
+    pending_slot_binding[slot].valid = true;
+    pending_slot_binding[slot].addr_type = addr_type;
+    memcpy(pending_slot_binding[slot].mac, mac, BLE_MAC_LEN);
+    slot_binding_save_pending[slot] = true;
 
     /*
      * A new (or returning) controller is now wirelessly connected on slot s.
@@ -475,11 +493,23 @@ int main(void) {
     /* Init BLE scanner (pure Central — passive scan) */
     dongle_bt_init();
 
+    dongle_binding_t saved_bindings[DONGLE_MAX_CONTROLLERS];
+    dongle_bindings_load(saved_bindings);
+    bool any_saved_binding = false;
+    for (uint8_t s = 0; s < DONGLE_MAX_CONTROLLERS; s++) {
+        if (!saved_bindings[s].valid) continue;
+        any_saved_binding = true;
+        slot_allocated[s] = true;
+        dongle_bt_set_bound_mac(s, saved_bindings[s].addr_type, saved_bindings[s].mac);
+    }
+
     /*
      * Auto-start bind on slot 0. LED will blink rapidly until the first
      * controller is found (dongle_bt_is_binding() == true the whole time).
      */
-    dongle_bt_start_bind(0, on_bind_complete);
+    if (!any_saved_binding) {
+        dongle_bt_start_bind(0, on_bind_complete);
+    }
 
     /* ── Main loop state ── */
     xinput_report_t xreport;
@@ -493,6 +523,7 @@ int main(void) {
     while (true) {
         tud_task();
         cyw43_arch_poll();
+        process_pending_binding_saves();
 
         /* ── Detect wireless disconnections, trigger USB update ── */
         rebind_disconnected_slots();
@@ -507,7 +538,13 @@ int main(void) {
             if (pressed && !sync_was_pressed[s]) {
                 if (now_ms - last_sync_press_ms[s] >= SYNC_DEBOUNCE_MS) {
                     last_sync_press_ms[s] = now_ms;
+                    dongle_bindings_clear_slot(s);
+                    slot_allocated[s] = false;
+                    slot_was_connected[s] = false;
+                    slot_binding_save_pending[s] = false;
+                    memset(&pending_slot_binding[s], 0, sizeof(pending_slot_binding[s]));
                     dongle_bt_start_bind(s, on_bind_complete);
+                    schedule_usb_update();
                 }
             }
             sync_was_pressed[s] = pressed;

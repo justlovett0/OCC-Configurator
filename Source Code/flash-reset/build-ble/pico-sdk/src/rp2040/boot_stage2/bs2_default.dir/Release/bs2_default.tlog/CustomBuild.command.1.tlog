@@ -1,0 +1,10 @@
+^C:\USERS\JAMES\PICO-SDK\SRC\RP2040\BOOT_STAGE2\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SC:/Users/James/Desktop/OCC/Source Code/flash-reset" "-BC:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble" --check-stamp-file "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/pico-sdk/src/rp2040/boot_stage2/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

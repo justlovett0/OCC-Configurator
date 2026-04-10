@@ -13,7 +13,7 @@ public sealed class MainForm : Form
     private readonly bool _startHidden;
     private readonly AppConfigurationStore _configurationStore = new();
     private readonly FileLog _log = new();
-    private readonly DeviceBindingService _deviceBindingService = new();
+    private readonly DeviceBindingService _deviceBindingService;
     private readonly PrerequisiteService _prerequisiteService = new();
     private readonly StartupRegistrationService _startupRegistrationService = new();
     private readonly BridgeCoordinator _bridgeCoordinator;
@@ -44,6 +44,7 @@ public sealed class MainForm : Form
     public MainForm(bool startHidden)
     {
         _startHidden = startHidden;
+        _deviceBindingService = new DeviceBindingService(_log);
 
         var physicalInputService = new PhysicalInputService(_log);
         var virtualControllerService = new VirtualControllerService(_log);
@@ -264,7 +265,35 @@ public sealed class MainForm : Form
 
     private void BindController()
     {
-        var candidates = _deviceBindingService.GetCandidates();
+        IReadOnlyList<DeviceCandidate> candidates;
+
+        try
+        {
+            candidates = _deviceBindingService.GetCandidates();
+        }
+        catch (Exception ex)
+        {
+            _log.Exception("Failed to enumerate HID devices for controller binding", ex);
+            MessageBox.Show(
+                this,
+                "OCC Bridge could not enumerate Bluetooth/HID controllers on this PC. Check the log for details and try reconnecting the controller.",
+                "Bind Failed",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+            return;
+        }
+
+        if (candidates.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "No compatible HID controller candidates were found. Make sure the OCC guitar is powered on, paired, and connected over Bluetooth before binding.",
+                "No Controllers Found",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
         using var dialog = new BindControllerForm(candidates);
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.SelectedCandidate is null)
         {

@@ -42,6 +42,7 @@ class MainMenu:
         self._check_in_progress = False   # suppress poll rebuilds during update check
         self._probing_ctrl = False        # background serial probe in flight
         self._factory_reset_in_progress = False  # suppress flash screen during factory reset
+        self._flash_screen_job = None           # delayed auto-open from firmware card
         # BOOTSEL debounce: drive must be seen for this many consecutive polls
         # before we switch screens.  POLL_MS=1000ms so 2 polls = ~2s minimum.
         self._bootsel_stable_count = 0
@@ -1849,9 +1850,18 @@ class MainMenu:
 
     def _build_flash_button(self, drive):
         # Clear old button(s)
+        if self._flash_screen_job:
+            try:
+                self._fw_btn_frame.after_cancel(self._flash_screen_job)
+            except Exception:
+                pass
+            self._flash_screen_job = None
         for w in self._fw_btn_frame.winfo_children():
             w.destroy()
         self._flash_btn = None
+
+        if self._factory_reset_in_progress:
+            return
 
         # Route to the dedicated FlashFirmwareScreen instead of flashing inline.
         # Show a "loading" label briefly, then switch screens.
@@ -1861,11 +1871,12 @@ class MainMenu:
         lbl.pack()
 
         def _go():
-            if self._on_flash_screen:
+            self._flash_screen_job = None
+            if self._on_flash_screen and not self._factory_reset_in_progress:
                 self._on_flash_screen(drive)
 
         # Small delay so the label is visible before the screen switches
-        self._fw_btn_frame.after(400, _go)
+        self._flash_screen_job = self._fw_btn_frame.after(400, _go)
 
     # ── Check for Updates ─────────────────────────────────────────
     def _check_for_updates(self):
@@ -2594,8 +2605,8 @@ class MainMenu:
                     "Hold BOOTSEL while plugging in, then try again.")
                 return
             confirmed = messagebox.askyesno(
-                "Factory Reset — Are you sure?",
-                "This will COMPLETELY ERASE all firmware and settings on the Pico.\n\n"
+                "Factory Reset.. Are you sure?",
+                "This will COMPLETELY ERASE all firmware, data, and settings.\n\n"
                 f"File: {os.path.basename(resetFW_path)}\n"
                 f"Drive: {drive}\n\n"
                 "The Pico will be wiped. You will need to re-flash firmware afterwards.\n\n"
@@ -2620,12 +2631,12 @@ class MainMenu:
             source_desc = "XInput"
 
         confirmed = messagebox.askyesno(
-            "Factory Reset — Are you sure?",
-            "This will COMPLETELY ERASE all firmware and settings on the Pico.\n\n"
+            "Factory Reset.. Are you sure?",
+            "This will COMPLETELY ERASE all firmware, data, and settings.\n\n"
             f"File: {os.path.basename(resetFW_path)}\n"
             f"Detected via: {source_desc}\n\n"
-            "The configurator will switch the Pico to BOOTSEL mode automatically,\n"
-            "then flash resetFW.uf2 to wipe the device.\n\n"
+            "The configurator will switch the Pico to\nBOOTSEL mode automatically, "
+            "then flash resetFW.uf2\nto wipe the device.\n\n"
             "You will need to re-flash firmware afterwards.\n\n"
             "Continue?",
             icon="warning")
@@ -2682,12 +2693,28 @@ class MainMenu:
             status_lbl.config(fg=color)
             dlg.update_idletasks()
 
-        def finish_ok():
+        def _handoff_to_flash_screen():
+            drive = find_rpi_rp2_drive()
+            self._bootsel_stable_count = 0
             self._factory_reset_in_progress = False
+
+            if drive and self._on_flash_screen:
+                if self._poll_job:
+                    self.root.after_cancel(self._poll_job)
+                    self._poll_job = None
+                if dlg.winfo_exists():
+                    dlg.destroy()
+                self._on_flash_screen(drive)
+                return
+
+            if dlg.winfo_exists():
+                dlg.destroy()
+
+        def finish_ok():
             set_status("✓  Factory reset complete!", "", ACCENT_GREEN)
             close_btn.set_state("normal")
-            dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
-            dlg.after(2000, lambda: dlg.destroy() if dlg.winfo_exists() else None)
+            dlg.protocol("WM_DELETE_WINDOW", _handoff_to_flash_screen)
+            self.root.after(0, _handoff_to_flash_screen)
 
         def finish_err(msg, detail=""):
             self._factory_reset_in_progress = False
@@ -2695,8 +2722,10 @@ class MainMenu:
             close_btn.set_state("normal")
             dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
 
+        self._factory_reset_in_progress = True
+        self._bootsel_stable_count = 0
+
         def worker():
-            self._factory_reset_in_progress = True
             pico = PicoSerial()
 
             # ── Step 1: ensure we are in config mode ─────────────────────
@@ -2887,6 +2916,12 @@ class MainMenu:
         # Clear any configurator menu bar left over from App / DrumApp
         self._empty_menu = getattr(self, '_empty_menu', None) or tk.Menu(self.root)
         self.root.config(menu=self._empty_menu)
+        if self._flash_screen_job:
+            try:
+                self._fw_btn_frame.after_cancel(self._flash_screen_job)
+            except Exception:
+                pass
+            self._flash_screen_job = None
         self._bootsel_stable_count = 0   # always start fresh debounce on show
         # Reset Alternatefw detection so incompatible-firmware check reruns
         # fresh every time the main menu is shown (e.g. after firmware switch).
@@ -2909,4 +2944,10 @@ class MainMenu:
         if self._poll_job:
             self.root.after_cancel(self._poll_job)
             self._poll_job = None
+        if self._flash_screen_job:
+            try:
+                self._fw_btn_frame.after_cancel(self._flash_screen_job)
+            except Exception:
+                pass
+            self._flash_screen_job = None
         self.frame.pack_forget()

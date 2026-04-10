@@ -46,6 +46,8 @@
 #include "usb_descriptors.h"
 #include "xinput_driver.h"
 #include "guitar_config.h"
+#include "ble_identity_storage.h"
+#include "controller_binding_storage.h"
 #include "config_serial.h"
 #include "apa102_leds.h"
 #include "adxl345.h"
@@ -64,6 +66,7 @@
 
 // How long GUIDE must be held (in dongle mode) to trigger a switch to BT HID.
 #define GUIDE_HOLD_TO_BT_MS     3000
+#define FORGET_DONGLE_HOLD_MS   3000
 
 static const uint16_t button_masks[BTN_IDX_COUNT] = {
     [BTN_IDX_GREEN]      = GUITAR_BTN_GREEN,
@@ -83,6 +86,7 @@ static const uint16_t button_masks[BTN_IDX_COUNT] = {
 };
 
 static guitar_config_t g_config;
+static controller_bt_binding_t g_controller_binding;
 
 typedef struct {
     uint32_t last_change_us;
@@ -809,6 +813,7 @@ int main(void) {
     picow_led_set(true);  // LED on during boot
 
     config_load(&g_config);
+    controller_binding_load(&g_controller_binding);
 
     g_hid_mode = false;
     g_kb_mode = false;
@@ -989,7 +994,7 @@ int main(void) {
             // ═══════════════════════════════════════════════════════════
 
             if (g_cyw43_initialized) {
-                controller_bt_init(bt_name);
+                controller_bt_init(bt_name, &g_controller_binding);
                 controller_bt_start_sync();
             }
 
@@ -1004,6 +1009,16 @@ int main(void) {
                                        !is_led_spi_pin(guide_pin));
             uint32_t guide_hold_start_ms = 0;
             bool     guide_was_held = false;
+            int8_t   start_pin = g_config.pin_buttons[BTN_IDX_START];
+            int8_t   select_pin = g_config.pin_buttons[BTN_IDX_SELECT];
+            bool     forget_holdable = (start_pin >= 0 && start_pin <= 28 &&
+                                        select_pin >= 0 && select_pin <= 28 &&
+                                        !is_picow_reserved(start_pin) &&
+                                        !is_picow_reserved(select_pin) &&
+                                        !is_led_spi_pin(start_pin) &&
+                                        !is_led_spi_pin(select_pin));
+            uint32_t forget_hold_start_ms = 0;
+            bool     forget_latched = false;
 
             while (true) {
                 if (g_cyw43_initialized) {
@@ -1011,6 +1026,11 @@ int main(void) {
                 }
 
                 uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+                controller_bt_binding_t claimed_binding;
+                if (controller_bt_take_new_claim(&claimed_binding)) {
+                    g_controller_binding = claimed_binding;
+                    controller_binding_save(&g_controller_binding);
+                }
 
                 // ── GUIDE hold: switch to Bluetooth HID mode ──
                 bool guide_held = guide_holdable && !gpio_get(guide_pin);
@@ -1032,6 +1052,24 @@ int main(void) {
                 guide_was_held = guide_held;
 
                 // ── Onboard LED ──
+                bool start_held = forget_holdable && !gpio_get(start_pin);
+                bool select_held = forget_holdable && !gpio_get(select_pin);
+                bool forget_combo_held = start_held && select_held;
+                if (!forget_combo_held) {
+                    forget_hold_start_ms = 0;
+                    forget_latched = false;
+                } else if (!forget_latched) {
+                    if (forget_hold_start_ms == 0) {
+                        forget_hold_start_ms = now_ms;
+                    }
+                    if ((now_ms - forget_hold_start_ms) >= FORGET_DONGLE_HOLD_MS) {
+                        controller_binding_clear();
+                        memset(&g_controller_binding, 0, sizeof(g_controller_binding));
+                        controller_bt_forget_bonding();
+                        forget_latched = true;
+                    }
+                }
+
                 if (!in_guide_countdown) {
                     if (controller_bt_connected()) {
                         picow_led_set(true);
@@ -1058,8 +1096,10 @@ int main(void) {
                     last_led_us = now_us;
                     if (controller_bt_connected()) {
                         apa102_update_from_inputs(&g_aligned_leds, g_pressed_mask);
-                    } else {
+                    } else if (controller_bt_is_open_sync_mode()) {
                         apa102_blink_pairing(255, 200, 0);
+                    } else {
+                        apa102_all_off(&g_aligned_leds);
                     }
                 }
 
@@ -1076,7 +1116,12 @@ int main(void) {
             // ═══════════════════════════════════════════════════════════
 
             if (g_cyw43_initialized) {
-                bt_hid_init(bt_name);
+                uint8_t bt_identity[BLE_IDENTITY_ADDR_LEN];
+                if (!ble_identity_load(bt_identity)) {
+                    ble_identity_generate(bt_identity);
+                    ble_identity_save(bt_identity);
+                }
+                bt_hid_init(bt_name, bt_identity);
             }
 
             bt_hid_report_t bt_report;

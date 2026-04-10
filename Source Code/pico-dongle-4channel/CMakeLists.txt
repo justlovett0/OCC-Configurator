@@ -19,6 +19,7 @@ add_executable(pico_guitar_dongle_4channel
     src/usb_descriptors.c
     src/xinput_driver.c
     src/dongle_bt.c
+    src/dongle_bindings.c
     src/apa102_leds.c
 )
 
@@ -42,6 +43,7 @@ target_link_libraries(pico_guitar_dongle_4channel
     hardware_gpio
     hardware_spi
     hardware_dma
+    hardware_flash
     pico_cyw43_arch_poll
     pico_btstack_ble
     pico_btstack_cyw43

@@ -19,6 +19,8 @@ add_executable(pico_guitar_controller_bt
     src/usb_descriptors.c
     src/xinput_driver.c
     src/guitar_config.c
+    src/ble_identity_storage.c
+    src/controller_binding_storage.c
     src/config_serial.c
     src/apa102_leds.c
     src/adxl345.c
@@ -40,6 +42,10 @@ target_include_directories(pico_guitar_controller_bt PRIVATE
 target_compile_definitions(pico_guitar_controller_bt PRIVATE
     CYW43_LWIP=0
     PICO_W_BT=1
+)
+
+target_compile_options(pico_guitar_controller_bt PRIVATE
+    "-DPICO_FLASH_BANK_STORAGE_OFFSET=(PICO_FLASH_SIZE_BYTES-(5*FLASH_SECTOR_SIZE))"
 )
 
 # Link required libraries

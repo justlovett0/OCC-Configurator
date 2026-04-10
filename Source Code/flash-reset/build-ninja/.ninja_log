@@ -1,0 +1,209 @@
+# ninja log v7
+28	130	7974594425770540	pico-sdk/src/rp2040/boot_stage2/CMakeFiles/bs2_default.dir/compile_time_choice.S.obj	cfaf726be9130f4c
+62	140	7974594426120545	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq_handler_chain.S.obj	59bacce234ca26b3
+43	172	7974594425930555	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_common/common.c.obj	6080246f08a2fb1
+41	178	7974594425900533	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2040/pico_platform/platform.c.obj	cde54b2d9f48bdaa
+33	200	7974594425830536	CMakeFiles/flash_nuke.dir/flash.c.obj	e242ea67a6b65c41
+70	208	7974594426191025	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj	aaf52a19cd5d1931
+52	225	7974594426010540	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj	9146870ccafa4bca
+36	226	7974594425850535	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdlib/stdlib.c.obj	3c95ee4e40ea2ac0
+49	232	7974594425980572	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj	1f101701aaa5ffbc
+86	246	7974594426360544	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/timeout_helper.c.obj	2a8f27aaddd1df20
+46	248	7974594425950544	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj	4ae49bb856058586
+55	251	7974594426040541	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj	7e8fe1fd4b06464d
+66	251	7974594426150552	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/sem.c.obj	a3794168efd4e7f2
+78	270	7974594426270544	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/critical_section.c.obj	8aa3fd7d11d7fa91
+123	279	7974594426730546	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj	d4bfb7183c4f3845
+38	281	7974594425880555	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj	d3cd30f754238f60
+140	298	7974594426890541	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_vreg/vreg.c.obj	82bf344eaee6d99d
+178	310	7974594427280546	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj	7d47c491c38a16cc
+95	312	7974594426450545	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_util/datetime.c.obj	bb5e7e28954b2bca
+59	317	7974594426080545	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj	84d59b4b482eda47
+209	325	7974594427580541	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom_lock.c.obj	6843b7372b861b36
+131	325	7974594428710538	pico-sdk/src/rp2040/boot_stage2/bs2_default.elf	15f7cb2054d2d63e
+131	325	7974594428710538	pico-sdk/src/rp2040/boot_stage2/bs2_default.dis	15f7cb2054d2d63e
+131	325	7974594428710538	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2040/boot_stage2/bs2_default.dis	15f7cb2054d2d63e
+114	343	7974594426640550	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_uart/uart.c.obj	42019ea14c16c1f3
+200	348	7974594427500546	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj	30f24d37c7aaa7cc
+74	351	7974594426230544	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj	3599cc25ec5ba363
+109	362	7974594426580542	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_util/queue.c.obj	f13a2f793f12cd3a
+91	372	7974594426400544	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj	db2cba680ee50ff4
+172	373	7974594427220554	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_watchdog/watchdog.c.obj	4d8e0fee8c7bf290
+119	388	7974594426680544	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj	175b0dac6c8e3ee4
+99	394	7974594426490540	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_util/pheap.c.obj	ce03c11d56fdce7b
+81	454	7974594426310554	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj	fd4a67bc16a033c
+23	596	7974594515096446	build.ninja	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/tools/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/boot_picobin_headers/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/boot_picoboot_headers/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/boot_uf2_headers/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/pico_base_headers/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/pico_usb_reset_interface_headers/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/pico_bit_ops_headers/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/pico_binary_info/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/pico_divider_headers/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/pico_sync/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/pico_time/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/pico_util/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/pico_stdlib_headers/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/common/hardware_claim/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2040/pico_platform/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2040/hardware_regs/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2040/hardware_structs/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2040/boot_stage2/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_base/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_adc/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_boot_lock/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_clocks/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_divider/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_dma/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_exception/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_flash/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_gpio/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_i2c/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_interp/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_irq/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_pio/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_pll/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_pwm/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_resets/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_rtc/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_spi/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_sync/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_sync_spin_lock/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_ticks/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_timer/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_uart/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_vreg/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_watchdog/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_xip_cache/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/hardware_xosc/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/boot_bootrom_headers/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_platform_common/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_platform_compiler/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_platform_sections/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_platform_panic/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_aon_timer/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_bootrom/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_bootsel_via_double_reset/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_multicore/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_unique_id/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_atomic/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_bit_ops/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_divider/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_double/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_int64_ops/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_flash/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_float/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_mem_ops/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_malloc/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_printf/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_rand/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_stdio_semihosting/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_stdio_uart/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_stdio_rtt/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/cmsis/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/tinyusb/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_stdio_usb/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_i2c_slave/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_async_context/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_btstack/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_cyw43_driver/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_cyw43_driver/cybt_shared_bus/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_mbedtls/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_lwip/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_lwip/tools/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_cyw43_arch/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_time_adapter/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_crt0/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_clib_interface/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_cxx_options/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_standard_binary_info/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_standard_link/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_fix/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_fix/rp2040_usb_device_enumeration/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_status_led/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_runtime_init/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_runtime/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_stdio/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2_common/pico_stdlib/cmake_install.cmake	9ade808012c4abb5
+23	596	7974594515096446	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/docs/cmake_install.cmake	9ade808012c4abb5
+26	132	7974594515946434	pico-sdk/src/rp2040/boot_stage2/bs2_default.bin	4b490f381478dd6b
+26	132	7974594515946434	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2040/boot_stage2/bs2_default.bin	4b490f381478dd6b
+64	150	7974594516156915	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq_handler_chain.S.obj	9fcf9136a4464d5e
+44	157	7974594515966445	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_common/common.c.obj	753e7a497a1e058d
+41	162	7974594515936438	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2040/pico_platform/platform.c.obj	7e1ce8e02815c2a6
+53	201	7974594516056433	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj	aa7a4969b5acb211
+36	206	7974594515886456	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdlib/stdlib.c.obj	8269462960e56950
+57	210	7974594516096431	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj	9066be4b9c4bc115
+50	226	7974594516026438	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj	803d2487504992ea
+71	234	7974594516236435	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj	220cce8508b69a0a
+33	255	7974594515856427	CMakeFiles/flash_nuke.dir/flash.c.obj	c02441fddce91f01
+79	263	7974594516306437	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/critical_section.c.obj	daee859d8da4f3bc
+87	268	7974594516396442	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/timeout_helper.c.obj	e8901dc1e2016702
+47	281	7974594515996445	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj	dc06f9a3aef89d1
+67	286	7974594516196444	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/sem.c.obj	af383a82d924fbd6
+132	296	7974594516846433	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_vreg/vreg.c.obj	e546d1ad6b88ed79
+39	300	7974594515906431	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj	ec1e85eff314dc73
+60	315	7974594516126431	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj	6da979a0e69ca6dd
+234	334	7974594517869605	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_divider/divider.S.obj	b5d8390699996450
+201	339	7974594517536439	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom_lock.c.obj	55afe84cf118c05a
+30	344	7974594515826431	CMakeFiles/flash_nuke.dir/nuke.c.obj	380520acc794f4c
+125	352	7974594516786439	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj	fec35ad05c5802b0
+74	365	7974594516266441	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj	c3ed422145b2876f
+113	370	7974594516666443	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_uart/uart.c.obj	fab92d9be994177e
+157	376	7974594517096446	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj	754bcc7f3d8d0745
+108	381	7974594516606440	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_util/queue.c.obj	47f9add3f320fafb
+162	387	7974594517146445	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj	4ee3a57b6bc815b3
+286	393	7974594518386435	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj	d4ff682007a97a45
+206	415	7974594517586431	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_boot_lock/boot_lock.c.obj	2477cce5212f949b
+98	443	7974594516506445	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_util/datetime.c.obj	11abbe848f02693c
+210	450	7974594517626439	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_flash/flash.c.obj	aecd4ff3eb1af6f4
+300	454	7974594518526443	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj	250a2481ff1082e0
+226	458	7974594517786437	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj	a388ce65b286bf45
+92	463	7974594516446438	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj	ef40d824688ceea5
+339	468	7974594518916442	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj	3b4f9825c0a9b782
+281	482	7974594518338317	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_stack_guard.c.obj	f6f45333287a4b8
+256	488	7974594518086434	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj	3396287cd6a9430f
+296	493	7974594518486441	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj	edff417016cc12ef
+344	497	7974594518966444	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj	6ebf653c09d0c57e
+150	504	7974594517026441	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_watchdog/watchdog.c.obj	3e154e283d53df82
+120	505	7974594516726443	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj	ae7b633baaf412f5
+269	512	7974594518206441	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj	1ae0ad9491b2aedb
+315	513	7974594518676437	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj	d4065022cb391015
+263	518	7974594518156447	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj	3dc1946b54b9e2b6
+103	526	7974594516556440	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_util/pheap.c.obj	1f220b7d644ac48a
+352	531	7974594519046439	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj	519a46e74cec7c73
+83	533	7974594516356442	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj	5907eb3b587c3574
+387	534	7974594519396446	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj	b299e4a9cf7df62c
+376	539	7974594519286435	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj	c7b2dadb4102ab0f
+455	573	7974594520071893	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj	70891e604e5b9808
+382	577	7974594519336440	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_malloc/malloc.c.obj	b676c72ee9e0b929
+443	601	7974594519961897	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj	52d21c097ca27d3c
+365	602	7974594519176448	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj	3b476f3d6dad1bc9
+488	620	7974594520401896	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xip_cache/xip_cache.c.obj	dcb9145ee19af9e3
+415	646	7974594519671889	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_cxx_options/new_delete.cpp.obj	8cc38a1aa462b33c
+497	650	7974594521892205	pico-sdk/src/rp2040/boot_stage2/bs2_default_padded_checksummed.S	82cfcff123c34174
+497	650	7974594521892205	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/pico-sdk/src/rp2040/boot_stage2/bs2_default_padded_checksummed.S	82cfcff123c34174
+493	659	7974594520451903	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj	5318a3a1f0eadaa
+483	669	7974594520351898	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj	9d3de31fc35ab854
+468	693	7974594520201904	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio_uart/stdio_uart.c.obj	53002cbe6448d0cc
+650	700	7974594522022218	pico-sdk/src/rp2040/boot_stage2/CMakeFiles/bs2_default_library.dir/bs2_default_padded_checksummed.S.obj	7a22cbd337b2b033
+458	700	7974594520111892	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj	ebe203d2ad699eda
+335	715	7974594518866437	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_math.c.obj	9197cf50d11c2a36
+393	720	7974594519456440	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_atomic/atomic.c.obj	5da9c10d6ccd9a12
+370	729	7974594519226441	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_math.c.obj	408e3353d48222f6
+463	750	7974594520151909	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj	8894cc9db598e477
+450	830	7974594520031901	CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj	d16a064676cde42b
+830	977	7974594525267343	flash_nuke.elf	921fa5b1d2f6bd9b
+830	977	7974594525267343	flash_nuke.dis	921fa5b1d2f6bd9b
+830	977	7974594525267343	flash_nuke.hex	921fa5b1d2f6bd9b
+830	977	7974594525267343	flash_nuke.bin	921fa5b1d2f6bd9b
+830	977	7974594525267343	flash_nuke.uf2	921fa5b1d2f6bd9b
+830	977	7974594525267343	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.dis	921fa5b1d2f6bd9b
+830	977	7974594525267343	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.hex	921fa5b1d2f6bd9b
+830	977	7974594525267343	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.bin	921fa5b1d2f6bd9b
+830	977	7974594525267343	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.uf2	921fa5b1d2f6bd9b

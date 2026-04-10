@@ -1,0 +1,10 @@
+^C:\USERS\JAMES\DESKTOP\OCC\SOURCE CODE\FLASH-RESET\BUILD-BLE\CMAKEFILES\967BF4577C605DD6D95FB215484B0E1E\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SC:/Users/James/Desktop/OCC/Source Code/flash-reset" "-BC:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble" --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/universal_flash_nuke.slnx"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

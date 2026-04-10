@@ -162,6 +162,10 @@ class PicoSerial:
         if self.send("DEFAULTS") != "OK":
             raise ValueError("DEFAULTS failed")
 
+    def rotate_ble_identity(self):
+        if self.send("ROTATE_BLE_IDENTITY") != "OK":
+            raise ValueError("ROTATE_BLE_IDENTITY failed")
+
     def start_scan(self):
         """Start SCAN. Returns list of pre-scan lines (like I2C:ADXL345) before OK."""
         self.ser.write(b"SCAN\n")
@@ -307,4 +311,3 @@ class PicoSerial:
         r = self.send("LED_OFF")
         if r != "OK":
             raise ValueError(f"LED_OFF: {r}")
-

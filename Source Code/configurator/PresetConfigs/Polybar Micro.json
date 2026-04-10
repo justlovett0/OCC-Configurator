@@ -106,6 +106,6 @@
     23
   ],
   "sync_pin": 15,
-  "wireless_default_mode": 0,
+  "wireless_default_mode": 1,
   "device_type": "guitar_combined"
 }

@@ -1,0 +1,176 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\nuke.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\flash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_stdlib\stdlib.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_gpio\gpio.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2040\pico_platform\platform.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_platform_common\common.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_platform_panic\panic.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\common\hardware_claim\claim.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_sync\sync.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_sync_spin_lock\sync_spin_lock.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_irq\irq.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\common\pico_sync\sem.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\common\pico_sync\lock_core.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\common\pico_sync\mutex.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\common\pico_sync\critical_section.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\common\pico_time\time.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\common\pico_time\timeout_helper.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_timer\timer.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\common\pico_util\datetime.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\common\pico_util\pheap.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\common\pico_util\queue.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_uart\uart.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_clocks\clocks.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_pll\pll.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_vreg\vreg.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_watchdog\watchdog.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_ticks\ticks.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_bootrom\bootrom.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_bootrom\bootrom_lock.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_boot_lock\boot_lock.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_flash\flash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_xosc\xosc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_runtime\runtime.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_runtime_init\runtime_init.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_runtime_init\runtime_init_clocks.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_runtime_init\runtime_init_stack_guard.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_double\double_init_rom_rp2040.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_double\double_math.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_float\float_init_rom_rp2040.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_float\float_math.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_malloc\malloc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_atomic\atomic.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_cxx_options\new_delete.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_standard_binary_info\standard_binary_info.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_printf\printf.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_clib_interface\newlib_interface.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_stdio\stdio.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\pico_stdio_uart\stdio_uart.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_flash\flash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_xip_cache\xip_cache.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_irq\irq_handler_chain.S" />
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\hardware_divider\divider.S" />
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\pico_bit_ops\bit_ops_aeabi.S" />
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\pico_divider\divider_hardware.S" />
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\pico_double\double_aeabi_rp2040.S" />
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\pico_double\double_v1_rom_shim_rp2040.S" />
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\pico_int64_ops\pico_int64_ops_aeabi.S" />
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\pico_float\float_aeabi_rp2040.S" />
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\pico_float\float_v1_rom_shim_rp2040.S" />
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\pico_mem_ops\mem_ops_aeabi.S" />
+    <None Include="C:\Users\James\pico-sdk\src\rp2_common\pico_crt0\crt0.S" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{14A0F16B-3C8F-39B3-B375-E01CB2F0F1C0}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

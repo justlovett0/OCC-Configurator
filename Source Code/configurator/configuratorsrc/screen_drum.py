@@ -1,10 +1,10 @@
-import sys, os, time, threading, json
+import sys, os, time, threading, json, datetime
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
                          TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
                          DIGITAL_PINS, DIGITAL_PIN_LABELS, MAX_LEDS, LED_INPUT_NAMES,
-                         LED_INPUT_LABELS, VALID_NAME_CHARS)
+                         LED_INPUT_LABELS, VALID_NAME_CHARS, OCC_SUBTYPES)
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import (RoundedButton, HelpButton, HelpDialog, CustomDropdown,
                        SpeedSlider, LiveBarGraph, _help_text, _help_placeholder)
@@ -12,7 +12,8 @@ from .serial_comms import PicoSerial
 from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
                               get_bundled_fw_date_str, find_rpi_rp2_drive)
-from .xinput_utils import XINPUT_AVAILABLE, ERROR_SUCCESS
+from .xinput_utils import (XINPUT_AVAILABLE, ERROR_SUCCESS, xinput_get_connected,
+                           MAGIC_STEPS, xinput_send_vibration)
 from .utils import (_centered_dialog, _center_window, _make_flash_popup, _find_preset_configs)
 class DrumApp:
     """
@@ -2235,4 +2236,3 @@ class DrumApp:
             "OCC — Open Controller Configurator\n"
             "Guitars, Drums, Whatever you want I guess\n"
             "threepieces.nut")
-

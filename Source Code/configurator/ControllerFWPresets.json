@@ -11,12 +11,7 @@
     "RIFFSTICK PRO":  { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json" }
   },
   "Phunky Customs": {
-    "Phunkiest Guitar": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Phunkiest Guitar.json" },
-    "Coming Soon": { "firmware": "Guitar Controller", "preset_config": null }
-  },
-  "Coming Soon": {
-    "Coming Soon": { "firmware": "Guitar Controller", "preset_config": null },
-    "Coming Soon": { "firmware": "Guitar Controller", "preset_config": null }
+    "Monoboard RP": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Monoboard RP.json" }
   },
   "Coming Soon": {
     "Coming Soon": { "firmware": "Guitar Controller", "preset_config": null },

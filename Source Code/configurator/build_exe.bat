@@ -206,7 +206,7 @@ for %%I in (*.ico) do (
 echo.
 echo Running PyInstaller...
 pyinstaller --clean --onefile --windowed ^
-    --name "OCC - Configurator" ^
+    --name "OCC Configurator" ^
     %ICON_ARG% %ICON_DATA_ARG% ^
     %SPLASH_ARG% %SOUND_ARG% ^
     %FONT_ARGS% ^
@@ -220,14 +220,14 @@ pyinstaller --clean --onefile --windowed ^
 
 echo.
 echo ==========================================
-if exist "dist\OCC - Configurator.exe" (
-    echo  SUCCESS!  dist\OCC - Configurator.exe
+if exist "dist\OCC Configurator.exe" (
+    echo  SUCCESS!  dist\OCC Configurator.exe
     echo  Moving to OCC root folder...
-    move /y "dist\OCC - Configurator.exe" "..\..\OCC - Configurator v!APP_VERSION!.exe"
-    if exist "..\..\OCC - Configurator v!APP_VERSION!.exe" (
-        echo  Moved to OCC - Configurator v!APP_VERSION!.exe
+    move /y "dist\OCC Configurator.exe" "..\..\OCC Configurator v!APP_VERSION!.exe"
+    if exist "..\..\OCC Configurator v!APP_VERSION!.exe" (
+        echo  Moved to OCC Configurator v!APP_VERSION!.exe
     ) else (
-        echo  WARNING: Move failed - exe remains in dist\
+        echo  WARNING: Move failed, exe remains in dist\
     )
 ) else (
     echo  BUILD FAILED - check output above

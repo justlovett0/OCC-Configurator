@@ -1,4 +1,4 @@
-import sys, os, time, threading, json
+import sys, os, time, threading, json, datetime
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
@@ -1231,4 +1231,3 @@ class KeyMacroApp:
             "OCC — Open Controller Configurator\n"
             "Guitars, Drums, Whatever you want I guess\n"
             "threepieces.nut")
-

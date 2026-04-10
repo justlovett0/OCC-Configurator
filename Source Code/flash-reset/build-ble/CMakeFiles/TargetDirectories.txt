@@ -1,0 +1,10 @@
+C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/flash_nuke.dir
+C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/ALL_BUILD.dir
+C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/ZERO_CHECK.dir
+C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/pico-sdk/CMakeFiles/ALL_BUILD.dir
+C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/pico-sdk/src/rp2040/boot_stage2/CMakeFiles/bs2_default.dir
+C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/pico-sdk/src/rp2040/boot_stage2/CMakeFiles/bs2_default_bin.dir
+C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/pico-sdk/src/rp2040/boot_stage2/CMakeFiles/bs2_default_library.dir
+C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/pico-sdk/src/rp2_common/pico_cyw43_driver/CMakeFiles/pioasmBuild.dir
+C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/pico-sdk/src/rp2_common/pico_cyw43_driver/CMakeFiles/cyw43_driver_picow_cyw43_bus_pio_spi_pio_h.dir
+C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/pico-sdk/src/rp2_common/pico_status_led/CMakeFiles/pico_status_led_ws2812_pio_h.dir

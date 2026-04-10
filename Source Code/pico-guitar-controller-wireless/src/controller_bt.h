@@ -15,6 +15,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define CONTROLLER_BT_ADDR_LEN 6
+
+typedef struct {
+    bool    valid;
+    uint8_t addr_type;
+    uint8_t addr[CONTROLLER_BT_ADDR_LEN];
+} controller_bt_binding_t;
+
 // ── Report structure embedded in advertisement (12 bytes) ──
 typedef struct __attribute__((packed)) {
     uint16_t buttons;        // 16 buttons (XInput bit layout)
@@ -28,10 +36,14 @@ typedef struct __attribute__((packed)) {
 
 // Initialize the BLE broadcaster.
 // Call after cyw43_arch_init().
-void controller_bt_init(const char *device_name);
+void controller_bt_init(const char *device_name, const controller_bt_binding_t *binding);
 
 // Start advertising (call at boot or when sync is pressed).
 void controller_bt_start_sync(void);
+
+void controller_bt_forget_bonding(void);
+bool controller_bt_take_new_claim(controller_bt_binding_t *out_binding);
+bool controller_bt_is_open_sync_mode(void);
 
 // Update the advertisement data with the latest gamepad report.
 // Call this at your desired report rate (~250 Hz).

@@ -147,17 +147,25 @@ public sealed class BridgeCoordinator : IDisposable
                     continue;
                 }
 
+                var hideApplied = false;
                 if (configuration.HidePhysicalController && prerequisites.CanHide)
                 {
-                    _hideService.ApplyHide(candidate.InstanceId);
-                    _currentHiddenInstanceId = candidate.InstanceId;
+                    if (_hideService.ApplyHide(candidate.InstanceId))
+                    {
+                        _currentHiddenInstanceId = candidate.InstanceId;
+                        hideApplied = true;
+                    }
+                    else
+                    {
+                        _log.Warn($"HidHide could not hide bound controller '{candidate.ProductName}' because backend '{candidate.Backend}' did not provide a usable PnP instance ID.");
+                    }
                 }
 
                 PublishStatus(new BridgeRuntimeStatus
                 {
                     IsRunning = true,
                     PrerequisitesReady = prerequisites.CanBridge,
-                    HideApplied = configuration.HidePhysicalController && prerequisites.CanHide,
+                    HideApplied = hideApplied,
                     StatusText = "Connected to physical OCC controller.",
                     ActiveDeviceName = candidate.ProductName,
                 });
@@ -172,7 +180,7 @@ public sealed class BridgeCoordinator : IDisposable
                             IsRunning = true,
                             PrerequisitesReady = prerequisites.CanBridge,
                             VirtualControllerConnected = true,
-                            HideApplied = configuration.HidePhysicalController && prerequisites.CanHide,
+                            HideApplied = hideApplied,
                             StatusText = "Bridging OCC controller to virtual Xbox 360 pad.",
                             ActiveDeviceName = candidate.ProductName,
                         });

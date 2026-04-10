@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/pico-sdk/src/rp2_common/pico_cyw43_driver/CMakeFiles/pioasmBuild"
+		},
+		{
+			"file" : "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/8c5353318e261f2cc1c8cdac66400123/pioasmBuild.rule"
+		},
+		{
+			"file" : "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/79bf695ac1add6b6378d4ab4734dc141/pioasmBuild-complete.rule"
+		},
+		{
+			"file" : "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/e8ec6b4215d29f4dee4d38bdddf4ccd8/pioasmBuild-build.rule"
+		},
+		{
+			"file" : "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/e8ec6b4215d29f4dee4d38bdddf4ccd8/pioasmBuild-configure.rule"
+		},
+		{
+			"file" : "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/e8ec6b4215d29f4dee4d38bdddf4ccd8/pioasmBuild-download.rule"
+		},
+		{
+			"file" : "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/e8ec6b4215d29f4dee4d38bdddf4ccd8/pioasmBuild-install.rule"
+		},
+		{
+			"file" : "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/e8ec6b4215d29f4dee4d38bdddf4ccd8/pioasmBuild-mkdir.rule"
+		},
+		{
+			"file" : "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/e8ec6b4215d29f4dee4d38bdddf4ccd8/pioasmBuild-patch.rule"
+		},
+		{
+			"file" : "C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ble/CMakeFiles/e8ec6b4215d29f4dee4d38bdddf4ccd8/pioasmBuild-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"pioasmBuild"
+		],
+		"name" : "pioasmBuild"
+	}
+}

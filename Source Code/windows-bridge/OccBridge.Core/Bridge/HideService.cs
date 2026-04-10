@@ -31,17 +31,30 @@ public sealed class HideService
         _log.Info($"Added application to HidHide whitelist: {applicationPath}");
     }
 
-    public void ApplyHide(string? instanceId)
+    public bool CanHideInstance(string? instanceId)
     {
         if (!_control.IsOperational || string.IsNullOrWhiteSpace(instanceId))
         {
-            return;
+            return false;
         }
 
-        if (!_control.BlockedInstanceIds.Contains(instanceId, StringComparer.OrdinalIgnoreCase))
+        // HidHide expects a real PnP instance ID, not a WinRT non-roamable ID.
+        return instanceId.Contains('\\') && !instanceId.Contains('{');
+    }
+
+    public bool ApplyHide(string? instanceId)
+    {
+        if (!CanHideInstance(instanceId))
         {
-            _control.AddBlockedInstanceId(instanceId);
-            _log.Info($"Added HidHide blocked instance: {instanceId}");
+            return false;
+        }
+
+        var safeInstanceId = instanceId!;
+
+        if (!_control.BlockedInstanceIds.Contains(safeInstanceId, StringComparer.OrdinalIgnoreCase))
+        {
+            _control.AddBlockedInstanceId(safeInstanceId);
+            _log.Info($"Added HidHide blocked instance: {safeInstanceId}");
         }
 
         if (!_control.IsActive)
@@ -49,6 +62,8 @@ public sealed class HideService
             _control.IsActive = true;
             _log.Info("Enabled HidHide filtering.");
         }
+
+        return true;
     }
 
     public void RemoveHide(string? instanceId)

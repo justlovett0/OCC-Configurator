@@ -43,7 +43,7 @@ typedef struct __attribute__((packed)) {
 // Initialize Bluetooth LE HID subsystem.
 // Must be called after cyw43_arch_init().
 // device_name: the Bluetooth discoverable name (from config).
-void bt_hid_init(const char *device_name);
+void bt_hid_init(const char *device_name, const uint8_t *static_addr);
 
 // Process Bluetooth events. Call this in the main loop.
 // (Used alongside cyw43_arch_poll() in poll mode.)

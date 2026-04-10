@@ -2,6 +2,8 @@ namespace OccBridge.Core.Models;
 
 public sealed class BoundControllerConfiguration
 {
+    public ControllerBackend Backend { get; init; } = ControllerBackend.Hid;
+
     public required string ProductName { get; init; }
 
     public required string DevicePath { get; init; }

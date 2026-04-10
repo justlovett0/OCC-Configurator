@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
                          TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
-                         NUKE_UF2_FILENAME)
+                         NUKE_UF2_FILENAME, OCC_SUBTYPES)
 from .fonts import FONT_UI, _resource_path
 from .widgets import RoundedButton, CustomDropdown, HelpDialog, HelpButton, _help_text, _help_placeholder
 from .firmware_utils import (find_uf2_files, _group_uf2_files, load_fw_presets,
@@ -11,6 +11,7 @@ from .firmware_utils import (find_uf2_files, _group_uf2_files, load_fw_presets,
                               find_rpi_rp2_drive, find_rpi_rp2_drive_info,
                               get_bundled_fw_date_str, find_resetFW_uf2)
 from .serial_comms import PicoSerial
+from .xinput_utils import xinput_get_connected, MAGIC_STEPS, xinput_send_vibration
 from .utils import _centered_dialog, _center_window, _ask_wired_or_wireless, _make_flash_popup, _find_preset_configs
 class FlashFirmwareScreen:
     """
@@ -445,13 +446,13 @@ class FlashFirmwareScreen:
         status_var = tk.StringVar(value="Starting…")
         status_lbl = tk.Label(dlg_frame, textvariable=status_var,
                               bg=BG_CARD, fg=ACCENT_BLUE,
-                              font=(FONT_UI, 9), anchor="w", wraplength=430, justify="left")
+                              font=(FONT_UI, 9), anchor="w", wraplength=1100, justify="left")
         status_lbl.pack(anchor="w", pady=(0, 6))
 
         detail_var = tk.StringVar(value="")
         tk.Label(dlg_frame, textvariable=detail_var,
                  bg=BG_CARD, fg=TEXT_DIM,
-                 font=(FONT_UI, 8), anchor="w", wraplength=430, justify="left").pack(anchor="w")
+                 font=(FONT_UI, 8), anchor="w", wraplength=1100, justify="left").pack(anchor="w")
 
         close_btn = RoundedButton(dlg_frame, text="Close", command=dlg.destroy,
                                   bg_color="#555560", btn_width=100, btn_height=30,
@@ -459,7 +460,14 @@ class FlashFirmwareScreen:
         close_btn.pack(side="right", pady=(16, 0))
         close_btn.set_state("disabled")
 
-        _center_window(dlg, self.root)
+        dlg.update_idletasks()
+        req_w = int(dlg.winfo_reqwidth() * 2.5)
+        req_h = int(dlg.winfo_reqheight() * 1.4)
+        px = self.root.winfo_rootx()
+        py = self.root.winfo_rooty()
+        pw = self.root.winfo_width()
+        ph = self.root.winfo_height()
+        dlg.geometry(f"{req_w}x{req_h}+{px + (pw - req_w) // 2}+{py + (ph - req_h) // 2}")
         dlg.grab_set()
 
         def set_status(msg, detail="", color=ACCENT_BLUE):
@@ -509,9 +517,6 @@ class FlashFirmwareScreen:
                     occ = [c for c in connected if c[1] in OCC_SUBTYPES]
                     if occ:
                         xinput_slot = occ[0][0]
-                        break
-                    if connected:
-                        xinput_slot = connected[0][0]
                         break
                 except Exception:
                     pass
@@ -892,8 +897,9 @@ class FlashFirmwareScreen:
         # Center over parent
         pw = self.root.winfo_width();  ph = self.root.winfo_height()
         px = self.root.winfo_rootx(); py = self.root.winfo_rooty()
-        dw = wait_dlg.winfo_reqwidth();  dh = wait_dlg.winfo_reqheight()
-        wait_dlg.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
+        dw = int(wait_dlg.winfo_reqwidth() * 2.5)
+        dh = int(wait_dlg.winfo_reqheight() * 1.4)
+        wait_dlg.geometry(f"{dw}x{dh}+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
         wait_dlg.grab_set()
 
         # ── 2. Run the flash in a background thread ──────────────────
@@ -983,6 +989,7 @@ class FlashFirmwareScreen:
         # Clear any configurator menu bar left over from App / DrumApp
         self._empty_menu = getattr(self, '_empty_menu', None) or tk.Menu(self.root)
         self.root.config(menu=self._empty_menu)
+        self._switch_tab("firmware")
         self._refresh_device_combo()
         info = find_rpi_rp2_drive_info()
         if info:

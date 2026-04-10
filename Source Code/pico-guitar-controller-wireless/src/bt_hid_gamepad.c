@@ -21,7 +21,6 @@
  *   1. CYW43 is initialized (already done by main.c before bt_hid_init)
  *   2. BTstack GATT server is set up with:
  *        - GAP service (device name)
- *        - Battery service (reports 100%)
  *        - HIDS service (HID report descriptor + input report characteristic)
  *   3. BLE advertisements are started — Windows/Android/iOS discover the device
  *   4. On connection: host subscribes to the HIDS Input Report characteristic
@@ -49,7 +48,6 @@
 #include "pico/unique_id.h"
 
 #include "btstack.h"
-#include "ble/gatt-service/battery_service_server.h"
 #include "ble/gatt-service/device_information_service_server.h"
 #include "ble/gatt-service/hids_device.h"
 
@@ -89,15 +87,6 @@ static const uint8_t profile_data[] =
     // Served at runtime via att_read_callback so device name matches g_config.device_name
     0x08, 0x00, 0x03, 0x01, 0x03, 0x00, 0x00, 0x2a,
 
-    // Battery Service 180F
-    // 0x0004 PRIMARY_SERVICE-ORG_BLUETOOTH_SERVICE_BATTERY_SERVICE
-    0x0a, 0x00, 0x02, 0x00, 0x04, 0x00, 0x00, 0x28, 0x0f, 0x18,
-    // 0x0005 CHARACTERISTIC-BATTERY_LEVEL - DYNAMIC | READ | NOTIFY
-    0x0d, 0x00, 0x02, 0x00, 0x05, 0x00, 0x03, 0x28, 0x12, 0x06, 0x00, 0x19, 0x2a,
-    // 0x0006 VALUE CHARACTERISTIC-BATTERY_LEVEL - DYNAMIC | READ | NOTIFY
-    0x08, 0x00, 0x02, 0x01, 0x06, 0x00, 0x19, 0x2a,
-    // 0x0007 CLIENT_CHARACTERISTIC_CONFIGURATION
-    0x0a, 0x00, 0x0e, 0x01, 0x07, 0x00, 0x02, 0x29, 0x00, 0x00,
 
     // Device Information 180A (full service — all fields DYNAMIC, served by library)
     // 0x0008 PRIMARY_SERVICE-ORG_BLUETOOTH_SERVICE_DEVICE_INFORMATION
@@ -449,7 +438,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 // Public API
 // ────────────────────────────────────────────────────────────────────────
 
-void bt_hid_init(const char *device_name) {
+void bt_hid_init(const char *device_name, const uint8_t *static_addr) {
     memset(&_bt, 0, sizeof(_bt));
     _bt.con_handle = HCI_CON_HANDLE_INVALID;
     _bt.device_name = device_name;
@@ -476,7 +465,6 @@ void bt_hid_init(const char *device_name) {
     att_server_init(profile_data, att_read_callback, NULL);
 
     // ── Battery Service: fixed at 100% ──
-    battery_service_server_init(100);
 
     // ── Device Information Service: PnP ID matching USB VID/PID ──
     device_information_service_server_init();
@@ -491,6 +479,9 @@ void bt_hid_init(const char *device_name) {
 
     // ── HIDS: HID Device Service ──
     hids_device_init(0, hid_report_descriptor, sizeof(hid_report_descriptor));
+    if (static_addr) {
+        gap_random_address_set(static_addr);
+    }
 
     // ── GAP: advertisement ──
     // Device name is already embedded in adv_data (Complete Local Name field)

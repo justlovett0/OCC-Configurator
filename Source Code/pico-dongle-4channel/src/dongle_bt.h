@@ -44,7 +44,7 @@ typedef struct __attribute__((packed)) {
  * IMPORTANT: Do not call any blocking functions from this callback.
  * Set a flag and handle in main loop.
  */
-typedef void (*dongle_bt_bind_cb_t)(uint8_t slot, const uint8_t mac[BLE_MAC_LEN]);
+typedef void (*dongle_bt_bind_cb_t)(uint8_t slot, uint8_t addr_type, const uint8_t mac[BLE_MAC_LEN]);
 
 /* ── Lifecycle ──────────────────────────────────────────────────── */
 
@@ -58,10 +58,11 @@ void dongle_bt_init(void);
  * Call for each already-bound slot before scanning starts so the dongle
  * knows which advertisements to route to which XInput instance.
  */
-void dongle_bt_set_bound_mac(uint8_t slot, const uint8_t mac[BLE_MAC_LEN]);
+void dongle_bt_set_bound_mac(uint8_t slot, uint8_t addr_type, const uint8_t mac[BLE_MAC_LEN]);
 
 /* Remove the bound MAC for slot `slot`. That slot will no longer receive data. */
 void dongle_bt_clear_bound_mac(uint8_t slot);
+bool dongle_bt_get_bound_mac(uint8_t slot, uint8_t *addr_type, uint8_t mac[BLE_MAC_LEN]);
 
 /*
  * Enter bind mode for slot `slot`.

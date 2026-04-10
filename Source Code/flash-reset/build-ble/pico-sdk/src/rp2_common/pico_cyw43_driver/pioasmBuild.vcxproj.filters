@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\build-ble\CMakeFiles\e8ec6b4215d29f4dee4d38bdddf4ccd8\pioasmBuild-mkdir.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\build-ble\CMakeFiles\e8ec6b4215d29f4dee4d38bdddf4ccd8\pioasmBuild-download.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\build-ble\CMakeFiles\e8ec6b4215d29f4dee4d38bdddf4ccd8\pioasmBuild-update.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\build-ble\CMakeFiles\e8ec6b4215d29f4dee4d38bdddf4ccd8\pioasmBuild-patch.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\build-ble\CMakeFiles\e8ec6b4215d29f4dee4d38bdddf4ccd8\pioasmBuild-configure.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\build-ble\CMakeFiles\e8ec6b4215d29f4dee4d38bdddf4ccd8\pioasmBuild-build.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\build-ble\CMakeFiles\e8ec6b4215d29f4dee4d38bdddf4ccd8\pioasmBuild-install.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\build-ble\CMakeFiles\79bf695ac1add6b6378d4ab4734dc141\pioasmBuild-complete.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\build-ble\CMakeFiles\8c5353318e261f2cc1c8cdac66400123\pioasmBuild.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+    <CustomBuild Include="C:\Users\James\pico-sdk\src\rp2_common\pico_cyw43_driver\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="C:\Users\James\Desktop\OCC\Source Code\flash-reset\build-ble\pico-sdk\src\rp2_common\pico_cyw43_driver\CMakeFiles\pioasmBuild" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{15438AAF-65AB-3F86-BCAA-DB8286176550}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

@@ -19,6 +19,8 @@ add_executable(flash_nuke
 target_link_libraries(flash_nuke
         pico_stdlib
         hardware_flash
+        hardware_sync
+        pico_unique_id
         )
 
 # Dummy PICO_FLASH_SIZE_BYTES so that flash_range_erase doesn't just assert

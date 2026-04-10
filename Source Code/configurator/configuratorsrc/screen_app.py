@@ -1,4 +1,4 @@
-import sys, os, time, threading, json
+import sys, os, time, threading, json, datetime
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
@@ -7,7 +7,7 @@ from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT
                          ANALOG_PIN_LABELS, I2C0_SDA_PINS, I2C0_SCL_PINS, I2C_SDA_LABELS,
                          I2C_SCL_LABELS, I2C_MODEL_LABELS, I2C_MODEL_VALUES,
                          ADXL345_AXIS_LABELS, MAX_LEDS, LED_INPUT_COUNT, LED_INPUT_NAMES,
-                         LED_INPUT_LABELS, BUTTON_DEFS, VALID_NAME_CHARS)
+                         LED_INPUT_LABELS, BUTTON_DEFS, VALID_NAME_CHARS, OCC_SUBTYPES)
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import (RoundedButton, HelpButton, HelpDialog, CustomDropdown,
                        SpeedSlider, LiveBarGraph, LiveBarGraphVertical, CalibratedBarGraph,
@@ -16,7 +16,8 @@ from .serial_comms import PicoSerial
 from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
                               get_bundled_fw_date_str, find_rpi_rp2_drive)
-from .xinput_utils import XINPUT_AVAILABLE, ERROR_SUCCESS
+from .xinput_utils import (XINPUT_AVAILABLE, ERROR_SUCCESS, xinput_get_connected,
+                           MAGIC_STEPS, xinput_send_vibration)
 from .utils import (_centered_dialog, _center_window, _make_flash_popup,
                      _find_preset_configs, _ask_wired_or_wireless)
 class App:
@@ -2991,6 +2992,69 @@ class App:
 
     # ── Export / Import Configuration ──────────────────────────────
 
+    def _normalized_device_name(self, name=None):
+        raw_name = self.device_name.get() if name is None else name
+        cleaned = ''.join(c for c in raw_name if c in VALID_NAME_CHARS).strip()
+        if not cleaned:
+            cleaned = "Guitar Controller"
+        return cleaned[:20]
+
+    def _is_wireless_guitar_firmware(self):
+        return getattr(self, "_loaded_device_type", "") == "guitar_combined"
+
+    def _should_rotate_ble_identity_for_name_change(self):
+        if not self._is_wireless_guitar_firmware():
+            return False
+        raw_cfg = getattr(self, "_last_raw_cfg", {})
+        current_name = self._normalized_device_name(raw_cfg.get("device_name", ""))
+        pending_name = self._normalized_device_name()
+        return pending_name != current_name
+
+    def _reset_after_disconnect(self, status_text):
+        self._set_status(status_text, ACCENT_GREEN)
+        self.connect_btn.set_state("normal")
+        self.manual_btn.set_state("normal")
+        self.save_reboot_btn.set_state("disabled")
+        self._set_controls_enabled(False)
+
+    def _save_configuration_common(self, reboot_after_save):
+        rotate_identity = self._should_rotate_ble_identity_for_name_change()
+        if rotate_identity:
+            if not messagebox.askyesno(
+                "Bluetooth Re-Pair Required",
+                "Changing the name of a wireless guitar will also rotate its "
+                "Bluetooth identity.\n\nAfter saving, the controller will appear "
+                "as a new Bluetooth device and must be paired again.\n\nContinue?"):
+                return False
+
+        self._stop_monitoring()
+        self._push_all_values()
+        self.pico.save()
+
+        raw_cfg = dict(getattr(self, "_last_raw_cfg", {}))
+        raw_cfg["device_name"] = self._normalized_device_name()
+        self._last_raw_cfg = raw_cfg
+
+        if rotate_identity:
+            self.pico.rotate_ble_identity()
+            self.pico.disconnect()
+            self._reset_after_disconnect("   Saved and rebooted to Play Mode")
+            messagebox.showinfo(
+                "Saved",
+                "Configuration saved.\n\nThe wireless guitar rebooted with a new "
+                "Bluetooth identity and now needs to be paired again.")
+            return True
+
+        if reboot_after_save:
+            try:
+                self.pico.reboot()
+            except Exception:
+                pass
+            self._reset_after_disconnect("   Rebooted to Play Mode")
+        else:
+            messagebox.showinfo("Saved", "Configuration saved to controller!")
+        return True
+
     def _export_config(self):
         """Snapshot all current UI values to a JSON file."""
         device_name = self.device_name.get().strip() or "Guitar Controller"
@@ -3329,10 +3393,7 @@ class App:
         if not self.pico.connected:
             return
         try:
-            self._stop_monitoring()
-            self._push_all_values()
-            self.pico.save()
-            messagebox.showinfo("Saved", "Configuration saved to controller!")
+            self._save_configuration_common(reboot_after_save=False)
         except Exception as exc:
             messagebox.showerror("Save Error", str(exc))
 
@@ -3343,21 +3404,12 @@ class App:
                 "Save configuration and return to Play Mode?"):
             return
         try:
-            self._stop_monitoring()
-            self._push_all_values()
-            self.pico.save()
+            saved = self._save_configuration_common(reboot_after_save=True)
         except Exception as exc:
             messagebox.showerror("Error", f"Save failed: {exc}")
             return
-        try:
-            self.pico.reboot()
-        except Exception:
-            pass
-        self._set_status("   Rebooted to Play Mode", ACCENT_GREEN)
-        self.connect_btn.set_state("normal")
-        self.manual_btn.set_state("normal")
-        self.save_reboot_btn.set_state("disabled")
-        self._set_controls_enabled(False)
+        if not saved:
+            return
 
     def _reset_defaults(self):
         if not self.pico.connected:
@@ -4097,4 +4149,3 @@ class App:
         _center_window(dlg, self.root)
         dlg.grab_set()
         dlg.wait_window()
-

@@ -2,6 +2,8 @@ namespace OccBridge.Core.Models;
 
 public sealed class DeviceCandidate
 {
+    public ControllerBackend Backend { get; init; } = ControllerBackend.Hid;
+
     public required string ProductName { get; init; }
 
     public required string DevicePath { get; init; }
@@ -18,5 +20,13 @@ public sealed class DeviceCandidate
 
     public int OutputReportLength { get; init; }
 
-    public override string ToString() => $"{ProductName} (VID {VendorId:X4}, PID {ProductId:X4})";
+    public override string ToString() => $"{ProductName} (VID {VendorId:X4}, PID {ProductId:X4}) [{GetBackendLabel()}]";
+
+    private string GetBackendLabel() => Backend switch
+    {
+        ControllerBackend.Hid => "HID",
+        ControllerBackend.WinRtGamepad => "Gamepad API",
+        ControllerBackend.WinRtRawGameController => "Raw Game Controller API",
+        _ => Backend.ToString(),
+    };
 }

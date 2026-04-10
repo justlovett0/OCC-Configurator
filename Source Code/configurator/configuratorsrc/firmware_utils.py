@@ -1,7 +1,7 @@
 import sys, os, time, struct, ctypes, json, shutil, datetime, string
 from tkinter import messagebox
 from .constants import (NUKE_UF2_FILENAME, DEVICE_TYPE_UF2_HINTS,
-                         CONFIG_MODE_VID, CONFIG_MODE_PIDS,
+                         CONFIG_MODE_VID, CONFIG_MODE_PIDS, MAX_LEDS,
                          ACCENT_BLUE, ACCENT_RED, ACCENT_ORANGE)
 from .xinput_utils import (XINPUT_AVAILABLE, xinput_get_connected,
                              xinput_send_vibration, MAGIC_STEPS)
@@ -51,7 +51,9 @@ def load_fw_presets():
     bundle_dir = getattr(sys, '_MEIPASS', None)
     if bundle_dir:
         candidates.append(bundle_dir)
-    candidates.append(os.path.dirname(os.path.abspath(__file__)))
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(script_dir)
+    candidates.append(os.path.dirname(script_dir))
     for d in candidates:
         path = os.path.join(d, filename)
         if os.path.isfile(path):

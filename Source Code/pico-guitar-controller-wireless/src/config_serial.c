@@ -2,7 +2,7 @@
  * config_serial.c - CDC serial config mode
  *
  * Commands: PING, GET_CONFIG, SET:key=value, SAVE, DEFAULTS,
- *           SCAN, STOP, REBOOT, BOOTSEL,
+ *           SCAN, STOP, REBOOT, BOOTSEL, ROTATE_BLE_IDENTITY,
  *           MONITOR_ADC:pin, MONITOR_I2C, STOP
  *
  * LED keys:
@@ -20,6 +20,7 @@
 
 #include "config_serial.h"
 #include "guitar_config.h"
+#include "ble_identity_storage.h"
 // apa102_leds.h is included transitively via guitar_config.h — do not
 // include it directly here to avoid confusion about include ordering.
 #include "adxl345.h"
@@ -1055,6 +1056,15 @@ void config_mode_main(guitar_config_t *config) {
                 else if (strcmp(cmd_buf, "DEFAULTS") == 0) {
                     config_set_defaults(config);
                     serial_writeln("OK");
+                }
+                else if (strcmp(cmd_buf, "ROTATE_BLE_IDENTITY") == 0) {
+                    uint8_t new_addr[BLE_IDENTITY_ADDR_LEN];
+                    ble_identity_generate(new_addr);
+                    ble_identity_save(new_addr);
+                    serial_writeln("OK");
+                    sleep_ms(100);
+                    watchdog_reboot(0, 0, 10);
+                    while (1) { tight_loop_contents(); }
                 }
                 else if (strcmp(cmd_buf, "SCAN") == 0)
                     run_scan(config);

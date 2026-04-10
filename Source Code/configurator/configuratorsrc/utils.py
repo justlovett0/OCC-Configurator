@@ -239,8 +239,9 @@ def _make_flash_popup(root):
     dlg.update_idletasks()
     pw = root.winfo_width();  ph = root.winfo_height()
     rx = root.winfo_rootx(); ry = root.winfo_rooty()
-    dw = dlg.winfo_reqwidth(); dh = dlg.winfo_reqheight()
-    dlg.geometry(f"+{rx + (pw - dw) // 2}+{ry + (ph - dh) // 2}")
+    dw = int(dlg.winfo_reqwidth() * 2.5)
+    dh = int(dlg.winfo_reqheight() * 1.4)
+    dlg.geometry(f"{dw}x{dh}+{rx + (pw - dw) // 2}+{ry + (ph - dh) // 2}")
     dlg.grab_set()
 
     def _close():

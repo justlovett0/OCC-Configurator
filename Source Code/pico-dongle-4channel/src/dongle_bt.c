@@ -264,7 +264,7 @@ static void gatt_client_handler(uint8_t packet_type, uint16_t channel,
                     if (_d.binding && _d.bind_slot == s) {
                         _d.binding = false;
                         if (_d.bind_cb) {
-                            _d.bind_cb(s, _d.slots[s].mac);
+                            _d.bind_cb(s, _d.slots[s].addr_type, _d.slots[s].mac);
                             _d.bind_cb = NULL;
                         }
                     }
@@ -486,10 +486,10 @@ void dongle_bt_init(void) {
     hci_power_control(HCI_POWER_ON);
 }
 
-void dongle_bt_set_bound_mac(uint8_t slot, const uint8_t mac[BLE_MAC_LEN]) {
+void dongle_bt_set_bound_mac(uint8_t slot, uint8_t addr_type, const uint8_t mac[BLE_MAC_LEN]) {
     if (slot >= DONGLE_MAX_CONTROLLERS) return;
     memcpy(_d.slots[slot].mac, mac, BLE_MAC_LEN);
-    _d.slots[slot].addr_type = 0;   /* assume public; addr_type not exposed in API */
+    _d.slots[slot].addr_type = addr_type;
     _d.slots[slot].bound     = true;
     /* Actual connection starts when HCI is ready via try_start_pending_connections */
 }
@@ -502,6 +502,14 @@ void dongle_bt_clear_bound_mac(uint8_t slot) {
     }
     memset(&_d.slots[slot], 0, sizeof(slot_state_t));
     _d.slots[slot].con_handle = HCI_CON_HANDLE_INVALID;
+}
+
+bool dongle_bt_get_bound_mac(uint8_t slot, uint8_t *addr_type, uint8_t mac[BLE_MAC_LEN]) {
+    if (slot >= DONGLE_MAX_CONTROLLERS) return false;
+    if (!_d.slots[slot].bound) return false;
+    if (addr_type) *addr_type = _d.slots[slot].addr_type;
+    if (mac) memcpy(mac, _d.slots[slot].mac, BLE_MAC_LEN);
+    return true;
 }
 
 void dongle_bt_start_bind(uint8_t slot, dongle_bt_bind_cb_t cb) {
