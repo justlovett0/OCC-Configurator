@@ -4,7 +4,7 @@
   xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
   <Bundle
-    Name="OCC Bridge Setup"
+    Name="OCC Bridge"
     Manufacturer="Open Controller"
     Version="$(ProductVersion)"
     UpgradeCode="72EA82E4-239C-44FE-9ADF-08D5B7B35D49"

@@ -135,27 +135,32 @@ def _help_text(*segments):
     """
     Returns a tab content builder with per-segment formatting.
     Each segment is a (text, style) tuple. Use "\n" text for blank lines.
-    Styles: None (normal), "bold", "dim", "header"
+    Styles: None (normal), "bold", "dim", "header", "italic"
     Example: _help_text(("Bold title", "bold"), ("\n", None), ("Body text.", None))
     """
     def _build(frame):
         inner = tk.Frame(frame, bg=BG_CARD)
         inner.pack(anchor="nw", padx=20, pady=20)
+        prev_style = None
         for text, style in segments:
             if text == "\n" or text == "\n\n":
                 # blank spacer line
-                tk.Label(inner, text="", bg=BG_CARD, height=1).pack(anchor="w")
+                if prev_style not in ("bold", "header"):
+                    tk.Label(inner, text="", bg=BG_CARD, height=1).pack(anchor="w")
             else:
                 if style == "bold":
-                    font_spec = (FONT_UI, 10, "bold")
+                    font_spec = (FONT_UI, 9, "bold")
                 elif style == "header":
-                    font_spec = (FONT_UI, 12, "bold")
+                    font_spec = (FONT_UI, 11, "bold")
+                elif style == "italic":
+                    font_spec = (FONT_UI, 9, "italic")
                 else:
-                    font_spec = (FONT_UI, 10)
+                    font_spec = (FONT_UI, 9)
                 fg = TEXT_DIM if style == "dim" else TEXT
                 tk.Label(inner, text=text, bg=BG_CARD, fg=fg,
                          font=font_spec, wraplength=530,
                          justify="left", anchor="w").pack(anchor="w")
+            prev_style = style
     return _build
 
 
@@ -165,7 +170,7 @@ class HelpDialog:
     Tabs: same pack/pack_forget pattern as App._switch_tab.
     Re-opening lifts existing window instead of opening a second one.
     """
-    W, H = 590, 410
+    W, H = 590, 600
 
     def __init__(self, root, tabs):
         # tabs: list of (name: str, builder: callable(frame) -> None)
@@ -1086,4 +1091,3 @@ class CalibratedBarGraph(tk.Canvas):
 
     def redraw(self):
         self._draw()
-

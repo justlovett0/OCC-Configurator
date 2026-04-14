@@ -492,8 +492,8 @@ static void build_report(xinput_report_t *report) {
 // TinyUSB callbacks
 //--------------------------------------------------------------------
 
-// HID auto-detection state: start timer on USB mount, watch for XInput LED report.
-// If 3 seconds pass with no LED report → non-XInput host (PS3/macOS/Linux) → reboot HID.
+// HID auto-detection state: start timer on USB mount, watch for XInput host signal.
+// If 3 seconds pass with no signal → non-XInput host (PS3/macOS/Linux) → reboot HID.
 static bool     _hid_detecting      = false;
 static uint32_t _hid_detect_start_ms = 0;
 
@@ -661,11 +661,12 @@ int main(void) {
                 request_config_mode_reboot();
 
             // ── HID auto-detection ───────────────────────────────────────────
-            // After USB mount, wait up to 3s for the XInput LED control report
-            // (byte[0]=0x01) that Windows and Linux xpad always send. If it never
-            // arrives, assume PS3 / non-XInput host and reboot into HID mode.
+            // After USB mount, wait up to 3s for an XInput host signal:
+            //   - LED OUT report (byte[0]=0x01): Windows and Linux xpad
+            //   - Security challenge (req 0x81): real Xbox 360 console
+            // If neither arrives, assume PS3 / non-XInput host → reboot HID.
             if (_hid_detecting) {
-                if (xinput_led_report_seen()) {
+                if (xinput_led_report_seen() || xinput_auth_seen()) {
                     _hid_detecting = false;   // confirmed XInput host, stay as-is
                 } else if (to_ms_since_boot(get_absolute_time()) - _hid_detect_start_ms > 3000) {
                     _hid_detecting = false;

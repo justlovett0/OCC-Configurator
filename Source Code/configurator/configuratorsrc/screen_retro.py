@@ -6,7 +6,7 @@ from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT
                          DIGITAL_PINS, DIGITAL_PIN_LABELS, VALID_NAME_CHARS, OCC_SUBTYPES)
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import (RoundedButton, HelpButton, HelpDialog, CustomDropdown,
-                       LiveBarGraph, CalibratedBarGraph, _help_text, _help_placeholder)
+                       LiveBarGraph, CalibratedBarGraph, _help_text)
 from .serial_comms import PicoSerial
 from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
@@ -171,9 +171,25 @@ class RetroApp:
     def _open_help(self):
         if self._help_dialog is None:
             self._help_dialog = HelpDialog(self.root, [
-                ("Overview",       _help_placeholder()),
-                ("Button Mapping", _help_placeholder()),
-                ("Triggers",       _help_placeholder()),
+                ("Pins & Detections", _help_text(
+                    ("Selecting Pins for Button Inputs", "bold"),
+                    ("\n\n", None),
+                    ("Next to each button input which the controller will send, you can manually or automatically choose the GPIO pin to correspond to that button input.", None),
+                    ("Use the dropdown menu to manually choose a GPIO Pin, or use the \"Detect\" button and OCC will attempt to detect you clicking that button on your device automatically and assign the pin in the dropdown.", None),
+                    ("\n\n", None),
+                    ("Reserved Pins & Conflicts", "bold"),
+                    ("\n\n", None),
+                    ("Keep in mind, you generally shouldn't set a pin to be multiple inputs, although it can work if you have a special use case.", None),
+                    ("Some inputs will automatically NOT allow you to duplicate pins for inputs, such as Up and Down not being the same button on your device.", None),
+                )),
+                ("Analog & Digital Inputs", _help_text(
+                    ("Analog vs Digital", "bold"),
+                    ("\n\n", None),
+                    ("A Digital pin input is a simple button press. Digital detection will see if you are pressing a button or not, no inbetween.", None),
+                    ("An Analog input is a variable input, basically. It will detect you NOT pressing anything, fully pressing an input, or the inbetween.", None),
+                    ("\n\n", None),
+                    ("Digital pin input is typically for buttons, Analog pin input is for things like accelerometers, joysticks, or triggers.", None),
+                )),
             ])
         self._help_dialog.open()
 

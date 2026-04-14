@@ -7,11 +7,12 @@ from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT
                          LED_INPUT_LABELS, VALID_NAME_CHARS, OCC_SUBTYPES)
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import (RoundedButton, HelpButton, HelpDialog, CustomDropdown,
-                       SpeedSlider, LiveBarGraph, _help_text, _help_placeholder)
+                       SpeedSlider, LiveBarGraph, _help_text)
 from .serial_comms import PicoSerial
 from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
-                              get_bundled_fw_date_str, find_rpi_rp2_drive)
+                              get_bundled_fw_date_str, find_rpi_rp2_drive,
+                              apply_config_to_pico)
 from .xinput_utils import (XINPUT_AVAILABLE, ERROR_SUCCESS, xinput_get_connected,
                            MAGIC_STEPS, xinput_send_vibration)
 from .utils import (_centered_dialog, _center_window, _make_flash_popup, _find_preset_configs)
@@ -157,9 +158,47 @@ class DrumApp:
     def _open_help(self):
         if self._help_dialog is None:
             self._help_dialog = HelpDialog(self.root, [
-                ("Overview",   _help_placeholder()),
-                ("Drum Pads",  _help_placeholder()),
-                ("LEDs",       _help_placeholder()),
+                ("Pins & Detections", _help_text(
+                    ("Selecting Pins for Button Inputs", "bold"),
+                    ("\n\n", None),
+                    ("Next to each button input which the controller will send, you can manually or automatically choose the GPIO pin to correspond to that button input.", None),
+                    ("Use the dropdown menu to manually choose a GPIO Pin, or use the \"Detect\" button and OCC will attempt to detect you clicking that button on your device automatically and assign the pin in the dropdown.", None),
+                    ("\n\n", None),
+                    ("Reserved Pins & Conflicts", "bold"),
+                    ("\n\n", None),
+                    ("Keep in mind, you generally shouldn't set a pin to be multiple inputs, although it can work if you have a special use case.", None),
+                    ("Some inputs will automatically NOT allow you to duplicate pins for inputs, such as Up and Down not being the same button on your device.", None),
+                )),
+                ("Analog & Digital Inputs", _help_text(
+                    ("Analog vs Digital", "bold"),
+                    ("\n\n", None),
+                    ("A Digital pin input is a simple button press. Digital detection will see if you are pressing a button or not, no inbetween.", None),
+                    ("An Analog input is a variable input, basically. It will detect you NOT pressing anything, fully pressing an input, or the inbetween.", None),
+                    ("\n\n", None),
+                    ("Digital pin input is typically for buttons, Analog pin input is for things like accelerometers, joysticks, or triggers.", None),
+                )),
+                ("Lighting & Effects", _help_text(
+                    ("Controller LEDs are communicated through two pins, GPIO 3 and 6 by default. Tell OCC how many LEDs are in series on those LED pins, and you can individually address each one.", None),
+                    ("\n\n", None),
+                    ("OCC has multiple lighting effects programmed in:", "bold"),
+                    ("\n\n", None),
+                    ("LED Color Loop", "bold"),
+                    ("\n\n", None),
+                    ("Set the starting and ending LED you'd like to loop, and while the controller is on, it will make the LEDs gradually fade into eachothers color, looping.", None),
+                    ("\n\n", None),
+                    ("LED Breathe", "bold"),
+                    ("\n\n", None),
+                    ("Set the starting to ending LEDs you'd like to be effected, set their low and high brightness, and while the controller is on, the LEDs will gradually turn thier brightness up and back down, looping.", None),
+                    ("\n\n", None),
+                    ("LED Wave", "bold"),
+                    ("\n\n", None),
+                    ("Set the LED origin point and on any button press, a \"ripple\" of brightness will wave through the LEDs in line from the pre-set origin point.", None),
+                    ("\n\n", None),
+                    ("Reactive LEDs", "bold"),
+                    ("\n\n", None),
+                    ("This is the complicated looking one.. but I promise it is not bad.", None),
+                    ("On the left, rows are depicted by button inputs. Each column is an LED in your controller. Match up in the grid which button goes with which LED number. On button press, the LED corresponding to that button will get brighter.", None),
+                )),
             ])
         self._help_dialog.open()
 
@@ -1906,16 +1945,7 @@ class DrumApp:
 
     def _apply_config_dict(self, cfg):
         """Push all SET-able keys from cfg to the firmware. Returns list of error strings."""
-        SKIP_KEYS = {"device_type", "led_colors_raw", "led_map_raw"}
-        errors = []
-        for key, val in cfg.items():
-            if key in SKIP_KEYS:
-                continue
-            try:
-                self.pico.set_value(key, val)
-            except Exception as exc:
-                errors.append(f"{key}: {exc}")
-        return errors
+        return apply_config_to_pico(self.pico, cfg, led_input_names=self.DRUM_LED_INPUT_NAMES)
 
     def _import_config(self):
         if not self.pico.connected:

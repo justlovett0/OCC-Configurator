@@ -11,7 +11,7 @@ from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT
 from .fonts import FONT_UI, _resource_path
 from .widgets import (RoundedButton, HelpButton, HelpDialog, CustomDropdown,
                        LiveBarGraph, LiveBarGraphVertical, CalibratedBarGraph,
-                       _help_text, _help_placeholder)
+                       _help_text)
 from .serial_comms import PicoSerial
 from .utils import _centered_dialog, _center_window, _find_preset_configs
 from .firmware_utils import enter_bootsel_for
@@ -135,10 +135,61 @@ class EasyConfigScreen:
         ("placeholder", None,         "Review & Save",                 ACCENT_BLUE, "Finishing Up"),
     ]
 
+    _PIN_KEY_TO_LABEL = {
+        "green": "Green Fret",
+        "red": "Red Fret",
+        "yellow": "Yellow Fret",
+        "blue": "Blue Fret",
+        "orange": "Orange Fret",
+        "strum_up": "Strum Up",
+        "strum_down": "Strum Down",
+        "start": "Start Button",
+        "select": "Select / Star Power",
+        "dpad_up": "D-Pad Up",
+        "dpad_right": "D-Pad Right",
+        "dpad_down": "D-Pad Down",
+        "dpad_left": "D-Pad Left",
+        "joy_x": "Joystick — Left / Right Axis",
+        "joy_y": "Joystick — Up / Down Axis",
+        "joy_sw": "Guide Button (Joystick Click)",
+        "whammy_pin": "Whammy Bar",
+        "tilt_pin": "Tilt Sensor",
+    }
+
+    _PIN_KEY_TO_PAGE = {
+        "green": 0,
+        "red": 1,
+        "yellow": 2,
+        "blue": 3,
+        "orange": 4,
+        "strum_up": 5,
+        "strum_down": 6,
+        "start": 7,
+        "select": 8,
+        "dpad_up": 9,
+        "dpad_right": 9,
+        "dpad_down": 9,
+        "dpad_left": 9,
+        "joy_x": 10,
+        "joy_y": 11,
+        "joy_sw": 12,
+        "whammy_pin": 13,
+        "tilt_pin": 14,
+    }
+
+    _PIN_ASSIGNMENT_KEYS = (
+        "green", "red", "yellow", "blue", "orange",
+        "strum_up", "strum_down", "start", "select",
+        "dpad_up", "dpad_right", "dpad_down", "dpad_left",
+        "joy_x", "joy_y", "joy_sw",
+        "whammy_pin", "tilt_pin",
+    )
+
     def __init__(self, root, on_back=None):
         self.root = root
         self._on_back = on_back
         self._current_page = 0
+        self._page_token = 0
 
         # Serial connection
         self.pico = PicoSerial()
@@ -151,6 +202,13 @@ class EasyConfigScreen:
         self._preview_active = False
         self._preview_seen = {}
         self._help_dialog = None
+        self._auto_detect_after_id = None
+        self._scan_timeout_after_id = None
+        self._page_detection_reset = None
+        self._override_origin_page = None
+        self._override_repair_page = None
+        self._override_return_page = None
+        self._override_repair_key = None
 
         # Detected values persist across page navigation
         # Keys match firmware config keys: green, red, ..., dpad_up, joy_x, whammy_pin, tilt_pin …
@@ -176,9 +234,43 @@ class EasyConfigScreen:
     def _open_help(self):
         if self._help_dialog is None:
             self._help_dialog = HelpDialog(self.root, [
-                ("Overview",        _help_placeholder()),
-                ("Button Detection", _help_placeholder()),
-                ("Finishing Up",    _help_placeholder()),
+                ("Overview",        _help_text(
+                    ("This is the easy configurator for guitar controllers.", None),
+                    ("It will walk you through step by step on mapping buttons for your controller.", None),
+                    ("Click the BIG BOX that says \"Click here to start Input Detection\" to start input detection if not already started.", None),
+                    ("\n\n", None),
+                    ("Pressed the wrong button?", "bold"),
+                    ("\n\n", None),
+                    ("Simply click the detection box again and re-press the button.", None),
+                    ("You can click \"<-- Go Back\" to go back pages.", None),
+                    ("\n\n", None),
+                    ("Clicking \"Back to Menu\" will not save your button presses, and the controller will revert to previous configuration.", None),
+                )),
+                ("Button Detection", _help_text(
+                    ("Button detection is automatic. You can always go back and re-do button inputs if needed.", None),
+                    ("\n\n", None),
+                    ("On guitars, the only required buttons are Frets, Strum Up/Down, and Start button.", None),
+                    ("You don't NEED to map those buttons in the advanced configurator, it is only a requirement in the easy configurator.", None),
+                )),
+                ("Analog Inputs",   _help_text(
+                    ("Some buttons, such as Joystick, Whammy, Tilt, could be digital or analog inputs.", None),
+                    ("An analog input is on the uppermost GPIO pins of the Pi.", None),
+                    ("\n\n", None),
+                    ("Mapping an analog input could need input inversion, so check the \"Invert\" box to invert the controller output.", None),
+                    ("\n\n", None),
+                    ("Mapping an analog input could need calibration for at rest and at full actuation.", None),
+                    ("\"Set Min\" is to set your analog input at rest.", None),
+                    ("\"Set Max\" is to set your analog input at full actuation. (Tilted all the way up, or Whammy pressed all the way in)", None),
+                    ("The Calibrated output will show you the new output, what the game will use, according to your min and max values.", None),
+                )),
+                ("Review & Save",   _help_text(
+                    ("The Review and Save section is in beta, but will attempt to show you some basic inputs from your controller live.", None),
+                    ("\n\n", None),
+                    ("Feel free to export your controller configuration for later if you ever reset it and want to import it later. (From advanced configuration tab)", None),
+                    ("\n\n", None),
+                    ("\"Wireless Dongle\" mode is for your wireless controller to default to connecting to an OCC Dongle.", None),
+                    ("\"Wireless Bluetooth\" mode is for your wireless controller to default to standard BT connections.", None),
+                )),
             ])
         self._help_dialog.open()
 
@@ -263,8 +355,10 @@ class EasyConfigScreen:
     # ── Page management ───────────────────────────────────────────
 
     def _show_page(self, idx):
-        self._stop_scan_and_monitor()
+        self._stop_scan_and_monitor(reset_detection_ui=True)
         self._current_page = idx
+        self._page_token += 1
+        self._page_detection_reset = None
 
         # Rebuild body
         for w in self._body_frame.winfo_children():
@@ -343,8 +437,50 @@ class EasyConfigScreen:
         else:
             self._build_placeholder_content(name)
 
-    def _stop_scan_and_monitor(self):
+    def _cancel_detection_jobs(self):
+        """Cancel any delayed auto-start or timeout callback for the current page."""
+        if self._auto_detect_after_id is not None:
+            try:
+                self.root.after_cancel(self._auto_detect_after_id)
+            except Exception:
+                pass
+            self._auto_detect_after_id = None
+        if self._scan_timeout_after_id is not None:
+            try:
+                self.root.after_cancel(self._scan_timeout_after_id)
+            except Exception:
+                pass
+            self._scan_timeout_after_id = None
+
+    def _schedule_auto_detect(self, callback, delay_ms=300):
+        self._cancel_detection_jobs()
+        def _run():
+            self._auto_detect_after_id = None
+            callback()
+        self._auto_detect_after_id = self.root.after(delay_ms, _run)
+
+    def _start_scan_timeout(self, callback, timeout_ms=10000):
+        if self._scan_timeout_after_id is not None:
+            try:
+                self.root.after_cancel(self._scan_timeout_after_id)
+            except Exception:
+                pass
+        def _run():
+            self._scan_timeout_after_id = None
+            callback()
+        self._scan_timeout_after_id = self.root.after(timeout_ms, _run)
+
+    def _clear_scan_timeout(self):
+        if self._scan_timeout_after_id is not None:
+            try:
+                self.root.after_cancel(self._scan_timeout_after_id)
+            except Exception:
+                pass
+            self._scan_timeout_after_id = None
+
+    def _stop_scan_and_monitor(self, reset_detection_ui=False):
         """Stop any active scan or monitor thread safely."""
+        self._cancel_detection_jobs()
         need_stop_scan = self.scanning or self._preview_active
         self.scanning = False
         self._preview_active = False
@@ -359,10 +495,202 @@ class EasyConfigScreen:
                 self.pico.stop_monitor()
             except Exception:
                 pass
+        if reset_detection_ui and callable(self._page_detection_reset):
+            try:
+                self._page_detection_reset()
+            except Exception:
+                pass
+        if reset_detection_ui:
+            self._page_detection_reset = None
+
+    def _page_is_active(self, token, *widgets):
+        if token != self._page_token:
+            return False
+        for widget in widgets:
+            try:
+                if not widget.winfo_exists():
+                    return False
+            except Exception:
+                return False
+        return True
+
+    def _clear_override_flow(self):
+        self._override_origin_page = None
+        self._override_repair_page = None
+        self._override_return_page = None
+        self._override_repair_key = None
+
+    def _reset_easy_config_state(self):
+        self.detected.clear()
+        self._clear_override_flow()
+
+    def _get_pin_input_label(self, pin_key):
+        return self._PIN_KEY_TO_LABEL.get(pin_key, pin_key)
+
+    def _get_pin_input_page(self, pin_key):
+        return self._PIN_KEY_TO_PAGE.get(pin_key)
+
+    def _clear_detected_pin(self, pin_key):
+        self.detected.pop(pin_key, None)
+
+    def _find_existing_pin_assignment(self, pin, current_key):
+        for key in self._PIN_ASSIGNMENT_KEYS:
+            if key == current_key:
+                continue
+            existing_pin = self.detected.get(key)
+            if existing_pin == pin:
+                return key
+        return None
+
+    def _show_duplicate_override_dialog(self, pin, existing_key, same_page=False):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("GPIO Already Mapped")
+        dlg.configure(bg=BG_CARD)
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+
+        existing_label = self._get_pin_input_label(existing_key)
+        followup = ("(Will keep Easy Configurator on this page so you can rebind it.)"
+                    if same_page else
+                    f"(Will set Easy Configurator back to {existing_label} page)")
+        msg = (f"GPIO {pin} has already been mapped to {existing_label}. "
+               f"Do you want to override {existing_label}'s GPIO pin?\n{followup}")
+        tk.Label(dlg, text=msg, bg=BG_CARD, fg=TEXT, font=(FONT_UI, 10),
+                 justify="center", padx=28, pady=20, wraplength=420).pack()
+
+        result = [False]
+        btn_f = tk.Frame(dlg, bg=BG_CARD, pady=10)
+        btn_f.pack()
+
+        def _override():
+            result[0] = True
+            dlg.destroy()
+
+        RoundedButton(btn_f, text="Cancel", bg_color=BG_INPUT,
+                      btn_width=110, btn_height=30,
+                      command=dlg.destroy).pack(side="left", padx=(0, 10))
+        RoundedButton(btn_f, text="Override Input", bg_color=ACCENT_BLUE,
+                      btn_width=130, btn_height=30,
+                      command=_override).pack(side="left")
+
+        dlg.update_idletasks()
+        pw, ph = self.root.winfo_width(), self.root.winfo_height()
+        px, py = self.root.winfo_rootx(), self.root.winfo_rooty()
+        dw, dh = dlg.winfo_reqwidth(), dlg.winfo_reqheight()
+        dlg.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
+        dlg.grab_set()
+        self.root.wait_window(dlg)
+        return result[0]
+
+    def _show_crossed_inputs_dialog(self, pin, existing_key):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("GPIO Conflict Detected")
+        dlg.configure(bg=BG_CARD)
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+
+        existing_label = self._get_pin_input_label(existing_key)
+        msg = (
+            f"GPIO {pin} has already been mapped to {existing_label}.\n"
+            "It seems something is wrong here... buttons may be getting crossed in your "
+            "controller. Would you like to restart Easy Configurator over, or go to Main "
+            "Menu without saving configuration?"
+        )
+        tk.Label(dlg, text=msg, bg=BG_CARD, fg=TEXT, font=(FONT_UI, 10),
+                 justify="center", padx=28, pady=20, wraplength=450).pack()
+
+        result = [None]
+        btn_f = tk.Frame(dlg, bg=BG_CARD, pady=10)
+        btn_f.pack()
+
+        def _restart():
+            result[0] = "restart"
+            dlg.destroy()
+
+        def _menu():
+            result[0] = "menu"
+            dlg.destroy()
+
+        RoundedButton(btn_f, text="Restart Easy Config", bg_color=ACCENT_BLUE,
+                      btn_width=150, btn_height=30,
+                      command=_restart).pack(side="left", padx=(0, 10))
+        RoundedButton(btn_f, text="Back to Main Menu", bg_color=BG_INPUT,
+                      btn_width=145, btn_height=30,
+                      command=_menu).pack(side="left")
+
+        dlg.update_idletasks()
+        pw, ph = self.root.winfo_width(), self.root.winfo_height()
+        px, py = self.root.winfo_rootx(), self.root.winfo_rooty()
+        dw, dh = dlg.winfo_reqwidth(), dlg.winfo_reqheight()
+        dlg.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
+        dlg.grab_set()
+        self.root.wait_window(dlg)
+        return result[0]
+
+    def _finish_without_saving(self):
+        self._clear_override_flow()
+        self._stop_scan_and_monitor(reset_detection_ui=True)
+        if self.pico.connected:
+            try:
+                self.pico.reboot()   # return to play mode
+            except Exception:
+                pass
+            try:
+                self.pico.disconnect()
+            except Exception:
+                pass
+        if self._on_back:
+            self._on_back()
+
+    def _restart_easy_config(self):
+        self._stop_scan_and_monitor(reset_detection_ui=True)
+        self._reset_easy_config_state()
+        self._show_page(0)
+
+    def _begin_override_repair(self, current_key, conflict_key):
+        origin_page = self._current_page
+        repair_page = self._get_pin_input_page(conflict_key)
+        if repair_page is None:
+            return
+
+        self._clear_detected_pin(conflict_key)
+        self._override_origin_page = origin_page
+        self._override_repair_page = repair_page
+        self._override_return_page = origin_page if repair_page != origin_page else None
+        self._override_repair_key = conflict_key
+
+        self._stop_scan_and_monitor(reset_detection_ui=True)
+        self._show_page(repair_page)
+
+    def _handle_detected_pin(self, current_key, pin, commit, reset_ui):
+        conflict_key = self._find_existing_pin_assignment(pin, current_key)
+        if conflict_key is None:
+            commit()
+            return True
+
+        if self._override_repair_page == self._current_page and self._override_repair_key is not None:
+            action = self._show_crossed_inputs_dialog(pin, conflict_key)
+            if action == "restart":
+                self._restart_easy_config()
+            elif action == "menu":
+                self._finish_without_saving()
+            else:
+                reset_ui()
+            return False
+
+        repair_page = self._get_pin_input_page(conflict_key)
+        same_page = repair_page == self._current_page
+        if not self._show_duplicate_override_dialog(pin, conflict_key, same_page=same_page):
+            reset_ui()
+            return False
+
+        commit()
+        self._begin_override_repair(current_key, conflict_key)
+        return False
 
     # ── Shared helpers ────────────────────────────────────────────
 
-    def _make_status_box(self, parent):
+    def _make_status_box(self, parent, idle_text="Click Here to Start Input Detection"):
         """Create the combined detect/status box.
 
         The entire gray box is clickable and starts detection.
@@ -387,7 +715,7 @@ class EasyConfigScreen:
         can.set_state("disabled")
 
         # ── Centre: status label and GPIO result label ────────────────
-        slbl = tk.Label(sf, text="Click here to start Input Detection",
+        slbl = tk.Label(sf, text=idle_text,
                         bg=BG_INPUT, fg=ACCENT_BLUE,
                         font=(FONT_UI, 13, "bold"), cursor="hand2")
         slbl.pack(pady=(10, 2))
@@ -520,6 +848,9 @@ class EasyConfigScreen:
 
     def _build_digital_content(self, key, name, accent):
         f = self._body_frame
+        page_token = self._page_token
+        idle_text = "Click Here to Start Input Detection"
+        timeout_text = "No button press detected within timeout window. Click here to restart detection."
 
         # Fret colour dot for fret pages
         fret_color = FRET_COLORS.get(key)
@@ -537,7 +868,16 @@ class EasyConfigScreen:
                       "Make sure no other buttons are pressed during detection.",
                  bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9)).pack(anchor="w", pady=(0, 14))
 
-        _sf, status_lbl, gpio_lbl = self._make_status_box(f)
+        _sf, status_lbl, gpio_lbl = self._make_status_box(f, idle_text=idle_text)
+
+        def _restore_idle():
+            if not self._page_is_active(page_token, status_lbl, gpio_lbl):
+                return
+            self._clear_scan_timeout()
+            detect_btn.set_state("normal")
+            cancel_btn.set_state("disabled")
+            status_lbl.config(text=idle_text, fg=ACCENT_BLUE)
+            gpio_lbl.config(text="")
 
         # Restore previous detection if present
         if key in self.detected:
@@ -546,13 +886,17 @@ class EasyConfigScreen:
             gpio_lbl.config(text=f"GPIO {pin}")
 
         detect_btn, cancel_btn = self._make_detect_cancel_row(f, accent)
+        self._page_detection_reset = _restore_idle
 
         def start_detect():
+            if not self._page_is_active(page_token, status_lbl, gpio_lbl):
+                return
             if not self.pico.connected:
                 status_lbl.config(text="\u26a0  Not connected to controller.", fg=ACCENT_ORANGE)
                 return
             if self.scanning:
                 return
+            self._clear_scan_timeout()
             self.scanning = True
             self.scan_target = key
             detect_btn.set_state("disabled")
@@ -561,19 +905,44 @@ class EasyConfigScreen:
             gpio_lbl.config(text="")
 
             def _on_detected(pin):
-                self.detected[key] = pin
-                self.scanning = False
-                detect_btn.set_state("normal")
-                cancel_btn.set_state("disabled")
-                status_lbl.config(text="\u2713 Detection successful! Ready for next step.",
-                                   fg=ACCENT_GREEN)
-                gpio_lbl.config(text=f"GPIO {pin}")
+                if not self._page_is_active(page_token, status_lbl, gpio_lbl):
+                    return
+                def _commit():
+                    self.detected[key] = pin
+                    self.scanning = False
+                    self._clear_scan_timeout()
+                    detect_btn.set_state("normal")
+                    cancel_btn.set_state("disabled")
+                    status_lbl.config(text="\u2713 Detection successful! Ready for next step.",
+                                       fg=ACCENT_GREEN)
+                    gpio_lbl.config(text=f"GPIO {pin}")
+
+                self._handle_detected_pin(key, pin, _commit, _restore_idle)
 
             def _on_error(msg):
+                if not self._page_is_active(page_token, status_lbl, gpio_lbl):
+                    return
                 self.scanning = False
+                self._clear_scan_timeout()
                 detect_btn.set_state("normal")
                 cancel_btn.set_state("disabled")
                 status_lbl.config(text=f"\u26a0  Scan error: {msg}", fg=ACCENT_RED)
+
+            def _on_timeout():
+                if not self._page_is_active(page_token, status_lbl, gpio_lbl):
+                    return
+                if not self.scanning:
+                    return
+                self.scanning = False
+                try:
+                    self.pico.stop_scan()
+                except Exception:
+                    pass
+                self._clear_scan_timeout()
+                detect_btn.set_state("normal")
+                cancel_btn.set_state("disabled")
+                status_lbl.config(text=timeout_text, fg=ACCENT_ORANGE)
+                gpio_lbl.config(text="")
 
             def _thread():
                 try:
@@ -594,21 +963,28 @@ class EasyConfigScreen:
                     self.root.after(0, lambda e=str(exc): _on_error(e))
 
             def _cancel():
+                if not self._page_is_active(page_token, status_lbl, gpio_lbl):
+                    return
                 self.scanning = False
                 try:
                     self.pico.stop_scan()
                 except Exception:
                     pass
-                detect_btn.set_state("normal")
-                cancel_btn.set_state("disabled")
-                status_lbl.config(text="Detection cancelled.", fg=TEXT_DIM)
+                _restore_idle()
 
             cancel_btn._command = _cancel
             cancel_btn._render(cancel_btn._bg)
+            self._start_scan_timeout(_on_timeout, timeout_ms=10000)
             threading.Thread(target=_thread, daemon=True).start()
 
         detect_btn._command = start_detect
         detect_btn._render(detect_btn._bg)
+        if key not in self.detected:
+            def _auto_start():
+                self._auto_detect_after_id = None
+                if self._page_is_active(page_token, status_lbl, gpio_lbl) and key not in self.detected:
+                    start_detect()
+            self._schedule_auto_detect(_auto_start, delay_ms=300)
 
     # ── D-Pad page ────────────────────────────────────────────────
 
@@ -687,13 +1063,27 @@ class EasyConfigScreen:
             status_lbl.config(text=f"Press {label} now\u2026", fg=ACCENT_BLUE)
             gpio_lbl.config(text="\u2026", fg=ACCENT_BLUE)
 
-            def _on_detected(pin):
-                self.detected[key] = pin
-                self.scanning = False
+            def _restore_idle():
                 det_btn.set_state("normal")
                 can_btn.set_state("disabled")
-                gpio_lbl.config(text=f"GPIO {pin}", fg=ACCENT_GREEN)
-                status_lbl.config(text="\u2713 Detected", fg=ACCENT_GREEN)
+                prev = self.detected.get(key)
+                if prev is not None:
+                    gpio_lbl.config(text=f"GPIO {prev}", fg=ACCENT_GREEN)
+                    status_lbl.config(text="\u2713 Detected", fg=ACCENT_GREEN)
+                else:
+                    gpio_lbl.config(text="\u2014", fg=TEXT_DIM)
+                    status_lbl.config(text="Not yet detected", fg=TEXT_DIM)
+
+            def _on_detected(pin):
+                def _commit():
+                    self.detected[key] = pin
+                    self.scanning = False
+                    det_btn.set_state("normal")
+                    can_btn.set_state("disabled")
+                    gpio_lbl.config(text=f"GPIO {pin}", fg=ACCENT_GREEN)
+                    status_lbl.config(text="\u2713 Detected", fg=ACCENT_GREEN)
+
+                self._handle_detected_pin(key, pin, _commit, _restore_idle)
 
             def _on_error(msg):
                 self.scanning = False
@@ -726,12 +1116,7 @@ class EasyConfigScreen:
                     self.pico.stop_scan()
                 except Exception:
                     pass
-                det_btn.set_state("normal")
-                can_btn.set_state("disabled")
-                status_lbl.config(text="Cancelled", fg=TEXT_DIM)
-                prev = self.detected.get(key)
-                gpio_lbl.config(text=f"GPIO {prev}" if prev is not None else "\u2014",
-                                 fg=ACCENT_GREEN if prev is not None else TEXT_DIM)
+                _restore_idle()
 
             can_btn._command = _cancel
             can_btn._render(can_btn._bg)
@@ -777,7 +1162,9 @@ class EasyConfigScreen:
                             activebackground=BG_CARD, activeforeground=TEXT,
                             font=(FONT_UI, 9)).pack(side="left", padx=(0, 16))
 
-        _sf, status_lbl, gpio_lbl = self._make_status_box(f)
+        _sf, status_lbl, gpio_lbl = self._make_status_box(
+            f, idle_text="Choose Digital or Analog, then Click to Start Input Detection")
+        idle_text = "Choose Digital or Analog, then Click to Start Input Detection"
 
         # ── Live bar (respects invert_var visually) ───────────────
         bar_frame = tk.Frame(f, bg=BG_CARD)
@@ -787,6 +1174,12 @@ class EasyConfigScreen:
                            invert_var=invert_var)
 
         detect_btn, cancel_btn = self._make_detect_cancel_row(f, ACCENT_BLUE)
+
+        def _restore_idle():
+            detect_btn.set_state("normal")
+            cancel_btn.set_state("disabled")
+            status_lbl.config(text=idle_text, fg=ACCENT_BLUE)
+            gpio_lbl.config(text="")
 
         # ── Invert checkbox (near the monitor bar) ────────────────
         inv_row = tk.Frame(f, bg=BG_CARD)
@@ -824,16 +1217,19 @@ class EasyConfigScreen:
             gpio_lbl.config(text="")
 
             def _on_detected(pin, det_mode):
-                self.scanning = False
-                self.detected[key] = pin
-                self.detected[mode_key] = det_mode
-                detect_btn.set_state("normal")
-                cancel_btn.set_state("disabled")
-                status_lbl.config(text=f"\u2713 Detected on GPIO {pin} ({det_mode})!", fg=ACCENT_GREEN)
-                gpio_lbl.config(text=f"GPIO {pin}")
-                if det_mode == "analog":
-                    self._show_bar(bar_frame, bar, bar_hdr)
-                    self._start_monitor("analog", pin, bar)
+                def _commit():
+                    self.scanning = False
+                    self.detected[key] = pin
+                    self.detected[mode_key] = det_mode
+                    detect_btn.set_state("normal")
+                    cancel_btn.set_state("disabled")
+                    status_lbl.config(text=f"\u2713 Detected on GPIO {pin} ({det_mode})!", fg=ACCENT_GREEN)
+                    gpio_lbl.config(text=f"GPIO {pin}")
+                    if det_mode == "analog":
+                        self._show_bar(bar_frame, bar, bar_hdr)
+                        self._start_monitor("analog", pin, bar)
+
+                self._handle_detected_pin(key, pin, _commit, _restore_idle)
 
             def _on_error(msg):
                 self.scanning = False
@@ -877,9 +1273,7 @@ class EasyConfigScreen:
                     self.pico.stop_scan()
                 except Exception:
                     pass
-                detect_btn.set_state("normal")
-                cancel_btn.set_state("disabled")
-                status_lbl.config(text="Detection cancelled.", fg=TEXT_DIM)
+                _restore_idle()
 
             cancel_btn._command = _cancel
             cancel_btn._render(cancel_btn._bg)
@@ -917,7 +1311,9 @@ class EasyConfigScreen:
                             activebackground=BG_CARD, activeforeground=TEXT,
                             font=(FONT_UI, 9)).pack(side="left", padx=(0, 16))
 
-        _sf, status_lbl, gpio_lbl = self._make_status_box(f)
+        _sf, status_lbl, gpio_lbl = self._make_status_box(
+            f, idle_text="Choose Digital or Analog, then Click to Start Input Detection")
+        idle_text = "Choose Digital or Analog, then Click to Start Input Detection"
         detect_btn, cancel_btn = self._make_detect_cancel_row(f, ACCENT_BLUE)
 
         # ── Invert checkbox (near the monitor bar) ────────────────
@@ -933,6 +1329,12 @@ class EasyConfigScreen:
                         bg=BG_CARD, fg=TEXT, selectcolor=BG_INPUT,
                         activebackground=BG_CARD, activeforeground=TEXT,
                         font=(FONT_UI, 9)).pack(side="left")
+
+        def _restore_idle():
+            detect_btn.set_state("normal")
+            cancel_btn.set_state("disabled")
+            status_lbl.config(text=idle_text, fg=ACCENT_BLUE)
+            gpio_lbl.config(text="")
 
         # Vertical live bar — half height to fit UI better
         vbar_outer = tk.Frame(f, bg=BG_CARD)
@@ -966,18 +1368,21 @@ class EasyConfigScreen:
             gpio_lbl.config(text="")
 
             def _on_detected(pin, det_mode):
-                self.scanning = False
-                self.detected[key] = pin
-                self.detected[mode_key] = det_mode
-                detect_btn.set_state("normal")
-                cancel_btn.set_state("disabled")
-                status_lbl.config(text=f"\u2713 Detected on GPIO {pin} ({det_mode})!", fg=ACCENT_GREEN)
-                gpio_lbl.config(text=f"GPIO {pin}")
-                if det_mode == "analog":
-                    vbar_hdr.pack(anchor="w", pady=(0, 4))
-                    vbar.pack()
-                    vbar_outer.pack(anchor="w", pady=(14, 0))
-                    self._start_monitor("analog", pin, vbar)
+                def _commit():
+                    self.scanning = False
+                    self.detected[key] = pin
+                    self.detected[mode_key] = det_mode
+                    detect_btn.set_state("normal")
+                    cancel_btn.set_state("disabled")
+                    status_lbl.config(text=f"\u2713 Detected on GPIO {pin} ({det_mode})!", fg=ACCENT_GREEN)
+                    gpio_lbl.config(text=f"GPIO {pin}")
+                    if det_mode == "analog":
+                        vbar_hdr.pack(anchor="w", pady=(0, 4))
+                        vbar.pack()
+                        vbar_outer.pack(anchor="w", pady=(14, 0))
+                        self._start_monitor("analog", pin, vbar)
+
+                self._handle_detected_pin(key, pin, _commit, _restore_idle)
 
             def _on_error(msg):
                 self.scanning = False
@@ -1021,9 +1426,7 @@ class EasyConfigScreen:
                     self.pico.stop_scan()
                 except Exception:
                     pass
-                detect_btn.set_state("normal")
-                cancel_btn.set_state("disabled")
-                status_lbl.config(text="Detection cancelled.", fg=TEXT_DIM)
+                _restore_idle()
 
             cancel_btn._command = _cancel
             cancel_btn._render(cancel_btn._bg)
@@ -1081,7 +1484,9 @@ class EasyConfigScreen:
         wh_smooth_var.trace_add("write", _sync_wh_detected)
 
         # ── Status box ───────────────────────────────────────────────
-        _sf, status_lbl, gpio_lbl = self._make_status_box(f)
+        _sf, status_lbl, gpio_lbl = self._make_status_box(
+            f, idle_text="Choose Digital or Analog, then Click to Start Input Detection")
+        idle_text = "Choose Digital or Analog, then Click to Start Input Detection"
         if "whammy_pin" in self.detected:
             pin  = self.detected["whammy_pin"]
             mstr = self.detected.get("whammy_mode", "analog")
@@ -1090,6 +1495,12 @@ class EasyConfigScreen:
 
         # ── Detect / Cancel buttons ─────────────────────────────────
         detect_btn, cancel_btn = self._make_detect_cancel_row(f, ACCENT_BLUE)
+
+        def _restore_idle():
+            detect_btn.set_state("normal")
+            cancel_btn.set_state("disabled")
+            status_lbl.config(text=idle_text, fg=ACCENT_BLUE)
+            gpio_lbl.config(text="")
 
         # ── Two-column calibration panel (hidden until detection) ────
         col_outer = tk.Frame(f, bg=BG_CARD)
@@ -1287,16 +1698,19 @@ class EasyConfigScreen:
             gpio_lbl.config(text="")
 
             def _on_detected(pin, det_mode):
-                self.scanning = False
-                self.detected["whammy_pin"]  = pin
-                self.detected["whammy_mode"] = det_mode
-                detect_btn.set_state("normal")
-                cancel_btn.set_state("disabled")
-                status_lbl.config(
-                    text=f"\u2713 Detected on GPIO {pin} ({det_mode})!", fg=ACCENT_GREEN)
-                gpio_lbl.config(text=f"GPIO {pin}")
-                _show_whammy_bars(pin, det_mode)
-                self._start_monitor(det_mode, pin, bar, prefix="whammy")
+                def _commit():
+                    self.scanning = False
+                    self.detected["whammy_pin"]  = pin
+                    self.detected["whammy_mode"] = det_mode
+                    detect_btn.set_state("normal")
+                    cancel_btn.set_state("disabled")
+                    status_lbl.config(
+                        text=f"\u2713 Detected on GPIO {pin} ({det_mode})!", fg=ACCENT_GREEN)
+                    gpio_lbl.config(text=f"GPIO {pin}")
+                    _show_whammy_bars(pin, det_mode)
+                    self._start_monitor(det_mode, pin, bar, prefix="whammy")
+
+                self._handle_detected_pin("whammy_pin", pin, _commit, _restore_idle)
 
             def _on_error(msg):
                 self.scanning = False
@@ -1346,9 +1760,7 @@ class EasyConfigScreen:
                     self.pico.stop_scan()
                 except Exception:
                     pass
-                detect_btn.set_state("normal")
-                cancel_btn.set_state("disabled")
-                status_lbl.config(text="Detection cancelled.", fg=TEXT_DIM)
+                _restore_idle()
 
             cancel_btn._command = _cancel
             cancel_btn._render(cancel_btn._bg)
@@ -2255,7 +2667,9 @@ class EasyConfigScreen:
                             bg=BG_CARD, fg=TEXT, selectcolor=BG_INPUT,
                             activebackground=BG_CARD, font=(FONT_UI, 9)).pack(side="left", padx=(0, 10))
 
-        _sf, status_lbl, gpio_lbl = self._make_status_box(f)
+        _sf, status_lbl, gpio_lbl = self._make_status_box(
+            f, idle_text="Choose Digital or Analog, then Click to Start Input Detection")
+        idle_text = "Choose Digital or Analog, then Click to Start Input Detection"
         tmode = self.detected.get("tilt_mode")
         if tmode == "i2c":
             chip = "LIS3DH" if self.detected.get("i2c_model", 0) == 1 else "ADXL345"
@@ -2385,6 +2799,12 @@ class EasyConfigScreen:
 
         detect_btn, cancel_btn = self._make_detect_cancel_row(f, ACCENT_BLUE)
 
+        def _restore_idle():
+            detect_btn.set_state("normal")
+            cancel_btn.set_state("disabled")
+            status_lbl.config(text=idle_text, fg=ACCENT_BLUE)
+            gpio_lbl.config(text="")
+
         def start_detect():
             if not self.pico.connected:
                 status_lbl.config(text="\u26a0  Not connected to controller.", fg=ACCENT_ORANGE)
@@ -2419,15 +2839,18 @@ class EasyConfigScreen:
                 self._start_monitor("i2c", None, bar, prefix="tilt", axis=axis_var.get())
 
             def _on_detected(pin, det_mode):
-                self.detected["tilt_pin"] = pin
-                self.detected["tilt_mode"] = det_mode
-                detect_btn.set_state("normal")
-                cancel_btn.set_state("disabled")
-                status_lbl.config(text=f"\u2713 Detected on GPIO {pin} ({det_mode})!", fg=ACCENT_GREEN)
-                gpio_lbl.config(text=f"GPIO {pin}")
-                if det_mode == "analog":
-                    _show_tilt_cal()
-                    self._start_monitor("analog", pin, bar, prefix="tilt")
+                def _commit():
+                    self.detected["tilt_pin"] = pin
+                    self.detected["tilt_mode"] = det_mode
+                    detect_btn.set_state("normal")
+                    cancel_btn.set_state("disabled")
+                    status_lbl.config(text=f"\u2713 Detected on GPIO {pin} ({det_mode})!", fg=ACCENT_GREEN)
+                    gpio_lbl.config(text=f"GPIO {pin}")
+                    if det_mode == "analog":
+                        _show_tilt_cal()
+                        self._start_monitor("analog", pin, bar, prefix="tilt")
+
+                self._handle_detected_pin("tilt_pin", pin, _commit, _restore_idle)
 
             def _on_error(msg):
                 self.scanning = False
@@ -2653,9 +3076,7 @@ class EasyConfigScreen:
                     self.pico.stop_scan()
                 except Exception:
                     pass
-                detect_btn.set_state("normal")
-                cancel_btn.set_state("disabled")
-                status_lbl.config(text="Detection cancelled.", fg=TEXT_DIM)
+                _restore_idle()
 
             cancel_btn._command = _cancel
             cancel_btn._render(cancel_btn._bg)
@@ -2676,6 +3097,7 @@ class EasyConfigScreen:
     # ── Navigation ────────────────────────────────────────────────
 
     def _prev_page(self):
+        self._clear_override_flow()
         if self._current_page > 0:
             self._show_page(self._current_page - 1)
 
@@ -2686,6 +3108,7 @@ class EasyConfigScreen:
     def _next_page(self):
         idx = self._current_page
         ptype, key, name, accent, category = self.PAGE_DEFS[idx]
+        self._stop_scan_and_monitor(reset_detection_ui=True)
 
         # Enforce required bindings for digital button pages 0-7
         if idx in self._REQUIRED_PAGES:
@@ -2713,6 +3136,13 @@ class EasyConfigScreen:
                 dlg.grab_set()
                 self.root.wait_window(dlg)
                 return   # do NOT advance
+
+        if self._override_repair_page == idx and self._override_repair_key is not None:
+            return_page = self._override_return_page
+            self._clear_override_flow()
+            if return_page is not None:
+                self._show_page(return_page)
+                return
 
         if idx < len(self.PAGE_DEFS) - 1:
             self._show_page(idx + 1)
@@ -2942,18 +3372,7 @@ class EasyConfigScreen:
         self.root.wait_window(dlg)
         if not _confirmed[0]:
             return
-        self._stop_scan_and_monitor()
-        if self.pico.connected:
-            try:
-                self.pico.reboot()   # return to play mode
-            except Exception:
-                pass
-            try:
-                self.pico.disconnect()
-            except Exception:
-                pass
-        if self._on_back:
-            self._on_back()
+        self._finish_without_saving()
 
     # ── Show / Hide ───────────────────────────────────────────────
 
@@ -2961,11 +3380,12 @@ class EasyConfigScreen:
         self.root.title("OCC - Easy Configuration")
         self._empty_menu = getattr(self, '_empty_menu', None) or tk.Menu(self.root)
         self.root.config(menu=self._empty_menu)
-        self.detected.clear()   # always start fresh — no "Previously set" state
+        self._reset_easy_config_state()   # always start fresh — no "Previously set" state
         self._show_page(0)
         self.frame.pack(fill="both", expand=True)
 
     def hide(self):
+        self._clear_override_flow()
         self._stop_scan_and_monitor()
         if getattr(self, '_strum_anim', None):
             self._strum_anim.stop()

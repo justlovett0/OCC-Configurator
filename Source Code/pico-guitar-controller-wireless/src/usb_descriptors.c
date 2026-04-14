@@ -199,12 +199,15 @@ uint8_t const* tud_descriptor_device_cb(void) {
 static const uint8_t xinput_config_desc[] = {
     // Configuration Descriptor (9)
     0x09, TUSB_DESC_CONFIGURATION,
-    XINPUT_DESC_CONFIG_TOTAL, 0x00, 0x01, 0x01, 0x00, 0x80, 0xFA,
-    // Interface Descriptor (9)
+    XINPUT_DESC_CONFIG_TOTAL, 0x00,
+    0x03,       // bNumInterfaces: IF0 (controller) + IF1 (unknown) + IF2 (security)
+    0x01, 0x00, 0x80, 0xFA,
+
+    // Interface 0: XInput controller (FF/5D/01) — 9 bytes
     0x09, TUSB_DESC_INTERFACE,
     0x00, 0x00, 0x02,
     XINPUT_IF_CLASS, XINPUT_IF_SUBCLASS, XINPUT_IF_PROTOCOL, 0x00,
-    // XInput Vendor Descriptor (17)
+    // XInput capability descriptor (17 bytes)
     0x11, 0x21, 0x00, 0x01,
     XINPUT_SUBTYPE_GUITAR_ALT, 0x25,
     XINPUT_EP_IN, XINPUT_REPORT_SIZE,
@@ -218,6 +221,18 @@ static const uint8_t xinput_config_desc[] = {
     0x07, TUSB_DESC_ENDPOINT,
     XINPUT_EP_OUT, TUSB_XFER_INTERRUPT,
     XINPUT_EP_MAX_PACKET, 0x00, 0x08,
+
+    // Interface 1: unknown (FF/5D/03) — required by 360, no endpoints — 9+10 bytes
+    0x09, TUSB_DESC_INTERFACE,
+    0x01, 0x00, 0x00,
+    0xFF, 0x5D, 0x03, 0x00,
+    10, 0x21, 0x00, 0x01, 0x01, 0x00, 0x07, 0x00, 0x00, 0x00,
+
+    // Interface 2: security (FF/FD/13) — no endpoints — 9+6 bytes
+    0x09, TUSB_DESC_INTERFACE,
+    0x02, 0x00, 0x00,
+    0xFF, 0xFD, 0x13, 0x00,
+    6, 0x41, 0x00, 0x01, 0x01, 0x03,
 };
 
 #define CDC_CONFIG_TOTAL_LEN  75

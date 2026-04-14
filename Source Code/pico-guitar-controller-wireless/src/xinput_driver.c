@@ -19,6 +19,8 @@
 #include "xinput_driver.h"
 #include "usb_descriptors.h"
 #include "pico/stdlib.h"
+#include "pico/unique_id.h"
+#include "xsm3/xsm3.h"
 #include <string.h>
 
 //--------------------------------------------------------------------
@@ -121,15 +123,20 @@ static void xinput_reset(uint8_t rhport) {
 }
 
 static uint16_t xinput_open(uint8_t rhport, tusb_desc_interface_t const *desc_intf, uint16_t max_len) {
-    if (desc_intf->bInterfaceClass    != XINPUT_IF_CLASS ||
-        desc_intf->bInterfaceSubClass != XINPUT_IF_SUBCLASS) {
-        return 0;
-    }
+    // Claim IF0 (controller, 5D/01), IF1 (unknown, 5D/03), and IF2 (security, FD/13).
+    // IF1 and IF2 have no endpoints — claiming them lets control_xfer_cb handle auth.
+    if (desc_intf->bInterfaceClass != XINPUT_IF_CLASS) return 0;
+    bool is_security = (desc_intf->bInterfaceSubClass == 0xFD);
+    bool is_ctrl     = (desc_intf->bInterfaceSubClass == XINPUT_IF_SUBCLASS);
+    if (!is_security && !is_ctrl) return 0;
 
     uint16_t drv_len = sizeof(tusb_desc_interface_t);
     uint8_t const *p_desc = tu_desc_next(desc_intf);
 
     while (drv_len < max_len) {
+        // Stop at the next interface — don't consume it
+        if (tu_desc_type(p_desc) == TUSB_DESC_INTERFACE) break;
+
         if (tu_desc_type(p_desc) == TUSB_DESC_ENDPOINT) {
             tusb_desc_endpoint_t const *ep_desc = (tusb_desc_endpoint_t const *)p_desc;
             TU_ASSERT(usbd_edpt_open(rhport, ep_desc));
@@ -146,14 +153,71 @@ static uint16_t xinput_open(uint8_t rhport, tusb_desc_interface_t const *desc_in
         p_desc   = tu_desc_next(p_desc);
     }
 
-    _xinput.mounted = true;
-    _xinput.tx_busy = false;
+    if (is_ctrl) {
+        _xinput.mounted = true;
+        _xinput.tx_busy = false;
+    }
     return drv_len;
 }
 
+// Receive buffers for host-to-device challenge packets
+static uint8_t _xsm3_init_buf[0x22];    // challenge init (0x22 bytes)
+static uint8_t _xsm3_verify_buf[0x16];  // challenge verify (0x16 bytes)
+static uint8_t _xsm3_x84_buf[32];       // 0x84 OUT data — accepted, not processed
+static uint16_t _xsm3_status = 0x0002;  // 2 = ready
+
 static bool xinput_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const *request) {
-    (void)rhport; (void)stage; (void)request;
-    return true;
+    // Only handle vendor requests — pass everything else through
+    if (request->bmRequestType_bit.type != TUSB_REQ_TYPE_VENDOR) return true;
+
+    switch (request->bRequest) {
+    case 0x81: // Get identification — 360 starts auth here
+        if (stage == CONTROL_STAGE_SETUP) {
+            uint8_t serial[12] = {0};
+            pico_unique_board_id_t bid;
+            pico_get_unique_board_id(&bid);
+            memcpy(serial, bid.id, 8);
+            xsm3_set_vid_pid(serial, XINPUT_VID, XINPUT_PID);
+            xsm3_initialise_state();
+            xsm3_set_identification_data(xsm3_id_data_ms_controller);
+            return tud_control_xfer(rhport, request,
+                                    (void *)xsm3_id_data_ms_controller, 0x1D);
+        }
+        return true;
+
+    case 0x82: // Challenge init — 360 sends 0x22-byte encrypted challenge
+        if (stage == CONTROL_STAGE_SETUP)
+            return tud_control_xfer(rhport, request, _xsm3_init_buf, 0x22);
+        if (stage == CONTROL_STAGE_DATA)
+            xsm3_do_challenge_init(_xsm3_init_buf);
+        return true;
+
+    case 0x83: // Get challenge response (0x30 bytes)
+        if (stage == CONTROL_STAGE_SETUP)
+            return tud_control_xfer(rhport, request, xsm3_challenge_response, 0x30);
+        return true;
+
+    case 0x86: // Status — 0x0002 = response ready
+        if (stage == CONTROL_STAGE_SETUP)
+            return tud_control_xfer(rhport, request, &_xsm3_status, sizeof(_xsm3_status));
+        return true;
+
+    case 0x84: // OUT data from 360 — accept it, no processing needed
+        if (stage == CONTROL_STAGE_SETUP)
+            return tud_control_xfer(rhport, request, _xsm3_x84_buf,
+                                    sizeof(_xsm3_x84_buf));
+        return true;
+
+    case 0x87: // Challenge verify — 360 sends 0x16-byte verification packet
+        if (stage == CONTROL_STAGE_SETUP)
+            return tud_control_xfer(rhport, request, _xsm3_verify_buf, 0x16);
+        if (stage == CONTROL_STAGE_DATA)
+            xsm3_do_challenge_verify(_xsm3_verify_buf);
+        return true;
+
+    default:
+        return false;
+    }
 }
 
 static bool xinput_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_t xferred_len) {

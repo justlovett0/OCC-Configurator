@@ -96,3 +96,7 @@ Source Code\configurator\build_exe.bat
 ## Support
 
 For issues or feature requests, please [open an issue](https://github.com/justlovett0/OCC-Configurator/issues).
+
+## Startup Flags
+
+- `-scale X` (number between 0.5 and 2.5), Window scale override.

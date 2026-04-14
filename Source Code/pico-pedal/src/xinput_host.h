@@ -5,9 +5,8 @@
  * guitar controller and makes them available to Core 0 for merging
  * with pedal button inputs.
  *
- * Hardware: PIO-USB on two consecutive GPIO pins (D+ and D- = D+ + 1).
- * Default: GP0 (D+), GP1 (D-). Change PIO_USB_DP_PIN to use other pins.
- * Host mode should use the normal USB host pull-downs on the data lines.
+ * Hardware: PIO-USB on two consecutive GPIO pins configured at runtime.
+ * The host pin pair comes from pedal_config_t.
  */
 
 #ifndef _XINPUT_HOST_H_
@@ -17,12 +16,11 @@
 #include <stdbool.h>
 #include "usb_descriptors.h"
 
-// PIO-USB D+ pin (D- is always D+ + 1).
-// Change this if your hardware uses different GPIO pins.
-#define PIO_USB_DP_PIN   2
-
 // Initialize the USB host on Core 1. Call from core1_main().
-void xinput_host_init(void);
+// usb_host_pin is the lower-numbered pin of the consecutive pair.
+// usb_host_dm_first = 0 -> D+ on usb_host_pin, D- on usb_host_pin + 1
+// usb_host_dm_first = 1 -> D- on usb_host_pin, D+ on usb_host_pin + 1
+void xinput_host_init(int8_t usb_host_pin, bool usb_host_dm_first);
 
 // Run one iteration of the host task. Call repeatedly from Core 1 loop.
 void xinput_host_task(void);
@@ -31,7 +29,7 @@ void xinput_host_task(void);
 // regardless of whether it was claimed as XInput.
 bool xinput_host_any_device(void);
 
-// Returns true if a guitar controller is currently connected via USB host.
+// Returns true if a supported wired host interface is mounted/configured.
 bool xinput_host_connected(void);
 
 // Returns 0 if Core 1 hasn't started yet, 1 if alive but tuh_init not done,
@@ -68,6 +66,8 @@ typedef struct {
     uint16_t ep0_badpid_count; // EP0 IN got data with unexpected PID
     uint16_t setup_ack_count;  // SETUP packet got ACK
     uint16_t setup_fail_count; // SETUP packet did not get ACK
+    uint16_t setup_nak_count;  // SETUP packet got NAK
+    uint16_t setup_noresp_count; // SETUP packet got no valid handshake
     uint16_t hcd_ep0_complete_count; // HCD reported EP0 completion event
     uint16_t hcd_ep0_in_submit_count; // TinyUSB HCD queued EP0 IN stage
     uint16_t hcd_ep0_in_submit_fail_count; // TinyUSB tried to queue EP0 IN but start failed
@@ -79,6 +79,7 @@ typedef struct {
     uint16_t ep0_out_nak_count; // EP0 OUT got NAK
     uint16_t ep0_out_noresp_count; // EP0 OUT saw no valid response/start
     uint16_t ep0_out_stall_count; // EP0 OUT got STALL
+    uint16_t ep0_status_out_compat_count; // synthetic EP0 status-OUT completions
     uint8_t last_setup_addr; // device address used for the most recent SETUP
     uint8_t last_setup_bmRequestType;
     uint8_t last_setup_bRequest;

@@ -36,11 +36,10 @@
 #include "xinput_host.h"
 #include "pedal_config.h"
 #include "pedal_config_serial.h"
-#if PEDAL_LED_DEBUG
 #include "apa102_leds.h"
-#endif
 
 #define REPORT_INTERVAL_US     1000   // 1ms report interval (1000Hz)
+#define LED_UPDATE_INTERVAL_US 16667  // ~60Hz LED refresh
 #define ONBOARD_LED_PIN        25
 
 // XInput button masks indexed by button_index_t — shared lookup table
@@ -72,6 +71,11 @@ typedef struct {
 
 static debounce_state_t g_debounce[PEDAL_BUTTON_COUNT];
 
+static inline bool is_led_spi_pin(int8_t pin) {
+    if (!g_config.leds.enabled) return false;
+    return (pin == LED_SPI_DI_PIN || pin == LED_SPI_SCK_PIN);
+}
+
 //--------------------------------------------------------------------
 // Watchdog scratch register — config mode trigger
 //--------------------------------------------------------------------
@@ -85,6 +89,9 @@ static bool check_scratch_config_mode(void) {
 }
 
 static void request_config_mode_reboot(void) {
+    if (g_config.leds.enabled && g_config.leds.count > 0) {
+        apa102_all_off(&g_config.leds);
+    }
     watchdog_hw->scratch[0] = WATCHDOG_CONFIG_MAGIC;
     watchdog_reboot(0, 0, 10);
     while (1) { tight_loop_contents(); }
@@ -97,7 +104,8 @@ static void request_config_mode_reboot(void) {
 static void init_gpio_pin(int8_t pin) {
     if (pin < 0 || pin > 28) return;
     // Don't configure PIO-USB pins as GPIO
-    if (pin == PIO_USB_DP_PIN || pin == (PIO_USB_DP_PIN + 1)) return;
+    if (config_pin_is_usb_host_reserved(&g_config, pin)) return;
+    if (is_led_spi_pin(pin)) return;
     gpio_init(pin);
     gpio_set_dir(pin, GPIO_IN);
     gpio_pull_up(pin);
@@ -143,7 +151,7 @@ static void init_all_gpio(void) {
 
 static inline bool read_pin(int8_t pin) {
     if (pin < 0 || pin > 28) return false;
-    if (pin == PIO_USB_DP_PIN || pin == (PIO_USB_DP_PIN + 1)) return false;
+    if (config_pin_is_usb_host_reserved(&g_config, pin)) return false;
     return !gpio_get(pin);  // Active low: pressed = GPIO low
 }
 
@@ -232,6 +240,22 @@ static void build_report(xinput_report_t *report) {
     }
 }
 
+static uint16_t build_led_pressed_mask(void) {
+    uint16_t pressed = 0;
+    uint32_t now_us = time_us_32();
+    uint32_t debounce_us = (uint32_t)g_config.debounce_ms * 1000;
+
+    for (int i = 0; i < PEDAL_BUTTON_COUNT; i++) {
+        bool raw = read_pin(g_config.pin_buttons[i]);
+        bool is_pressed = debounce(&g_debounce[i], raw, now_us, debounce_us);
+        if (is_pressed) {
+            pressed |= (uint16_t)(1u << i);
+        }
+    }
+
+    return pressed;
+}
+
 //--------------------------------------------------------------------
 // TinyUSB device callbacks (required by TinyUSB)
 //--------------------------------------------------------------------
@@ -288,7 +312,7 @@ static void onboard_led_blink_config(void) {
 
 static void core1_main(void) {
     sleep_ms(10);  // Let Core 0 finish device stack init
-    xinput_host_init();
+    xinput_host_init(g_config.usb_host_pin, g_config.usb_host_dm_first != 0);
     while (true) {
         xinput_host_task();
     }
@@ -337,6 +361,10 @@ int main(void) {
         init_all_gpio();
         memset(g_debounce, 0, sizeof(g_debounce));
 
+        if (g_config.leds.enabled && g_config.leds.count > 0) {
+            apa102_init();
+        }
+
         // Reset Core 1 to a clean state, then launch it.
         multicore_reset_core1();
         multicore_launch_core1(core1_main);
@@ -356,9 +384,11 @@ int main(void) {
 #endif
 
         xinput_report_t report; (void)report;
+        uint64_t last_led_us = 0;
 #if PEDAL_LED_DEBUG
-        uint64_t last_led_us     = 0;
+        uint64_t last_led_dbg_us = 0;
         bool     led_on          = false;
+        uint8_t  led_mode        = 0xFF;
         uint64_t startup_done_us = time_us_64() + 1000000u;  // 1s for Core 1 to init
 #endif
 
@@ -372,6 +402,13 @@ int main(void) {
         while (true) {
             tud_task();
 
+            // The configurator sends a magic XInput vibration pattern while the
+            // pedal is in play mode. Reboot into CDC config mode as soon as we
+            // detect it so the COM port can enumerate for the GUI.
+            if (xinput_magic_detected()) {
+                request_config_mode_reboot();
+            }
+
 #if PEDAL_HOST_DEBUG
             uint64_t now_us = time_us_64();
 
@@ -379,9 +416,13 @@ int main(void) {
             if (!hdr_printed && tud_cdc_connected()) {
                 hdr_printed = true;
                 dbg_printf("\r\n=== Pedal Host Debug ===\r\n");
-                dbg_printf("dp_pin=%u  tx_ch=1  120MHz\r\n\r\n", (unsigned)PIO_USB_DP_PIN);
+                dbg_printf("host_pair=%u/%u  dp=%u dm=%u  tx_ch=1  120MHz\r\n\r\n",
+                    (unsigned)g_config.usb_host_pin,
+                    (unsigned)(g_config.usb_host_pin + 1),
+                    (unsigned)config_usb_host_dp_pin(&g_config),
+                    (unsigned)config_usb_host_dm_pin(&g_config));
                 dbg_printf("state: c1 any mnt umt oat ocl cls/sub/pro se0 ok fail pfird preal rcon rsus brst\r\n");
-                dbg_printf("ep0:   setup sack sfail hcmp hqin hqfl inat hqou hqof oat2 oack onak onrs ostl nak nrsp bpid\r\n");
+                dbg_printf("ep0:   setup sack sfail snak snrs hcmp hqin hqfl inat hqou hqof oat2 oack onak onrs ostl scon nak nrsp bpid\r\n");
                 dbg_printf("last:  saddr bmReq req wValue\r\n");
             }
 
@@ -411,6 +452,8 @@ int main(void) {
                     d.ep0_badpid_count!= prev_dbg.ep0_badpid_count||
                     d.setup_ack_count != prev_dbg.setup_ack_count ||
                     d.setup_fail_count!= prev_dbg.setup_fail_count||
+                    d.setup_nak_count != prev_dbg.setup_nak_count ||
+                    d.setup_noresp_count != prev_dbg.setup_noresp_count ||
                     d.hcd_ep0_complete_count != prev_dbg.hcd_ep0_complete_count ||
                     d.hcd_ep0_in_submit_count != prev_dbg.hcd_ep0_in_submit_count ||
                     d.hcd_ep0_in_submit_fail_count != prev_dbg.hcd_ep0_in_submit_fail_count ||
@@ -422,6 +465,7 @@ int main(void) {
                     d.ep0_out_nak_count != prev_dbg.ep0_out_nak_count ||
                     d.ep0_out_noresp_count != prev_dbg.ep0_out_noresp_count ||
                     d.ep0_out_stall_count != prev_dbg.ep0_out_stall_count ||
+                    d.ep0_status_out_compat_count != prev_dbg.ep0_status_out_compat_count ||
                     d.last_setup_addr != prev_dbg.last_setup_addr ||
                     d.last_setup_bmRequestType != prev_dbg.last_setup_bmRequestType ||
                     d.last_setup_bRequest != prev_dbg.last_setup_bRequest ||
@@ -439,15 +483,17 @@ int main(void) {
                         d.root_connected, d.root_suspended,
                         d.bus_reset_count,
                         xinup ? "XINPUT-OK" : (any ? "device-no-claim" : "no-device"));
-                    dbg_printf("ep0:   %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u\r\n",
+                    dbg_printf("ep0:   %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u %u\r\n",
                         d.setup_sent_count,
                         d.setup_ack_count, d.setup_fail_count,
+                        d.setup_nak_count, d.setup_noresp_count,
                         d.hcd_ep0_complete_count, d.hcd_ep0_in_submit_count,
                         d.hcd_ep0_in_submit_fail_count, d.ep0_in_attempt_count,
                         d.hcd_ep0_out_submit_count, d.hcd_ep0_out_submit_fail_count,
                         d.ep0_out_attempt_count,
                         d.ep0_out_ack_count, d.ep0_out_nak_count,
                         d.ep0_out_noresp_count, d.ep0_out_stall_count,
+                        d.ep0_status_out_compat_count,
                         d.ep0_nak_count, d.ep0_noresp_count, d.ep0_badpid_count);
                     dbg_printf("last:  %u 0x%02X 0x%02X 0x%04X\r\n",
                         d.last_setup_addr, d.last_setup_bmRequestType,
@@ -488,6 +534,12 @@ int main(void) {
                     xinput_send_report(&report);
                 }
             }
+
+            if (g_config.leds.enabled && g_config.leds.count > 0 &&
+                (now_us - last_led_us >= LED_UPDATE_INTERVAL_US)) {
+                last_led_us = now_us;
+                apa102_update_from_inputs(&g_config.leds, build_led_pressed_mask());
+            }
 #endif
 
 #if PEDAL_LED_DEBUG
@@ -506,7 +558,7 @@ int main(void) {
                     // Still in 1s startup window — LEDs off while Core 1 initializes
                 } else if (c1 == 0) {
                     // Core 1 never ran — solid blue
-                    if (!led_on) {
+                    if (led_mode != 0) {
                         for (int i = 0; i < _dbg_leds.count; i++) {
                             _dbg_leds.colors[i].r = 0;
                             _dbg_leds.colors[i].g = 0;
@@ -515,11 +567,17 @@ int main(void) {
                         uint8_t bri[MAX_LEDS] = {8, 8, 8, 8};
                         apa102_update(&_dbg_leds, bri);
                         led_on = true;
+                        led_mode = 0;
                     }
                 } else if (c1 == 1) {
+                    if (led_mode != 1) {
+                        led_mode = 1;
+                        led_on = false;
+                        last_led_dbg_us = 0;
+                    }
                     // Core 1 alive but tuh_init hasn't returned — fast blue blink
-                    if (now_us - last_led_us >= 200000u) {
-                        last_led_us = now_us;
+                    if (now_us - last_led_dbg_us >= 200000u) {
+                        last_led_dbg_us = now_us;
                         led_on = !led_on;
                         if (led_on) {
                             for (int i = 0; i < _dbg_leds.count; i++) {
@@ -536,7 +594,7 @@ int main(void) {
                     }
                 } else if (c1 == 3) {
                     // tuh_init returned false — host controller failed — solid magenta
-                    if (!led_on) {
+                    if (led_mode != 2) {
                         for (int i = 0; i < _dbg_leds.count; i++) {
                             _dbg_leds.colors[i].r = 255;
                             _dbg_leds.colors[i].g = 0;
@@ -545,6 +603,7 @@ int main(void) {
                         uint8_t bri[MAX_LEDS] = {8, 8, 8, 8};
                         apa102_update(&_dbg_leds, bri);
                         led_on = true;
+                        led_mode = 2;
                     }
                 } else {
                     // c1 == 2 or 4: tuh_init done (4 = task loop confirmed running)
@@ -552,7 +611,7 @@ int main(void) {
                     bool any_dev   = xinput_host_any_device();
 
                     if (xinput_up) {
-                        if (!led_on) {
+                        if (led_mode != 3) {
                             for (int i = 0; i < _dbg_leds.count; i++) {
                                 _dbg_leds.colors[i].r = 0;
                                 _dbg_leds.colors[i].g = 255;
@@ -561,11 +620,18 @@ int main(void) {
                             uint8_t bri[MAX_LEDS] = {8, 8, 8, 8};
                             apa102_update(&_dbg_leds, bri);
                             led_on = true;
+                            led_mode = 3;
                         }
                     } else {
+                        uint8_t blink_mode = any_dev ? 4 : 5;
+                        if (led_mode != blink_mode) {
+                            led_mode = blink_mode;
+                            led_on = false;
+                            last_led_dbg_us = 0;
+                        }
                         uint64_t period_us = any_dev ? 100000u : 500000u;
-                        if (now_us - last_led_us >= period_us) {
-                            last_led_us = now_us;
+                        if (now_us - last_led_dbg_us >= period_us) {
+                            last_led_dbg_us = now_us;
                             led_on = !led_on;
                             if (led_on) {
                                 for (int i = 0; i < _dbg_leds.count; i++) {

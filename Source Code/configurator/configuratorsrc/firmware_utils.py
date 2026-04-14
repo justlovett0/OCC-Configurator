@@ -2,6 +2,7 @@ import sys, os, time, struct, ctypes, json, shutil, datetime, string
 from tkinter import messagebox
 from .constants import (NUKE_UF2_FILENAME, DEVICE_TYPE_UF2_HINTS,
                          CONFIG_MODE_VID, CONFIG_MODE_PIDS, MAX_LEDS,
+                         PEDAL_LED_INPUT_NAMES, get_led_input_names_for_device_type,
                          ACCENT_BLUE, ACCENT_RED, ACCENT_ORANGE)
 from .xinput_utils import (XINPUT_AVAILABLE, xinput_get_connected,
                              xinput_send_vibration, MAGIC_STEPS)
@@ -65,40 +66,97 @@ def load_fw_presets():
     return {}, None
 
 
-def _apply_preset_config(pico, cfg_path):
-    """Send all SET commands from a preset JSON to an already-connected PicoSerial.
-    Handles led_colors/led_maps/led_active_br arrays.  Skips device_type (read-only).
-    """
-    with open(cfg_path, "r", encoding="utf-8") as f:
-        cfg = json.load(f)
+def _get_led_input_names_for_config(cfg, led_input_names=None):
+    if led_input_names is not None:
+        return list(led_input_names)
+    device_type = str(cfg.get("device_type", "")).strip()
+    if device_type == "pedal":
+        return list(PEDAL_LED_INPUT_NAMES)
+    return list(get_led_input_names_for_device_type(device_type))
 
-    SKIP = {"device_type", "led_colors", "led_maps", "led_active_br"}
+
+def apply_config_to_pico(pico, cfg, led_input_names=None):
+    """Send a config dict to firmware, including exported raw LED fields."""
+    skip = {
+        "device_type",
+        "led_colors",
+        "led_maps",
+        "led_active_br",
+        "led_colors_raw",
+        "led_map_raw",
+    }
+    errors = []
+
     for key, val in cfg.items():
-        if key in SKIP:
+        if key in skip:
             continue
         try:
             pico.set_value(key, str(val))
-        except Exception:
-            pass
+        except Exception as exc:
+            errors.append(f"{key}: {exc}")
 
-    for i, color in enumerate(cfg.get("led_colors", [])):
-        if i < MAX_LEDS:
+    colors_raw = cfg.get("led_colors_raw")
+    if colors_raw is not None:
+        for i, color in enumerate(str(colors_raw).split(",")):
+            color = color.strip().upper()
+            if i >= MAX_LEDS or len(color) != 6:
+                continue
+            try:
+                pico.set_value(f"led_color_{i}", color)
+            except Exception as exc:
+                errors.append(f"led_color_{i}: {exc}")
+    else:
+        for i, color in enumerate(cfg.get("led_colors", [])):
+            if i >= MAX_LEDS:
+                continue
             try:
                 pico.set_value(f"led_color_{i}", str(color).upper())
-            except Exception:
-                pass
+            except Exception as exc:
+                errors.append(f"led_color_{i}: {exc}")
 
-    for i, m in enumerate(cfg.get("led_maps", [])):
-        try:
-            pico.set_value(f"led_map_{i}", f"{int(m):04X}")
-        except Exception:
-            pass
+    maps_raw = cfg.get("led_map_raw")
+    if maps_raw is not None:
+        led_names = _get_led_input_names_for_config(cfg, led_input_names=led_input_names)
+        for pair in str(maps_raw).split(","):
+            pair = pair.strip()
+            if "=" not in pair:
+                continue
+            name, rest = pair.split("=", 1)
+            name = name.strip()
+            if name not in led_names or ":" not in rest:
+                continue
+            idx = led_names.index(name)
+            hex_mask, bright = rest.split(":", 1)
+            try:
+                pico.set_value(f"led_map_{idx}", hex_mask.strip().upper())
+            except Exception as exc:
+                errors.append(f"led_map_{idx}: {exc}")
+            try:
+                pico.set_value(f"led_active_{idx}", bright.strip())
+            except Exception as exc:
+                errors.append(f"led_active_{idx}: {exc}")
+    else:
+        for i, m in enumerate(cfg.get("led_maps", [])):
+            try:
+                pico.set_value(f"led_map_{i}", f"{int(m):04X}")
+            except Exception as exc:
+                errors.append(f"led_map_{i}: {exc}")
 
-    for i, b in enumerate(cfg.get("led_active_br", [])):
-        try:
-            pico.set_value(f"led_active_{i}", str(b))
-        except Exception:
-            pass
+        for i, b in enumerate(cfg.get("led_active_br", [])):
+            try:
+                pico.set_value(f"led_active_{i}", str(b))
+            except Exception as exc:
+                errors.append(f"led_active_{i}: {exc}")
+
+    return errors
+
+
+def _apply_preset_config(pico, cfg_path):
+    """Send all SET commands from a preset JSON to an already-connected PicoSerial."""
+    with open(cfg_path, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+
+    apply_config_to_pico(pico, cfg)
 
 
 def find_uf2_for_device_type(device_type):

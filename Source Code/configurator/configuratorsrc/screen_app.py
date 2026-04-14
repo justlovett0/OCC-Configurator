@@ -3,15 +3,15 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
                          TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
-                         FRET_COLORS, DIGITAL_PINS, DIGITAL_PIN_LABELS, ANALOG_PINS,
+                         DIGITAL_PINS, DIGITAL_PIN_LABELS, ANALOG_PINS,
                          ANALOG_PIN_LABELS, I2C0_SDA_PINS, I2C0_SCL_PINS, I2C_SDA_LABELS,
                          I2C_SCL_LABELS, I2C_MODEL_LABELS, I2C_MODEL_VALUES,
-                         ADXL345_AXIS_LABELS, MAX_LEDS, LED_INPUT_COUNT, LED_INPUT_NAMES,
-                         LED_INPUT_LABELS, BUTTON_DEFS, VALID_NAME_CHARS, OCC_SUBTYPES)
+                         ADXL345_AXIS_LABELS, MAX_LEDS, VALID_NAME_CHARS, OCC_SUBTYPES,
+                         GUITAR_PROFILE_DEFS)
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import (RoundedButton, HelpButton, HelpDialog, CustomDropdown,
                        SpeedSlider, LiveBarGraph, LiveBarGraphVertical, CalibratedBarGraph,
-                       _help_text, _help_placeholder)
+                       _help_text)
 from .serial_comms import PicoSerial
 from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
@@ -20,10 +20,16 @@ from .xinput_utils import (XINPUT_AVAILABLE, ERROR_SUCCESS, xinput_get_connected
                            MAGIC_STEPS, xinput_send_vibration)
 from .utils import (_centered_dialog, _center_window, _make_flash_popup,
                      _find_preset_configs, _ask_wired_or_wireless)
+
+MAX_GUITAR_LED_INPUT_COUNT = max(
+    len(profile["led_input_names"]) + 2 for profile in GUITAR_PROFILE_DEFS.values()
+)
 class App:
-    def __init__(self, root, on_back=None):
+    def __init__(self, root, on_back=None, guitar_profile="standard"):
         self.root = root
         self._on_back = on_back
+        self._guitar_profile_key = guitar_profile
+        self._apply_guitar_profile(guitar_profile)
         # Title is set in show() so it doesn't get overwritten by other screens at startup
         self.root.configure(bg=BG_MAIN)
         # Geometry is applied in show() so it doesn't clobber other screens at startup
@@ -77,17 +83,17 @@ class App:
         self.joy_dpad_y_invert = tk.BooleanVar(value=False)
         self.joy_deadzone      = tk.IntVar(value=205)
 
-        self._loaded_device_type = "guitar_alternate"  # updated by _load_config
+        self._loaded_device_type = self._default_device_type  # updated by _load_config
 
         # LED state
         self.led_enabled = tk.BooleanVar(value=False)
         self.led_count = tk.IntVar(value=0)
         self.led_base_brightness = tk.IntVar(value=5)
         self.led_colors = [tk.StringVar(value="FFFFFF") for _ in range(MAX_LEDS)]
-        self.led_maps = [tk.IntVar(value=0) for _ in range(LED_INPUT_COUNT)]
-        self.led_active_br = [tk.IntVar(value=7) for _ in range(LED_INPUT_COUNT)]
+        self.led_maps = [tk.IntVar(value=0) for _ in range(MAX_GUITAR_LED_INPUT_COUNT)]
+        self.led_active_br = [tk.IntVar(value=7) for _ in range(MAX_GUITAR_LED_INPUT_COUNT)]
         self.led_reactive = tk.BooleanVar(value=True)
-        self._led_maps_backup = [0] * LED_INPUT_COUNT
+        self._led_maps_backup = [0] * MAX_GUITAR_LED_INPUT_COUNT
 
         # LED loop state
         self.led_loop_enabled    = tk.BooleanVar(value=False)
@@ -105,7 +111,7 @@ class App:
         self.led_wave_speed      = tk.IntVar(value=800)
 
         # Device name
-        self.device_name = tk.StringVar(value="Guitar Controller")
+        self.device_name = tk.StringVar(value=self._default_device_name)
 
         # Analog smoothing.
         # ema_alpha_var holds the actual firmware EMA alpha value used internally.
@@ -142,6 +148,18 @@ class App:
         self._set_controls_enabled(False)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    def _apply_guitar_profile(self, profile_name):
+        profile = GUITAR_PROFILE_DEFS[profile_name]
+        self._profile_title = profile["title"]
+        self._default_device_name = profile["device_name"]
+        self._button_defs = list(profile["button_defs"])
+        self._led_input_names = list(profile["led_input_names"]) + ["tilt", "whammy"]
+        self._led_input_labels = list(profile["led_input_labels"]) + ["Tilt", "Whammy"]
+        self._led_input_count = len(self._led_input_names)
+        self._fret_colors = dict(profile["fret_colors"])
+        self._supported_types = set(profile["supported_types"])
+        self._default_device_type = "guitar_live_6fret" if profile_name == "six_fret" else "guitar_alternate"
+
     def _go_back(self):
         """Save config to the device, then return to the main menu.
         Save runs synchronously here so it completes before hide() disconnects."""
@@ -168,7 +186,7 @@ class App:
 
     def show(self):
         """Show the configurator UI and restore window to full size."""
-        self.root.title("OCC - Guitar Configurator")
+        self.root.title(f"OCC - {self._profile_title}")
         self.root.config(menu=self._menu_bar)
         self._outer_frame.pack(fill="both", expand=True)
         self._scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
@@ -249,7 +267,10 @@ class App:
 
         pm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
                      activebackground=ACCENT_BLUE, activeforeground="#fff")
-        presets = _find_preset_configs({"guitar_alternate", "guitar_alternate_dongle", "guitar_combined"})
+        presets = _find_preset_configs(
+            self._supported_types,
+            allow_unspecified=(self._guitar_profile_key != "six_fret"),
+        )
         if presets:
             for display_name, fpath in presets:
                 pm.add_command(label=display_name,
@@ -358,10 +379,47 @@ class App:
     def _open_help(self):
         if self._help_dialog is None:
             self._help_dialog = HelpDialog(self.root, [
-                ("Buttons",       _help_placeholder()),
-                ("Tilt & Whammy", _help_placeholder()),
-                ("Joystick & Dpad", _help_placeholder()),
-                ("Lighting",      _help_placeholder()),
+                ("Pins & Detections", _help_text(
+                    ("Selecting Pins for Button Inputs", "bold"),
+                    ("\n\n", None),
+                    ("Next to each button input which the controller will send, you can manually or automatically choose the GPIO pin to correspond to that button input.", None),
+                    ("Use the dropdown menu to manually choose a GPIO Pin, or use the \"Detect\" button and OCC will attempt to detect you clicking that button on your device automatically and assign the pin in the dropdown.", None),
+                    ("\n\n", None),
+                    ("Reserved Pins & Conflicts", "bold"),
+                    ("\n\n", None),
+                    ("Keep in mind, you generally shouldn't set a pin to be multiple inputs, although it can work if you have a special use case.", None),
+                    ("Some inputs will automatically NOT allow you to duplicate pins for inputs, such as Up and Down not being the same button on your device.", None),
+                )),
+                ("Analog & Digital Inputs", _help_text(
+                    ("Analog vs Digital", "bold"),
+                    ("\n\n", None),
+                    ("A Digital pin input is a simple button press. Digital detection will see if you are pressing a button or not, no inbetween.", None),
+                    ("An Analog input is a variable input, basically. It will detect you NOT pressing anything, fully pressing an input, or the inbetween.", None),
+                    ("\n\n", None),
+                    ("Digital pin input is typically for buttons, Analog pin input is for things like accelerometers, joysticks, or triggers.", None),
+                )),
+                ("Lighting & Effects", _help_text(
+                    ("Controller LEDs are communicated through two pins, GPIO 3 and 6 by default. Tell OCC how many LEDs are in series on those LED pins, and you can individually address each one.", None),
+                    ("\n\n", None),
+                    ("OCC has multiple lighting effects programmed in:", "bold"),
+                    ("\n\n", None),
+                    ("LED Color Loop", "bold"),
+                    ("\n\n", None),
+                    ("Set the starting and ending LED you'd like to loop, and while the controller is on, it will make the LEDs gradually fade into eachothers color, looping.", None),
+                    ("\n\n", None),
+                    ("LED Breathe", "bold"),
+                    ("\n\n", None),
+                    ("Set the starting to ending LEDs you'd like to be effected, set their low and high brightness, and while the controller is on, the LEDs will gradually turn thier brightness up and back down, looping.", None),
+                    ("\n\n", None),
+                    ("LED Wave", "bold"),
+                    ("\n\n", None),
+                    ("Set the LED origin point and on any button press, a \"ripple\" of brightness will wave through the LEDs in line from the pre-set origin point.", None),
+                    ("\n\n", None),
+                    ("Reactive LEDs", "bold"),
+                    ("\n\n", None),
+                    ("This is the complicated looking one.. but I promise it is not bad.", None),
+                    ("On the left, rows are depicted by button inputs. Each column is an LED in your controller. Match up in the grid which button goes with which LED number. On button press, the LED corresponding to that button will get brighter.", None),
+                )),
             ])
         self._help_dialog.open()
 
@@ -719,7 +777,7 @@ class App:
                      font=(FONT_UI, 8), wraplength=820,
                      justify="left", anchor="w").pack(fill="x", pady=(0, 4))
 
-        for key, name, sec in BUTTON_DEFS:
+        for key, name, sec in self._button_defs:
             if sec in sections:
                 self._make_button_row(inner, key, name)
 
@@ -733,7 +791,7 @@ class App:
         # enable_vars still used internally for save/load; no visible checkbox
         self.enable_vars[key].set(True)
 
-        fc = FRET_COLORS.get(key)
+        fc = self._fret_colors.get(key)
         if fc:
             # Horizontal rounded-rectangle icon
             # Draw within (0,0,W,H) where W/H are 1px less than canvas size
@@ -1682,13 +1740,13 @@ class App:
     def _on_reactive_toggle(self):
         reactive = self.led_reactive.get()
         if not reactive:
-            for i in range(LED_INPUT_COUNT):
+            for i in range(self._led_input_count):
                 cur = self.led_maps[i].get()
                 if cur != 0:
                     self._led_maps_backup[i] = cur
                 self.led_maps[i].set(0)
         else:
-            for i in range(LED_INPUT_COUNT):
+            for i in range(self._led_input_count):
                 if self.led_maps[i].get() == 0 and self._led_maps_backup[i] != 0:
                     self.led_maps[i].set(self._led_maps_backup[i])
 
@@ -1954,20 +2012,20 @@ class App:
             row=0, column=bright_col, padx=(6, 0))
 
         _bvcmd = (self.root.register(lambda P: P == "" or (P.isdigit() and 0 <= int(P) <= 9)), '%P')
-        for inp_idx in range(LED_INPUT_COUNT):
+        for inp_idx in range(self._led_input_count):
             grid_row = inp_idx + 1
 
             name_frame = tk.Frame(grid, bg=BG_CARD)
             name_frame.grid(row=grid_row, column=0, sticky="w", padx=(0, 2), pady=1)
 
-            color = FRET_COLORS.get(LED_INPUT_NAMES[inp_idx])
+            color = self._fret_colors.get(self._led_input_names[inp_idx])
             if color:
                 dot = tk.Canvas(name_frame, width=10, height=10, bg=BG_CARD,
                                 highlightthickness=0, bd=0)
                 dot.create_oval(1, 1, 9, 9, fill=color, outline=color)
                 dot.pack(side="left", padx=(0, 2))
 
-            tk.Label(name_frame, text=LED_INPUT_LABELS[inp_idx], bg=BG_CARD, fg=TEXT,
+            tk.Label(name_frame, text=self._led_input_labels[inp_idx], bg=BG_CARD, fg=TEXT,
                      font=(FONT_UI, 7), anchor="w").pack(side="left")
 
             pin_text = self._get_input_pin_text(inp_idx)
@@ -1997,9 +2055,9 @@ class App:
         self._schedule_pin_label_refresh()
 
     def _get_input_pin_text(self, inp_idx):
-        name = LED_INPUT_NAMES[inp_idx]
-        if inp_idx < len(BUTTON_DEFS):
-            key = BUTTON_DEFS[inp_idx][0]
+        name = self._led_input_names[inp_idx]
+        if inp_idx < len(self._button_defs):
+            key = self._button_defs[inp_idx][0]
             if key in self.pin_vars:
                 pin = self.pin_vars[key].get()
                 if key in self.enable_vars and not self.enable_vars[key].get():
@@ -2667,7 +2725,7 @@ class App:
         # Future device types (drum_kit, classic_controller, etc.) will need
         # their own screen class and a routing branch here in MainMenu.
         device_type = cfg.get("device_type", "unknown")
-        SUPPORTED_TYPES = {"guitar_alternate", "guitar_alternate_dongle", "guitar_combined"}
+        SUPPORTED_TYPES = self._supported_types
         if device_type not in SUPPORTED_TYPES:
             messagebox.showerror(
                 "Unsupported Device",
@@ -2686,6 +2744,7 @@ class App:
         self._loaded_device_type = device_type
         is_dongle_guitar  = (device_type == "guitar_alternate_dongle")
         is_combined       = (device_type == "guitar_combined")
+        is_six_fret       = (device_type == "guitar_live_6fret")
 
         # Update status text to indicate variant
         port_name = self.pico.ser.port if self.pico.connected else "?"
@@ -2694,7 +2753,10 @@ class App:
         elif is_combined:
             self._set_status(f"   Guitar (Combined Wireless)  —  {port_name}", ACCENT_GREEN)
 
-        for key, _, _ in BUTTON_DEFS:
+        elif is_six_fret:
+            self._set_status(f"   6-Fret Guitar  ·  {port_name}", ACCENT_GREEN)
+
+        for key, _, _ in self._button_defs:
             if key in cfg:
                 pin = int(cfg[key])
                 self.pin_vars[key].set(pin)
@@ -2877,16 +2939,16 @@ class App:
                     continue
                 name, rest = pair.split("=", 1)
                 name = name.strip()
-                if name in LED_INPUT_NAMES:
-                    idx = LED_INPUT_NAMES.index(name)
+                if name in self._led_input_names:
+                    idx = self._led_input_names.index(name)
                     if ":" in rest:
                         hex_mask, bright = rest.split(":", 1)
                         self.led_maps[idx].set(int(hex_mask, 16))
                         self.led_active_br[idx].set(self._brightness_from_hw(int(bright)))
 
-        any_mapped = any(self.led_maps[i].get() != 0 for i in range(LED_INPUT_COUNT))
+        any_mapped = any(self.led_maps[i].get() != 0 for i in range(self._led_input_count))
         self.led_reactive.set(any_mapped)
-        for i in range(LED_INPUT_COUNT):
+        for i in range(self._led_input_count):
             self._led_maps_backup[i] = self.led_maps[i].get()
 
         self._on_led_toggle()
@@ -2896,7 +2958,7 @@ class App:
                 self._rebuild_led_map_grid()
 
     def _push_all_values(self):
-        for key, _, _ in BUTTON_DEFS:
+        for key, _, _ in self._button_defs:
             pin = self.pin_vars[key].get() if self.enable_vars[key].get() else -1
             self.pico.set_value(key, str(pin))
 
@@ -2947,7 +3009,7 @@ class App:
         # Device name — strip any invalid chars (belt-and-suspenders over the Entry vcmd)
         name = ''.join(c for c in self.device_name.get() if c in VALID_NAME_CHARS).strip()
         if not name:
-            name = "Guitar Controller"
+            name = self._default_device_name
         try:
             self.pico.set_value("device_name", name[:20])
         except ValueError:
@@ -2966,7 +3028,7 @@ class App:
                 color = "FFFFFF"
             self.pico.set_value(f"led_color_{i}", color)
 
-        for i in range(LED_INPUT_COUNT):
+        for i in range(self._led_input_count):
             self.pico.set_value(f"led_map_{i}", f"{self.led_maps[i].get():04X}")
             self.pico.set_value(f"led_active_{i}",
                                str(self._brightness_to_hw(self.led_active_br[i].get())))
@@ -2996,7 +3058,7 @@ class App:
         raw_name = self.device_name.get() if name is None else name
         cleaned = ''.join(c for c in raw_name if c in VALID_NAME_CHARS).strip()
         if not cleaned:
-            cleaned = "Guitar Controller"
+            cleaned = self._default_device_name
         return cleaned[:20]
 
     def _is_wireless_guitar_firmware(self):
@@ -3057,7 +3119,7 @@ class App:
 
     def _export_config(self):
         """Snapshot all current UI values to a JSON file."""
-        device_name = self.device_name.get().strip() or "Guitar Controller"
+        device_name = self.device_name.get().strip() or self._default_device_name
         date_str = datetime.datetime.now().strftime("%m-%d-%Y")
         default_name = f"{device_name} {date_str}"
 
@@ -3073,7 +3135,7 @@ class App:
         cfg = {}
 
         # Buttons
-        for key, _, _ in BUTTON_DEFS:
+        for key, _, _ in self._button_defs:
             cfg[key] = self.pin_vars[key].get() if self.enable_vars[key].get() else -1
 
         # Tilt / whammy
@@ -3112,7 +3174,7 @@ class App:
         cfg["joy_deadzone"]     = self.joy_deadzone.get()
 
         # Device name
-        cfg["device_name"] = self.device_name.get().strip() or "Guitar Controller"
+        cfg["device_name"] = self.device_name.get().strip() or self._default_device_name
 
         # LEDs
         cfg["led_enabled"]    = 1 if self.led_enabled.get() else 0
@@ -3129,10 +3191,10 @@ class App:
         cfg["led_wave_enabled"]    = 1 if self.led_wave_enabled.get() else 0
         cfg["led_wave_origin"]     = self.led_wave_origin.get() - 1
         cfg["led_colors"] = [self.led_colors[i].get().upper() for i in range(MAX_LEDS)]
-        cfg["led_maps"]   = [self.led_maps[i].get() for i in range(LED_INPUT_COUNT)]
+        cfg["led_maps"]   = [self.led_maps[i].get() for i in range(self._led_input_count)]
         cfg["led_active_br"] = [
             self._brightness_to_hw(self.led_active_br[i].get())
-            for i in range(LED_INPUT_COUNT)
+            for i in range(self._led_input_count)
         ]
 
         # sync_pin and wireless_default_mode have no dedicated UI widgets —
@@ -3141,7 +3203,7 @@ class App:
         cfg["sync_pin"]              = int(raw.get("sync_pin", 15))
         cfg["wireless_default_mode"] = int(raw.get("wireless_default_mode", 0))
         # device_type makes exports self-describing (needed for preset filtering)
-        cfg["device_type"] = raw.get("device_type", "guitar_alternate")
+        cfg["device_type"] = raw.get("device_type", self._default_device_type)
 
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -3154,7 +3216,7 @@ class App:
     def _apply_config_dict(self, cfg):
         """Apply a config dict to the UI. Raises on error — callers wrap in try/except."""
         # Buttons
-        for key, _, _ in BUTTON_DEFS:
+        for key, _, _ in self._button_defs:
             if key in cfg:
                 pin = int(cfg[key])
                 enabled = (pin != -1)
@@ -3309,16 +3371,16 @@ class App:
                     self.led_colors[i].set(str(c).upper())
         if "led_maps" in cfg:
             for i, m in enumerate(cfg["led_maps"]):
-                if i < LED_INPUT_COUNT:
+                if i < self._led_input_count:
                     self.led_maps[i].set(int(m))
         if "led_active_br" in cfg:
             for i, b in enumerate(cfg["led_active_br"]):
-                if i < LED_INPUT_COUNT:
+                if i < self._led_input_count:
                     self.led_active_br[i].set(self._brightness_from_hw(int(b)))
 
-        any_mapped = any(self.led_maps[i].get() != 0 for i in range(LED_INPUT_COUNT))
+        any_mapped = any(self.led_maps[i].get() != 0 for i in range(self._led_input_count))
         self.led_reactive.set(any_mapped)
-        for i in range(LED_INPUT_COUNT):
+        for i in range(self._led_input_count):
             self._led_maps_backup[i] = self.led_maps[i].get()
 
         self._on_led_toggle()

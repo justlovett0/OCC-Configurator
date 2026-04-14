@@ -13,7 +13,7 @@ echo.
 :: ------------------------------------------------------------
 :: 1. Wired Guitar Controller
 :: ------------------------------------------------------------
-echo [1/7] Building pico-guitar-controller-wired...
+echo [1/9] Building pico-guitar-controller-wired...
 cd /d "%SRC%pico-guitar-controller-wired"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -28,9 +28,26 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 2. Wired Drum Controller
+:: 2. Wired Guitar Controller 6-Fret
 :: ------------------------------------------------------------
-echo [2/7] Building pico-drums-wired...
+echo [2/9] Building pico-guitar-controller-wired-6fret...
+cd /d "%SRC%pico-guitar-controller-wired-6fret"
+%BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
+if errorlevel 1 (
+    echo ERROR: pico-guitar-controller-wired-6fret build FAILED.
+    goto :error
+)
+
+echo Copying Wired Guitar Controller 6-Fret firmware...
+copy /Y "build\pico_guitar_controller_6fret.uf2" "%CONFIGURATOR%\Wired_Guitar_Controller_6Fret.uf2"
+copy /Y "build\pico_guitar_controller_6fret.uf2.date" "%CONFIGURATOR%\Wired_Guitar_Controller_6Fret.uf2.date"
+echo   OK
+echo.
+
+:: ------------------------------------------------------------
+:: 3. Wired Drum Controller
+:: ------------------------------------------------------------
+echo [3/9] Building pico-drums-wired...
 cd /d "%SRC%pico-drums-wired"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -45,9 +62,9 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 3. Wired Retro Controller
+:: 4. Wired Retro Controller
 :: ------------------------------------------------------------
-echo [3/7] Building pico-retro...
+echo [4/9] Building pico-retro...
 cd /d "%SRC%pico-retro"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -62,9 +79,9 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 4. Wireless Guitar Controller
+:: 5. Wireless Guitar Controller
 :: ------------------------------------------------------------
-echo [4/7] Building pico-guitar-controller-wireless...
+echo [5/9] Building pico-guitar-controller-wireless...
 cd /d "%SRC%pico-guitar-controller-wireless"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -79,9 +96,9 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 5. Wireless Dongle
+:: 6. Wireless Dongle
 :: ------------------------------------------------------------
-::echo [5/7] Building pico-dongle...
+::echo [6/9] Building pico-dongle...
 ::cd /d "%SRC%pico-dongle"
 ::%BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 ::if errorlevel 1 (
@@ -95,9 +112,9 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 6. Wireless Dongle 4-Channel
+:: 7. Wireless Dongle 4-Channel
 :: ------------------------------------------------------------
-echo [6/7] Building pico-dongle-4channel...
+echo [7/9] Building pico-dongle-4channel...
 cd /d "%SRC%pico-dongle-4channel"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -111,9 +128,9 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 7. Pedal Controller
+:: 8. Pedal Controller
 :: ------------------------------------------------------------
-echo [7/8] Building pico-pedal...
+echo [8/9] Building pico-pedal...
 cd /d "%SRC%pico-pedal"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -128,9 +145,9 @@ echo   OK
 echo.
 
 :: ------------------------------------------------------------
-:: 8. Keyboard Macro Pad
+:: 9. Keyboard Macro Pad
 :: ------------------------------------------------------------
-echo [8/8] Building pico-keyboard-macro...
+echo [9/9] Building pico-keyboard-macro...
 cd /d "%SRC%pico-keyboard-macro"
 %BASH% -c "rm -rf build && mkdir build && cd build && cmake -G Ninja .. && ninja"
 if errorlevel 1 (
@@ -148,7 +165,7 @@ echo.
 :: Done
 :: ------------------------------------------------------------
 echo ============================================================
-echo  All 8 firmware projects built and copied to configurator folder.
+echo  All firmware projects processed and copied to configurator folder.
 echo ============================================================
 goto :end
 

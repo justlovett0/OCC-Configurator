@@ -19,6 +19,132 @@ FRET_COLORS = {
     "green": "#2ecc71", "red": "#e74c3c", "yellow": "#f1c40f",
     "blue": "#3498db", "orange": "#e67e22",
 }
+
+STANDARD_GUITAR_BUTTON_DEFS = [
+    ("green",      "Green Fret",    "frets"),
+    ("red",        "Red Fret",      "frets"),
+    ("yellow",     "Yellow Fret",   "frets"),
+    ("blue",       "Blue Fret",     "frets"),
+    ("orange",     "Orange Fret",   "frets"),
+    ("strum_up",   "Strum Up",      "strum"),
+    ("strum_down", "Strum Down",    "strum"),
+    ("start",      "Start",         "nav"),
+    ("select",     "Select / Back", "nav"),
+    ("dpad_up",    "D-Pad Up",      "dpad"),
+    ("dpad_down",  "D-Pad Down",    "dpad"),
+    ("dpad_left",  "D-Pad Left",    "dpad"),
+    ("dpad_right", "D-Pad Right",   "dpad"),
+    ("guide",      "Guide",         "nav2"),
+]
+
+STANDARD_GUITAR_LED_INPUT_NAMES = [
+    "green", "red", "yellow", "blue", "orange",
+    "strum_up", "strum_down", "start", "select",
+    "dpad_up", "dpad_down", "dpad_left", "dpad_right",
+    "guide",
+]
+
+STANDARD_GUITAR_LED_INPUT_LABELS = [
+    "Green Fret", "Red Fret", "Yellow Fret", "Blue Fret", "Orange Fret",
+    "Strum Up", "Strum Down", "Start", "Select",
+    "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
+    "Guide",
+]
+
+SIX_FRET_FRET_COLORS = {
+    "white1": "#f2f2f2",
+    "black1": "#5050ff",
+    "black2": "#7878ff",
+    "black3": "#b4b4ff",
+    "white2": "#f2f2f2",
+    "white3": "#f2f2f2",
+}
+
+SIX_FRET_GUITAR_BUTTON_DEFS = [
+    ("white1",     "White 1",      "frets"),
+    ("white2",     "White 2",      "frets"),
+    ("white3",     "White 3",      "frets"),
+    ("black1",     "Black 1",      "frets"),
+    ("black2",     "Black 2",      "frets"),
+    ("black3",     "Black 3",      "frets"),
+    ("strum_up",   "Strum Up",     "strum"),
+    ("strum_down", "Strum Down",   "strum"),
+    ("start",      "Start",        "nav"),
+    ("hero_power", "Hero Power",   "nav"),
+    ("ghtv",       "GHTV",         "nav2"),
+    ("dpad_up",    "D-Pad Up",     "dpad"),
+    ("dpad_down",  "D-Pad Down",   "dpad"),
+    ("dpad_left",  "D-Pad Left",   "dpad"),
+    ("dpad_right", "D-Pad Right",  "dpad"),
+    ("guide",      "Guide",        "nav2"),
+]
+
+SIX_FRET_GUITAR_LED_INPUT_NAMES = [
+    "white1", "white2", "white3", "black1", "black2", "black3",
+    "strum_up", "strum_down", "start", "hero_power", "ghtv",
+    "dpad_up", "dpad_down", "dpad_left", "dpad_right",
+    "guide",
+]
+
+SIX_FRET_GUITAR_LED_INPUT_LABELS = [
+    "White 1", "White 2", "White 3", "Black 1", "Black 2", "Black 3",
+    "Strum Up", "Strum Down", "Start", "Hero Power", "GHTV",
+    "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
+    "Guide",
+]
+
+PEDAL_LED_INPUT_NAMES = [
+    "pedal1", "pedal2", "pedal3", "pedal4",
+]
+
+PEDAL_LED_INPUT_LABELS = [
+    "Pedal 1", "Pedal 2", "Pedal 3", "Pedal 4",
+]
+
+GUITAR_PROFILE_DEFS = {
+    "standard": {
+        "title": "Guitar Configurator",
+        "device_name": "Guitar Controller",
+        "button_defs": STANDARD_GUITAR_BUTTON_DEFS,
+        "led_input_names": STANDARD_GUITAR_LED_INPUT_NAMES,
+        "led_input_labels": STANDARD_GUITAR_LED_INPUT_LABELS,
+        "fret_colors": FRET_COLORS,
+        "supported_types": {"guitar_alternate", "guitar_alternate_dongle", "guitar_combined"},
+    },
+    "six_fret": {
+        "title": "6-Fret Guitar Configurator",
+        "device_name": "6 Fret Guitar",
+        "button_defs": SIX_FRET_GUITAR_BUTTON_DEFS,
+        "led_input_names": SIX_FRET_GUITAR_LED_INPUT_NAMES,
+        "led_input_labels": SIX_FRET_GUITAR_LED_INPUT_LABELS,
+        "fret_colors": SIX_FRET_FRET_COLORS,
+        "supported_types": {"guitar_live_6fret"},
+    },
+}
+
+DEVICE_TYPE_TO_GUITAR_PROFILE = {
+    "guitar_alternate": "standard",
+    "guitar_alternate_dongle": "standard",
+    "guitar_combined": "standard",
+    "guitar_live_6fret": "six_fret",
+}
+
+XINPUT_SUBTYPE_TO_GUITAR_PROFILE = {
+    6: "six_fret",
+    7: "standard",
+}
+
+
+def get_guitar_profile_name_for_device_type(device_type):
+    return DEVICE_TYPE_TO_GUITAR_PROFILE.get(device_type, "standard")
+
+
+def get_guitar_profile_for_device_type(device_type):
+    return GUITAR_PROFILE_DEFS[get_guitar_profile_name_for_device_type(device_type)]
+
+
+def get_led_input_names_for_device_type(device_type):
+    return list(get_guitar_profile_for_device_type(device_type)["led_input_names"])
 GITHUB_REPO   = "justlovett0/OCC-Configurator"
 RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases"
 #  CONSTANTS
@@ -69,6 +195,7 @@ DEVICE_TYPE_UF2_HINTS = {
     "guitar_alternate":        "guitar",
     "guitar_alternate_dongle": "guitar",
     "guitar_combined":         "guitar",
+    "guitar_live_6fret":       "6fret",
     "drum_kit":                "drum",
     "dongle":                  "dongle",
     "pedal":                   "pedal",
@@ -78,7 +205,7 @@ DEVICE_TYPE_UF2_HINTS = {
 # Maps XInput subtype → DEVTYPE string (used before serial connection is open)
 XINPUT_SUBTYPE_TO_DEVTYPE = {
     8: "drum_kit",
-    6: "guitar_alternate",
+    6: "guitar_live_6fret",
     7: "guitar_alternate",
     11: "dongle",           # Dongle uses subtype 0x0B=11 (XINPUT_DEVSUBTYPE_GUITAR_BASS)
     1: "pico_retro",        # Retro Gamepad uses subtype 0x01 (XINPUT_DEVSUBTYPE_GAMEPAD)
@@ -123,37 +250,10 @@ I2C_MODEL_LABELS  = [label for _, label in I2C_MODEL_OPTIONS]
 I2C_MODEL_VALUES  = [val   for val, _   in I2C_MODEL_OPTIONS]
 
 MAX_LEDS = 16
-LED_INPUT_COUNT = 14
+LED_INPUT_COUNT = len(STANDARD_GUITAR_LED_INPUT_NAMES)
 
 VALID_NAME_CHARS = set(string.ascii_letters + string.digits + ' ')
 
-LED_INPUT_NAMES = [
-    "green", "red", "yellow", "blue", "orange",
-    "strum_up", "strum_down", "start", "select",
-    "dpad_up", "dpad_down", "dpad_left", "dpad_right",
-    "guide",
-]
-
-LED_INPUT_LABELS = [
-    "Green Fret", "Red Fret", "Yellow Fret", "Blue Fret", "Orange Fret",
-    "Strum Up", "Strum Down", "Start", "Select",
-    "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
-    "Guide",
-]
-
-BUTTON_DEFS = [
-    ("green",      "Green Fret",    "frets"),
-    ("red",        "Red Fret",      "frets"),
-    ("yellow",     "Yellow Fret",   "frets"),
-    ("blue",       "Blue Fret",     "frets"),
-    ("orange",     "Orange Fret",   "frets"),
-    ("strum_up",   "Strum Up",      "strum"),
-    ("strum_down", "Strum Down",    "strum"),
-    ("start",      "Start",         "nav"),
-    ("select",     "Select / Back", "nav"),
-    ("dpad_up",    "D-Pad Up",      "dpad"),
-    ("dpad_down",  "D-Pad Down",    "dpad"),
-    ("dpad_left",  "D-Pad Left",    "dpad"),
-    ("dpad_right", "D-Pad Right",   "dpad"),
-    ("guide",      "Guide",         "nav2"),
-]
+LED_INPUT_NAMES = STANDARD_GUITAR_LED_INPUT_NAMES
+LED_INPUT_LABELS = STANDARD_GUITAR_LED_INPUT_LABELS
+BUTTON_DEFS = STANDARD_GUITAR_BUTTON_DEFS

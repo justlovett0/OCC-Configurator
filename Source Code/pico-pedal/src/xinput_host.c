@@ -1,10 +1,10 @@
 /*
  * xinput_host.c - USB Host XInput controller reader via PIO-USB
  *
- * Implements a custom TinyUSB host class driver that claims XInput
- * interfaces (class 0xFF, subclass 0x5D, protocol 0x01), reads
- * interrupt IN reports, and provides them to Core 0 via a spin-locked
- * shared buffer.
+ * Implements a custom TinyUSB host class driver that claims wired
+ * Xbox 360-family interfaces (class 0xFF, subclass 0x5D), reads
+ * interrupt IN reports when present, and provides them to Core 0 via
+ * a spin-locked shared buffer.
  *
  * The driver is registered via usbh_app_driver_get_cb() which TinyUSB
  * calls during host initialization to discover application-provided
@@ -31,6 +31,8 @@ static volatile bool _host_connected;
 static volatile bool _report_valid;
 static volatile bool _any_device_mounted;  // any USB device seen, not just XInput
 static volatile uint8_t _core1_status;     // 0=not started, 1=alive, 2=tuh_init done
+static uint8_t _usb_host_pin_dp;
+static uint8_t _usb_host_pin_dm;
 
 // Debug counters — incremented on Core 1, read by Core 0 for CDC output
 static volatile xinput_debug_t _dbg;
@@ -44,6 +46,10 @@ volatile uint8_t _xinput_root_connected = 0;
 volatile uint8_t _xinput_root_suspended = 0;
 // Force-reconnect: written by Core 0, cleared in SOF frame callback
 volatile bool    _xinput_force_reconnect = false;
+// Set by the low-level PIO host when it has to synthetically complete an
+// EP0 status OUT stage after repeated NAKs. The next SETUP should wait a bit
+// before reusing control EP0 on that device.
+volatile bool    _xinput_delay_next_setup = false;
 // Enum progress counters
 volatile uint8_t _xinput_bus_reset_count  = 0;
 volatile uint8_t _xinput_setup_sent_count = 0;
@@ -52,6 +58,8 @@ volatile uint16_t _xinput_ep0_noresp_count = 0;
 volatile uint16_t _xinput_ep0_badpid_count = 0;
 volatile uint16_t _xinput_setup_ack_count = 0;
 volatile uint16_t _xinput_setup_fail_count = 0;
+volatile uint16_t _xinput_setup_nak_count = 0;
+volatile uint16_t _xinput_setup_noresp_count = 0;
 volatile uint16_t _xinput_hcd_ep0_complete_count = 0;
 volatile uint16_t _xinput_hcd_ep0_in_submit_count = 0;
 volatile uint16_t _xinput_hcd_ep0_in_submit_fail_count = 0;
@@ -63,6 +71,7 @@ volatile uint16_t _xinput_ep0_out_ack_count = 0;
 volatile uint16_t _xinput_ep0_out_nak_count = 0;
 volatile uint16_t _xinput_ep0_out_noresp_count = 0;
 volatile uint16_t _xinput_ep0_out_stall_count = 0;
+volatile uint16_t _xinput_ep0_status_out_compat_count = 0;
 volatile uint8_t _xinput_last_setup_addr = 0;
 volatile uint8_t _xinput_last_setup_bmRequestType = 0;
 volatile uint8_t _xinput_last_setup_bRequest = 0;
@@ -124,11 +133,24 @@ static struct {
     uint8_t ep_in;
     uint8_t ep_out;
     uint8_t itf_num;
+    uint8_t protocol;
     uint8_t subtype;
     uint16_t ep_in_size;
     bool    mounted;
+    bool    led_kick_sent;
     uint8_t report_buf[32];
+    uint8_t out_buf[8];
 } _xinputh;
+
+static bool xinputh_is_supported_protocol(uint8_t protocol) {
+    switch (protocol) {
+        case 0x01:
+        case 0x04:
+            return true;
+        default:
+            return false;
+    }
+}
 
 static bool xinputh_vendor_get_report(uint8_t dev_addr, uint8_t itf_num,
                                       uint8_t recipient, uint16_t wvalue,
@@ -175,10 +197,10 @@ static bool xinputh_open(uint8_t rhport, uint8_t dev_addr,
     _dbg.last_subclass = desc_itf->bInterfaceSubClass;
     _dbg.last_proto    = desc_itf->bInterfaceProtocol;
 
-    // Only claim XInput interfaces (vendor class 0xFF, subclass 0x5D)
+    // Only claim wired Xbox 360-family interfaces (vendor class 0xFF, subclass 0x5D)
     if (desc_itf->bInterfaceClass    != XINPUT_IF_CLASS ||
         desc_itf->bInterfaceSubClass != XINPUT_IF_SUBCLASS ||
-        desc_itf->bInterfaceProtocol != XINPUT_IF_PROTOCOL) {
+        !xinputh_is_supported_protocol(desc_itf->bInterfaceProtocol)) {
         return false;
     }
 
@@ -187,6 +209,7 @@ static bool xinputh_open(uint8_t rhport, uint8_t dev_addr,
 
     _xinputh.dev_addr = dev_addr;
     _xinputh.itf_num  = desc_itf->bInterfaceNumber;
+    _xinputh.protocol = desc_itf->bInterfaceProtocol;
 
     // Parse the interface descriptor block to find the vendor descriptor and
     // the interrupt endpoints used by the XInput interface.
@@ -227,6 +250,10 @@ static bool xinputh_open(uint8_t rhport, uint8_t dev_addr,
 }
 
 static bool xinputh_set_config(uint8_t dev_addr, uint8_t itf_num) {
+    uint32_t save = spin_lock_blocking(_report_lock);
+    _host_connected = true;
+    spin_unlock(_report_lock, save);
+
     // Some XInput devices expect the standard Xbox vendor GET_REPORT probes
     // during bring-up. Ignore failures and keep enumeration moving.
     xinput_serial_t serial = {0};
@@ -242,6 +269,19 @@ static bool xinputh_set_config(uint8_t dev_addr, uint8_t itf_num) {
     (void)xinputh_vendor_get_report(dev_addr, itf_num, TUSB_REQ_RCPT_INTERFACE,
                                     XINPUT_VIBRATION_CAPS_WVALUE,
                                     &vibration_caps, sizeof(vibration_caps));
+
+    // Some downstream Pico guitar firmwares assume a host is "real XInput"
+    // only after seeing the standard LED/ring-of-light OUT report. Send a
+    // harmless one-shot packet so they stay in XInput mode instead of falling
+    // back to HID a few seconds after mount.
+    if (_xinputh.ep_out && !_xinputh.led_kick_sent) {
+        memset(_xinputh.out_buf, 0, sizeof(_xinputh.out_buf));
+        _xinputh.out_buf[0] = 0x01;
+        _xinputh.out_buf[1] = 0x03;
+        usbh_edpt_xfer(dev_addr, _xinputh.ep_out,
+                       _xinputh.out_buf, sizeof(_xinputh.out_buf));
+        _xinputh.led_kick_sent = true;
+    }
 
     // Start the first IN transfer to begin reading reports.
     if (_xinputh.ep_in) {
@@ -315,7 +355,10 @@ static void xinputh_close(uint8_t dev_addr) {
         _xinputh.ep_in   = 0;
         _xinputh.ep_out  = 0;
         _xinputh.ep_in_size = 0;
+        _xinputh.protocol = 0;
         _xinputh.subtype = 0;
+        _xinputh.led_kick_sent = false;
+        memset(_xinputh.out_buf, 0, sizeof(_xinputh.out_buf));
 
         uint32_t save = spin_lock_blocking(_report_lock);
         _host_connected = false;
@@ -376,30 +419,32 @@ void tuh_umount_cb(uint8_t dev_addr) {
     // connection_check() sees SE0 twice and resets root->connected = false,
     // re-enabling the detection loop for the real device.
     // Runs on Core 1 inside tuh_task(), so sleep_ms() only blocks Core 1.
-    gpio_set_outover(PIO_USB_DP_PIN,     GPIO_OVERRIDE_LOW);
-    gpio_set_outover(PIO_USB_DP_PIN + 1, GPIO_OVERRIDE_LOW);
-    gpio_set_oeover(PIO_USB_DP_PIN,      GPIO_OVERRIDE_HIGH);
-    gpio_set_oeover(PIO_USB_DP_PIN + 1,  GPIO_OVERRIDE_HIGH);
+    gpio_set_outover(_usb_host_pin_dp, GPIO_OVERRIDE_LOW);
+    gpio_set_outover(_usb_host_pin_dm, GPIO_OVERRIDE_LOW);
+    gpio_set_oeover(_usb_host_pin_dp,  GPIO_OVERRIDE_HIGH);
+    gpio_set_oeover(_usb_host_pin_dm,  GPIO_OVERRIDE_HIGH);
 
     _dbg.se0_count++;
     sleep_ms(3);  // 3 SOF ticks — enough for connection_check() to see SE0 twice
 
-    gpio_set_outover(PIO_USB_DP_PIN,     GPIO_OVERRIDE_NORMAL);
-    gpio_set_outover(PIO_USB_DP_PIN + 1, GPIO_OVERRIDE_NORMAL);
-    gpio_set_oeover(PIO_USB_DP_PIN,      GPIO_OVERRIDE_NORMAL);
-    gpio_set_oeover(PIO_USB_DP_PIN + 1,  GPIO_OVERRIDE_NORMAL);
+    gpio_set_outover(_usb_host_pin_dp, GPIO_OVERRIDE_NORMAL);
+    gpio_set_outover(_usb_host_pin_dm, GPIO_OVERRIDE_NORMAL);
+    gpio_set_oeover(_usb_host_pin_dp,  GPIO_OVERRIDE_NORMAL);
+    gpio_set_oeover(_usb_host_pin_dm,  GPIO_OVERRIDE_NORMAL);
 }
 
 //--------------------------------------------------------------------
 // Public API
 //--------------------------------------------------------------------
 
-void xinput_host_init(void) {
+void xinput_host_init(int8_t usb_host_pin, bool usb_host_dm_first) {
     _core1_status = 1;  // Core 1 is alive — set before anything else
     _report_lock = spin_lock_init(spin_lock_claim_unused(true));
     _host_connected    = false;
     _report_valid      = false;
     _any_device_mounted = false;
+    _usb_host_pin_dp    = (uint8_t)(usb_host_dm_first ? (usb_host_pin + 1) : usb_host_pin);
+    _usb_host_pin_dm    = (uint8_t)(usb_host_dm_first ? usb_host_pin : (usb_host_pin + 1));
     memset(&_shared_report, 0, sizeof(_shared_report));
     memset(&_xinputh, 0, sizeof(_xinputh));
 
@@ -409,7 +454,9 @@ void xinput_host_init(void) {
     // calls dma_claim_mask() which panics if the channel is already taken,
     // silently halting Core 1. Channel 1 is always free.
     pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
-    pio_cfg.pin_dp = PIO_USB_DP_PIN;
+    pio_cfg.pin_dp = _usb_host_pin_dp;
+    pio_cfg.pinout = usb_host_dm_first ? PIO_USB_PINOUT_DMDP
+                                       : PIO_USB_PINOUT_DPDM;
     pio_cfg.tx_ch  = 1;
     tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
     bool tuh_ok = tuh_init(1);
@@ -449,6 +496,8 @@ void xinput_host_get_debug(xinput_debug_t *out) {
     out->ep0_badpid_count = _xinput_ep0_badpid_count;
     out->setup_ack_count  = _xinput_setup_ack_count;
     out->setup_fail_count = _xinput_setup_fail_count;
+    out->setup_nak_count = _xinput_setup_nak_count;
+    out->setup_noresp_count = _xinput_setup_noresp_count;
     out->hcd_ep0_complete_count = _xinput_hcd_ep0_complete_count;
     out->hcd_ep0_in_submit_count = _xinput_hcd_ep0_in_submit_count;
     out->hcd_ep0_in_submit_fail_count = _xinput_hcd_ep0_in_submit_fail_count;
@@ -460,6 +509,7 @@ void xinput_host_get_debug(xinput_debug_t *out) {
     out->ep0_out_nak_count = _xinput_ep0_out_nak_count;
     out->ep0_out_noresp_count = _xinput_ep0_out_noresp_count;
     out->ep0_out_stall_count = _xinput_ep0_out_stall_count;
+    out->ep0_status_out_compat_count = _xinput_ep0_status_out_compat_count;
     out->last_setup_addr = _xinput_last_setup_addr;
     out->last_setup_bmRequestType = _xinput_last_setup_bmRequestType;
     out->last_setup_bRequest = _xinput_last_setup_bRequest;

@@ -33,6 +33,18 @@ from configuratorsrc.screen_splash import SplashOverlay, _find_icon, play_startu
 import configuratorsrc.widgets as _widgets_mod
 import configuratorsrc.screen_easy_config as _easy_config_mod
 
+DEBUG_SCREEN_LABELS = (
+  ("menu", "Main Menu"),
+  ("flash", "Flash Firmware"),
+  ("easy", "Easy Configuration"),
+  ("guitar_alternate", "Guitar Config"),
+  ("guitar_live_6fret", "6-Fret Guitar Config"),
+  ("drum_kit", "Drum Config"),
+  ("pedal", "Pedal Config"),
+  ("pico_retro", "Retro Config"),
+  ("keyboard_macro", "Keyboard Macro Config"),
+)
+
 #  DEVICE TYPE → SCREEN CLASS  routing table
 #
 #  To add a new device type:
@@ -44,6 +56,7 @@ import configuratorsrc.screen_easy_config as _easy_config_mod
 DEVICE_SCREEN_MAP = {
   "guitar_alternate":        None,   # filled in main() once App is instantiated
   "guitar_alternate_dongle": None,   # dongle guitar variant → same App screen
+  "guitar_live_6fret":       None,   # filled in main() once App is instantiated
   "drum_kit":                None,   # filled in main() once DrumApp is instantiated
   "pedal":                   None,   # filled in main() once PedalApp is instantiated
   "pico_retro":              None,   # filled in main() once RetroApp is instantiated
@@ -52,9 +65,10 @@ DEVICE_SCREEN_MAP = {
 
 # Map device_type → the constructor to call (used to build instances in main())
 DEVICE_SCREEN_CLASSES = {
-  "guitar_alternate":        App,
-  "guitar_alternate_dongle": App,
-  "guitar_combined":         App,
+  "guitar_alternate":        lambda root, on_back: App(root, on_back=on_back, guitar_profile="standard"),
+  "guitar_alternate_dongle": lambda root, on_back: App(root, on_back=on_back, guitar_profile="standard"),
+  "guitar_combined":         lambda root, on_back: App(root, on_back=on_back, guitar_profile="standard"),
+  "guitar_live_6fret":       lambda root, on_back: App(root, on_back=on_back, guitar_profile="six_fret"),
   "drum_kit":                DrumApp,
   "pedal":                   PedalApp,
   "pico_retro":              RetroApp,
@@ -62,11 +76,119 @@ DEVICE_SCREEN_CLASSES = {
 }
 
 
+class DebugLauncher:
+  """Simple debug-only screen launcher window."""
+
+  def __init__(self, root, on_show_screen):
+      self.root = root
+      self._on_show_screen = on_show_screen
+      self.window = tk.Toplevel(root)
+      self.window.title("OCC Debug Launcher")
+      self.window.configure(bg=BG_MAIN)
+      self.window.resizable(False, False)
+      self.window.transient(root)
+      self.window.attributes("-topmost", True)
+      self.window.protocol("WM_DELETE_WINDOW", self.window.destroy)
+
+      outer = tk.Frame(self.window, bg=BG_MAIN, padx=14, pady=14)
+      outer.pack(fill="both", expand=True)
+
+      tk.Label(
+          outer,
+          text="DEBUG SCREEN LAUNCHER",
+          bg=BG_MAIN,
+          fg=ACCENT_BLUE,
+          font=("Helvetica", 10, "bold"),
+      ).pack(anchor="w")
+      tk.Label(
+          outer,
+          text="Click a button to swap the main configurator window.",
+          bg=BG_MAIN,
+          fg=TEXT_DIM,
+          font=("Helvetica", 8),
+      ).pack(anchor="w", pady=(2, 10))
+
+      grid = tk.Frame(outer, bg=BG_MAIN)
+      grid.pack(fill="both", expand=True)
+
+      for idx, (screen_key, label) in enumerate(DEBUG_SCREEN_LABELS):
+          btn = tk.Button(
+              grid,
+              text=label,
+              command=lambda key=screen_key: self._on_show_screen(key),
+              bg=BG_CARD,
+              fg=TEXT,
+              activebackground=BG_HOVER,
+              activeforeground=TEXT,
+              relief="flat",
+              bd=1,
+              highlightbackground=BORDER,
+              highlightthickness=1,
+              width=24,
+              padx=8,
+              pady=8,
+          )
+          btn.grid(row=idx // 2, column=idx % 2, sticky="nsew", padx=4, pady=4)
+
+      for col in range(2):
+          grid.grid_columnconfigure(col, weight=1)
+
+      self.window.update_idletasks()
+      self.window.geometry(f"+{root.winfo_rootx() + 40}+{root.winfo_rooty() + 40}")
+
+
+
+def _show_startup_error(message):
+  """Display a launch-time error before the Tk root exists."""
+  print(message, file=sys.stderr)
+  if sys.platform == "win32":
+      try:
+          ctypes.windll.user32.MessageBoxW(None, message, "OCC Startup Error", 0x10)
+      except Exception:
+          pass
+
+
+def _parse_manual_scale(argv):
+  """Parse an optional -scale override from the command line."""
+  args = [arg.strip() for arg in argv]
+  idx = 0
+  while idx < len(args):
+      arg = args[idx]
+      if arg.lower() != "-scale":
+          idx += 1
+          continue
+
+      if idx + 1 >= len(args):
+          raise ValueError("Missing value after -scale. Use a number from 0.5 to 2.5.")
+
+      raw_value = args[idx + 1]
+      try:
+          scale = float(raw_value)
+      except ValueError as exc:
+          raise ValueError(
+              f"Invalid -scale value '{raw_value}'. Use a number from 0.5 to 2.5."
+          ) from exc
+
+      if not 0.5 <= scale <= 2.5:
+          raise ValueError(
+              f"Invalid -scale value '{raw_value}'. Scale must be between 0.5 and 2.5."
+          )
+      return scale
+
+  return None
+
 
 #  ENTRY POINT
 
 
 def main():
+  debug_mode = any(arg.lower() == "-debug" for arg in sys.argv[1:])
+  try:
+      manual_scale = _parse_manual_scale(sys.argv[1:])
+  except ValueError as exc:
+      _show_startup_error(str(exc))
+      return 1
+
   root = tk.Tk()
   # Hide the window immediately so the blank white frame is never visible
   # while Python/tkinter finishes initialising.  We reveal it below once
@@ -93,7 +215,8 @@ def main():
   sh = root.winfo_screenheight()
 
   # Baseline is 1080p tall.  Clamp to 1.0 minimum so 1080p is unchanged.
-  _scale = max(1.0, sh / 1080)
+  auto_scale = max(1.0, sh / 1080)
+  _scale = manual_scale if manual_scale is not None else auto_scale
 
   # Tk's built-in scaling multiplier handles ALL font sizes automatically.
   # Default Tk scaling is 1.0 at 96 DPI; we multiply by our factor.
@@ -169,28 +292,59 @@ def main():
 
   # ── Deferred device screen construction ─────────────────────────
   device_screens = {}
+  debug_launcher = [None]
 
-  def go_to_menu():
+  def _cancel_menu_poll():
+      if menu._poll_job:
+          menu.root.after_cancel(menu._poll_job)
+          menu._poll_job = None
+
+  def show_screen(screen_key, *, connect_port=None, drive=None):
+      """Central screen switcher used by normal routing and debug mode."""
+      _cancel_menu_poll()
+
       for s in device_screens.values():
           s.hide()
       flash_screen.hide()
       easy_config_screen.hide()
-      menu.show()
+      menu.hide()
+
+      if screen_key == "menu":
+          menu.show()
+          return
+
+      if screen_key == "flash":
+          flash_screen.show(drive=drive)
+          return
+
+      if screen_key == "easy":
+          easy_config_screen.show()
+          if connect_port:
+              easy_config_screen._connect_serial(connect_port)
+          return
+
+      screen = device_screens.get(screen_key)
+      if screen is None:
+          raise KeyError(f"Unknown screen key: {screen_key}")
+
+      screen.show()
+      if connect_port:
+          root.update()   # flush layout + WM_PAINT so canvas widgets render before serial blocks
+          screen._connect_serial(connect_port)
+
+  def go_to_menu():
+      show_screen("menu")
 
   def go_to_easy_config(port):
       """
       Route to Easy Configuration.  Mirrors go_to_configurator() — handles
       both config-mode (port given) and XInput play mode (port=None).
       """
-      if menu._poll_job:
-          menu.root.after_cancel(menu._poll_job)
-          menu._poll_job = None
+      _cancel_menu_poll()
 
       if port:
           # Already in config mode
-          menu.hide()
-          easy_config_screen.show()
-          easy_config_screen._connect_serial(port)
+          show_screen("easy", connect_port=port)
 
       elif XINPUT_AVAILABLE:
           # XInput play mode — stay on menu, run magic sequence in background
@@ -252,18 +406,12 @@ def main():
 
               time.sleep(0.5)
 
-              def _finish(fp=found_port):
-                  menu.hide()
-                  easy_config_screen.show()
-                  easy_config_screen._connect_serial(fp)
-
-              root.after(0, _finish)
+              root.after(0, lambda fp=found_port: show_screen("easy", connect_port=fp))
 
           threading.Thread(target=_worker, daemon=True).start()
 
   def go_to_flash_screen(drive):
-      menu.hide()
-      flash_screen.show(drive=drive)
+      show_screen("flash", drive=drive)
 
   def _route_to_screen(device_type, port):
       """Called on the Tk thread once DEVTYPE is known. Shows the right screen."""
@@ -302,19 +450,14 @@ def main():
                   "Make sure you are running the latest configurator."
               )
           return
-      menu.hide()
-      screen.show()
-      root.update()   # flush layout + WM_PAINT so canvas widgets render before serial blocks
-      screen._connect_serial(port)
+      show_screen(device_type, connect_port=port)
 
   def go_to_configurator(port):
       """
       Route to the correct configurator screen based on DEVTYPE.
       If device screens are not yet built, wait for them first.
       """
-      if menu._poll_job:
-          menu.root.after_cancel(menu._poll_job)
-          menu._poll_job = None
+      _cancel_menu_poll()
 
       if port:
           try:
@@ -415,6 +558,8 @@ def main():
       menu._on_configure = go_to_configurator
       menu._on_flash_screen = go_to_flash_screen
       menu._on_easy_config = go_to_easy_config
+      if debug_mode and debug_launcher[0] is None:
+          debug_launcher[0] = DebugLauncher(root, lambda key: show_screen(key))
 
   # Schedule device screen construction on the next event loop tick
   # so the splash overlay renders first
@@ -424,4 +569,4 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+  sys.exit(main() or 0)

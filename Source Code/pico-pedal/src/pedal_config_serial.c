@@ -2,11 +2,11 @@
  * pedal_config_serial.c - CDC serial command handler for pedal controller
  *
  * Handles the config-mode serial protocol: GET_CONFIG, SET, SAVE, SCAN, etc.
- * Much simpler than the guitar variant — only 4 buttons with mappings,
- * debounce, and device name.
+ * Supports pedal button mappings, analog setup, and APA102 lighting config.
  */
 
 #include "pedal_config.h"
+#include "apa102_leds.h"
 #include "usb_descriptors.h"
 #include "tusb.h"
 #include "pico/stdlib.h"
@@ -43,23 +43,30 @@ static void serial_writeln(const char *str) {
     serial_write("\r\n");
 }
 
-//--------------------------------------------------------------------
-// Button name table (for mapping display)
-//--------------------------------------------------------------------
-
-static const char *button_names[BTN_IDX_COUNT] = {
-    "green", "red", "yellow", "blue", "orange",
-    "strum_up", "strum_down", "start", "select",
-    "dpad_up", "dpad_down", "dpad_left", "dpad_right", "guide",
-    "whammy", "tilt"
+static const char *input_names[LED_INPUT_COUNT] = {
+    "pedal1", "pedal2", "pedal3", "pedal4",
+    "unused4", "unused5", "unused6", "unused7",
+    "unused8", "unused9", "unused10", "unused11",
+    "unused12", "unused13", "unused14", "unused15"
 };
+
+static uint8_t hex_nibble(char c) {
+    if (c >= '0' && c <= '9') return (uint8_t)(c - '0');
+    if (c >= 'a' && c <= 'f') return (uint8_t)(10 + c - 'a');
+    if (c >= 'A' && c <= 'F') return (uint8_t)(10 + c - 'A');
+    return 0;
+}
+
+static uint8_t hex_byte(const char *s) {
+    return (uint8_t)((hex_nibble(s[0]) << 4) | hex_nibble(s[1]));
+}
 
 //--------------------------------------------------------------------
 // Config serialization (GET_CONFIG response)
 //--------------------------------------------------------------------
 
 static void send_config(const pedal_config_t *config) {
-    char buf[640];
+    char buf[768];
 
     // Line 1: DEVTYPE
     serial_writeln("DEVTYPE:" DEVICE_TYPE);
@@ -72,6 +79,7 @@ static void send_config(const pedal_config_t *config) {
         "debounce=%u,"
         "adc0=%d,adc0_axis=%u,adc0_invert=%u,adc0_min=%u,adc0_max=%u,"
         "adc1=%d,adc1_axis=%u,adc1_invert=%u,adc1_min=%u,adc1_max=%u,"
+        "usb_host_pin=%d,usb_host_dm_first=%u,"
         "device_name=%s",
         config->pin_buttons[0], config->pin_buttons[1],
         config->pin_buttons[2], config->pin_buttons[3],
@@ -82,8 +90,42 @@ static void send_config(const pedal_config_t *config) {
         config->adc_invert[0], config->adc_min[0], config->adc_max[0],
         config->adc_pin[1], config->adc_axis[1],
         config->adc_invert[1], config->adc_min[1], config->adc_max[1],
+        config->usb_host_pin, config->usb_host_dm_first,
         config->device_name);
     (void)n;
+    serial_writeln(buf);
+
+    n = snprintf(buf, sizeof(buf),
+        "LED:"
+        "enabled=%u,count=%u,brightness=%u,"
+        "loop_enabled=%u,loop_start=%u,loop_end=%u,"
+        "breathe_enabled=%u,breathe_start=%u,breathe_end=%u,"
+        "breathe_min=%u,breathe_max=%u,"
+        "wave_enabled=%u,wave_origin=%u,"
+        "loop_speed=%u,breathe_speed=%u,wave_speed=%u",
+        config->leds.enabled, config->leds.count, config->leds.base_brightness,
+        config->leds.loop_enabled, config->leds.loop_start, config->leds.loop_end,
+        config->leds.breathe_enabled, config->leds.breathe_start, config->leds.breathe_end,
+        config->leds.breathe_min_bright, config->leds.breathe_max_bright,
+        config->leds.wave_enabled, config->leds.wave_origin,
+        config->leds.loop_speed_ms, config->leds.breathe_speed_ms, config->leds.wave_speed_ms);
+    (void)n;
+    serial_writeln(buf);
+
+    int pos = snprintf(buf, sizeof(buf), "LED_COLORS:");
+    for (int i = 0; i < MAX_LEDS; i++) {
+        pos += snprintf(buf + pos, sizeof(buf) - pos, "%02X%02X%02X%s",
+                        config->leds.colors[i].r, config->leds.colors[i].g, config->leds.colors[i].b,
+                        (i < MAX_LEDS - 1) ? "," : "");
+    }
+    serial_writeln(buf);
+
+    pos = snprintf(buf, sizeof(buf), "LED_MAP:");
+    for (int i = 0; i < LED_INPUT_COUNT; i++) {
+        pos += snprintf(buf + pos, sizeof(buf) - pos, "%s=%04X:%u%s",
+                        input_names[i], config->leds.led_map[i], config->leds.active_brightness[i],
+                        (i < LED_INPUT_COUNT - 1) ? "," : "");
+    }
     serial_writeln(buf);
 }
 
@@ -208,6 +250,28 @@ static bool handle_set(pedal_config_t *config, const char *param) {
     }
 
     // ── Debounce ──
+    if (key_len == 12 && strncmp(param, "usb_host_pin", 12) == 0) {
+        int v = atoi(val_str);
+        if (!config_usb_host_pin_valid(v)) {
+            serial_writeln("ERR:usb_host_pin must be 0-27");
+            return true;
+        }
+        config->usb_host_pin = (int8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 17 && strncmp(param, "usb_host_dm_first", 17) == 0) {
+        int v = atoi(val_str);
+        if (v < 0 || v > 1) {
+            serial_writeln("ERR:usb_host_dm_first must be 0 or 1");
+            return true;
+        }
+        config->usb_host_dm_first = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
     if (key_len == 8 && strncmp(param, "debounce", 8) == 0) {
         int v = atoi(val_str);
         if (v < 0 || v > 50) {
@@ -215,6 +279,202 @@ static bool handle_set(pedal_config_t *config, const char *param) {
             return true;
         }
         config->debounce_ms = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 11 && strncmp(param, "led_enabled", 11) == 0) {
+        config->leds.enabled = (atoi(val_str) != 0) ? 1 : 0;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 9 && strncmp(param, "led_count", 9) == 0) {
+        int v = atoi(val_str);
+        if (v < 0 || v > MAX_LEDS) {
+            serial_writeln("ERR:0-16");
+            return true;
+        }
+        config->leds.count = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 14 && strncmp(param, "led_brightness", 14) == 0) {
+        int v = atoi(val_str);
+        if (v < 0 || v > 31) {
+            serial_writeln("ERR:0-31");
+            return true;
+        }
+        config->leds.base_brightness = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len > 10 && strncmp(param, "led_color_", 10) == 0) {
+        int idx = atoi(param + 10);
+        if (idx < 0 || idx >= MAX_LEDS || strlen(val_str) != 6) {
+            serial_writeln("ERR:led index");
+            return true;
+        }
+        config->leds.colors[idx].r = hex_byte(val_str);
+        config->leds.colors[idx].g = hex_byte(val_str + 2);
+        config->leds.colors[idx].b = hex_byte(val_str + 4);
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len > 8 && strncmp(param, "led_map_", 8) == 0) {
+        int idx = atoi(param + 8);
+        if (idx < 0 || idx >= LED_INPUT_COUNT) {
+            serial_writeln("ERR:input index");
+            return true;
+        }
+        config->leds.led_map[idx] = (uint16_t)(strtoul(val_str, NULL, 16) & 0xFFFFu);
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len > 11 && strncmp(param, "led_active_", 11) == 0) {
+        int idx = atoi(param + 11);
+        int v = atoi(val_str);
+        if (idx < 0 || idx >= LED_INPUT_COUNT) {
+            serial_writeln("ERR:input index");
+            return true;
+        }
+        if (v < 0 || v > 31) {
+            serial_writeln("ERR:0-31");
+            return true;
+        }
+        config->leds.active_brightness[idx] = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 16 && strncmp(param, "led_loop_enabled", 16) == 0) {
+        config->leds.loop_enabled = (atoi(val_str) != 0) ? 1 : 0;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 14 && strncmp(param, "led_loop_start", 14) == 0) {
+        int v = atoi(val_str);
+        if (v < 0 || v >= MAX_LEDS) {
+            serial_writeln("ERR:0-15");
+            return true;
+        }
+        config->leds.loop_start = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 12 && strncmp(param, "led_loop_end", 12) == 0) {
+        int v = atoi(val_str);
+        if (v < 0 || v >= MAX_LEDS) {
+            serial_writeln("ERR:0-15");
+            return true;
+        }
+        config->leds.loop_end = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 19 && strncmp(param, "led_breathe_enabled", 19) == 0) {
+        config->leds.breathe_enabled = (atoi(val_str) != 0) ? 1 : 0;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 17 && strncmp(param, "led_breathe_start", 17) == 0) {
+        int v = atoi(val_str);
+        if (v < 0 || v >= MAX_LEDS) {
+            serial_writeln("ERR:0-15");
+            return true;
+        }
+        config->leds.breathe_start = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 15 && strncmp(param, "led_breathe_end", 15) == 0) {
+        int v = atoi(val_str);
+        if (v < 0 || v >= MAX_LEDS) {
+            serial_writeln("ERR:0-15");
+            return true;
+        }
+        config->leds.breathe_end = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 15 && strncmp(param, "led_breathe_min", 15) == 0) {
+        int v = atoi(val_str);
+        if (v < 0 || v > 31) {
+            serial_writeln("ERR:0-31");
+            return true;
+        }
+        config->leds.breathe_min_bright = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 15 && strncmp(param, "led_breathe_max", 15) == 0) {
+        int v = atoi(val_str);
+        if (v < 0 || v > 31) {
+            serial_writeln("ERR:0-31");
+            return true;
+        }
+        config->leds.breathe_max_bright = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 16 && strncmp(param, "led_wave_enabled", 16) == 0) {
+        config->leds.wave_enabled = (atoi(val_str) != 0) ? 1 : 0;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 15 && strncmp(param, "led_wave_origin", 15) == 0) {
+        int v = atoi(val_str);
+        if (v < 0 || v >= MAX_LEDS) {
+            serial_writeln("ERR:0-15");
+            return true;
+        }
+        config->leds.wave_origin = (uint8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 14 && strncmp(param, "led_loop_speed", 14) == 0) {
+        int v = atoi(val_str);
+        if (v < 100 || v > 9999) {
+            serial_writeln("ERR:100-9999");
+            return true;
+        }
+        config->leds.loop_speed_ms = (uint16_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 17 && strncmp(param, "led_breathe_speed", 17) == 0) {
+        int v = atoi(val_str);
+        if (v < 100 || v > 9999) {
+            serial_writeln("ERR:100-9999");
+            return true;
+        }
+        config->leds.breathe_speed_ms = (uint16_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+
+    if (key_len == 14 && strncmp(param, "led_wave_speed", 14) == 0) {
+        int v = atoi(val_str);
+        if (v < 100 || v > 9999) {
+            serial_writeln("ERR:100-9999");
+            return true;
+        }
+        config->leds.wave_speed_ms = (uint16_t)v;
         serial_writeln("OK");
         return true;
     }
@@ -247,9 +507,10 @@ static bool handle_set(pedal_config_t *config, const char *param) {
 static void run_scan(pedal_config_t *config) {
     // Set all valid GPIO pins as input with pull-up
     bool pin_inited[29] = {false};
-    for (int pin = 2; pin <= 28; pin++) {
-        // Skip PIO-USB pins (GP0, GP1)
-        if (pin == 0 || pin == 1) continue;
+    for (int pin = 0; pin <= 28; pin++) {
+        if (config_pin_is_usb_host_reserved(config, pin)) continue;
+        if (config->leds.enabled &&
+            (pin == LED_SPI_DI_PIN || pin == LED_SPI_SCK_PIN)) continue;
         gpio_init(pin);
         gpio_set_dir(pin, GPIO_IN);
         gpio_pull_up(pin);
@@ -259,7 +520,7 @@ static void run_scan(pedal_config_t *config) {
 
     // Read initial state
     bool prev_state[29] = {false};
-    for (int pin = 2; pin <= 28; pin++) {
+    for (int pin = 0; pin <= 28; pin++) {
         if (pin_inited[pin])
             prev_state[pin] = !gpio_get(pin);
     }
@@ -292,7 +553,7 @@ static void run_scan(pedal_config_t *config) {
         }
 
         // Poll digital pins for changes
-        for (int pin = 2; pin <= 28; pin++) {
+        for (int pin = 0; pin <= 28; pin++) {
             if (!pin_inited[pin]) continue;
             bool pressed = !gpio_get(pin);
             if (pressed && !prev_state[pin]) {
@@ -366,6 +627,10 @@ static void run_monitor_adc(int pin) {
 void config_mode_main(pedal_config_t *config) {
     char line[256];
     int  line_pos = 0;
+
+    if (config->leds.enabled && config->leds.count > 0) {
+        apa102_init();
+    }
 
     // Pre-connection timeout — reboot if host never connects within 30s
     uint32_t connect_start_ms = to_ms_since_boot(get_absolute_time());
@@ -444,6 +709,30 @@ void config_mode_main(pedal_config_t *config) {
                 run_monitor_adc(pin);
             }
             // ── REBOOT ──
+            else if (strncmp(line, "LED_FLASH:", 10) == 0) {
+                int idx = atoi(line + 10);
+                if (idx >= 0 && idx < MAX_LEDS) {
+                    serial_writeln("OK");
+                    apa102_flash_led(&config->leds, (uint8_t)idx, 3);
+                } else {
+                    serial_writeln("ERR:led index");
+                }
+            }
+            else if (strncmp(line, "LED_SOLID:", 10) == 0) {
+                int idx = atoi(line + 10);
+                if (idx >= 0 && idx < MAX_LEDS) {
+                    uint8_t brightness[MAX_LEDS] = {0};
+                    brightness[idx] = 31;
+                    serial_writeln("OK");
+                    apa102_update(&config->leds, brightness);
+                } else {
+                    serial_writeln("ERR:led index");
+                }
+            }
+            else if (strcmp(line, "LED_OFF") == 0) {
+                apa102_all_off(&config->leds);
+                serial_writeln("OK");
+            }
             else if (strcmp(line, "REBOOT") == 0) {
                 serial_writeln("OK");
                 sleep_ms(50);

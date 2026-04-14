@@ -5,8 +5,8 @@ from .constants import (BG_CARD, BG_INPUT, TEXT, TEXT_DIM, ACCENT_BLUE,
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import RoundedButton
 
-# Scans PresetConfigs/ for <json> files; missing device_type = shows on all screens
-def _find_preset_configs(device_types=None):
+# Scans PresetConfigs/ for <json> files; missing device_type can optionally show on all screens
+def _find_preset_configs(device_types=None, allow_unspecified=True):
     search_dirs = []
     if getattr(sys, '_MEIPASS', None):
         search_dirs.append(os.path.join(sys._MEIPASS, "PresetConfigs"))
@@ -32,9 +32,11 @@ def _find_preset_configs(device_types=None):
         except Exception:
             continue
         file_devtype = data.get("device_type")
-        # missing device_type = show on all screens
-        if device_types is not None and file_devtype is not None:
-            if file_devtype not in device_types:
+        if device_types is not None:
+            if file_devtype is None:
+                if not allow_unspecified:
+                    continue
+            elif file_devtype not in device_types:
                 continue
         results.append((os.path.splitext(fname)[0], fpath))
     return results

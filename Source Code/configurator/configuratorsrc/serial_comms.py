@@ -106,18 +106,32 @@ class PicoSerial:
           LED_MAP:...
         Returns a dict with all key/value pairs plus 'device_type'.
         """
-        # First line is now DEVTYPE (added in firmware v12+).
-        # For backward compatibility with older firmware that sends CFG: directly,
-        # we peek at the first line and handle both cases.
-        r = self.send("GET_CONFIG")
+        # First line is usually DEVTYPE, but stale serial data can occasionally
+        # leave an OK/PIN:/blank line ahead of the actual response. Scan forward
+        # for the first DEVTYPE:/CFG: line instead of assuming the first line is
+        # always the start of the GET_CONFIG response.
+        self.ser.write(b"GET_CONFIG\n")
+        self.ser.flush()
+
+        def _read_config_line():
+            for _ in range(8):
+                line = self.ser.readline().decode("ascii", errors="replace").strip()
+                if not line:
+                    continue
+                if line.startswith("DEVTYPE:") or line.startswith("CFG:"):
+                    return line
+            return ""
+
+        r = _read_config_line()
+        if not r:
+            raise ValueError("Timed out waiting for GET_CONFIG response")
 
         device_type = "unknown"
         cfg_line = None
 
         if r.startswith("DEVTYPE:"):
             device_type = r[8:].strip()
-            # Next line should be CFG:
-            cfg_line = self.ser.readline().decode("ascii", errors="replace").strip()
+            cfg_line = _read_config_line()
         elif r.startswith("CFG:"):
             # Old firmware without DEVTYPE — treat as unknown
             cfg_line = r

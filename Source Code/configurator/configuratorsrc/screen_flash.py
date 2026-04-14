@@ -5,7 +5,7 @@ from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT
                          TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
                          NUKE_UF2_FILENAME, OCC_SUBTYPES)
 from .fonts import FONT_UI, _resource_path
-from .widgets import RoundedButton, CustomDropdown, HelpDialog, HelpButton, _help_text, _help_placeholder
+from .widgets import RoundedButton, CustomDropdown, HelpDialog, HelpButton, _help_text
 from .firmware_utils import (find_uf2_files, _group_uf2_files, load_fw_presets,
                               _apply_preset_config, flash_uf2, flash_uf2_with_reboot,
                               find_rpi_rp2_drive, find_rpi_rp2_drive_info,
@@ -49,8 +49,27 @@ class FlashFirmwareScreen:
                     ("\n\n", None),
                     ("This is what you'll see if your Pico controller is detected to be in BOOTSEL/USB mode. You can use this screen to select an OCC firmware to install to your Pico, and then you will be automatically redirected to the main menu. Check out the \"Choosing Firmwares\" help tab for more information about the firmwares available here.", None),
                 )),
-                ("Choosing Firmwares", _help_placeholder("OCC has firmwares for typical game controllers, rhythm controllers, proprietary wireless dongles, and more! Depending on what controller you have plugged in right now, or what this Pi Pico will be used for, go ahead and select a firmware that suits your need. Different firmwares have different configurable settings, and will appear as different device types to your PC.")),
-                ("Wireless or Wired",  _help_placeholder("(Feature still in progress)\nOCC has firmwares for both wired Picos and wireless capable PicoWs! Clicking a firmware for a controller will automatically install the wireless or wired version of it, depending on what type of Pi Pico you have connected. If you want to manually pick a wired or wireless firmware yourself, right click the firmware you want, then make your pick.")),
+                ("Choosing Firmwares", _help_text(
+                    ("OCC Firmware", "bold"),
+                    ("\n\n", None),
+                    ("The first tab is for just firmwares.", None),
+                    ("Multiple Rythm controllers, generic controllers, or keyboard macro board firmwares.", None),
+                    ("Choose a firmware, install, and then configure buttons to your device.", None),
+                    ("\n\n", None),
+                    ("Controller Presets", "bold"),
+                    ("\n\n", None),
+                    ("OCC partners with many sellers of devices to give you easy one-click presets.", None),
+                    ("If your device is listed, you can select it and OCC will install firmware AND configure it for you.", None),
+                    ("If you make devices, reach out to me (LovettCustoms) and I am happy to add you to this list.", None),
+                )),
+                ("Wireless or Wired",  _help_text(
+                    ("Warning", "bold"),
+                    ("\n\n", None),
+                    ("DO NOT install Wireless firmware on a Pico (non W).", None),
+                    ("If you install W firmware on a non-W pico, you'll need to hold BOOTSEL while plugging it in to recover the Pico.", None),
+                    ("\n\n", None),
+                    ("Additionally, wireless firmwares work wirelessly or wired over USB.", None),
+                )),
             ])
         self._help_dialog.open()
 

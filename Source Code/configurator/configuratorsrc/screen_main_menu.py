@@ -6,7 +6,8 @@ from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT
                          CONFIG_MODE_VID, CONFIG_MODE_PIDS, ALTERNATEFW_VID, ALTERNATEFW_PID,
                          GP2040CE_VID, GP2040CE_PID, GP2040CE_WEBCONFIG_IP,
                          GP2040CE_BOOTMODE_BOOTSEL, XINPUT_SUBTYPE_TO_DEVTYPE,
-                         OCC_SUBTYPES, DONGLE_XINPUT_SUBTYPES, MAX_LEDS, LED_INPUT_NAMES,
+                         OCC_SUBTYPES, DONGLE_XINPUT_SUBTYPES, MAX_LEDS,
+                         get_led_input_names_for_device_type,
                          _ALTERNATEFW_CMD_JUMP_BOOTLOADER, _ALTERNATEFW_BM_REQUEST_TYPE)
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import RoundedButton, CustomDropdown, HelpDialog, HelpButton, _help_text, _help_placeholder
@@ -65,9 +66,26 @@ class MainMenu:
                 ("Getting Started",       _help_text(
                     ("Welcome to OCC, Open Controller Configurator!", "bold"),
                     ("\n\n", None),
-                    ("This program is loaded with a set of firmwares for the Raspberry Pi Pico and Pico W and comes bundled with a configurator to set up your button inputs and other settings for game controllers and peripherals. Check out the other tabs in this help menu for more information about the functions of this screen.", None),
+                    ("This program is loaded with firmwares made for the Raspberry Pi Pico and Pico W. It comes bundled with a configurator screen to set up your button inputs and other settings for game controllers and peripherals.", None),
+                    ("\n\n", None),
+                    ("Check out the other tabs in this help menu for more information about the functions of this Main Menu screen.", None),
+                    ("\n\n", None),
+                    ("OCC was made by LovettCustoms as a free, open source, alternative option for Rythm Controllers, Game Controllers, and Peripherals for anyone to use for any purpose.", None),
+                    ("You do not need a license or need to pay me to sell products with my firmware. Enjoy.", None),
+                    ("\n\n", None),
+                    ("Special thanks to roadsidebomb of threepieces.net for inspiring me to make this project.", "italic"),
+                    ("\n\n", None),
+                    ("Also check out my website, LovettCustoms.com. Thanks!", None),
                 )),
-                ("Connecting a Device",   _help_placeholder("If a Pico is detected in BOOTSEL mode, (with no firmware and shows up as a storage drive), OCC should automatically switch to the firmware selection screen. If OCC detects a firmware already installed, you'll see the options to check for firmware updates and go into configuration screens. Check the Configuration Screens help tab for more information about Easy vs Advanced configurator.")),
+                ("Connecting a Device",   _help_text(
+                    ("If a Pico is detected in BOOTSEL mode,", "bold"),
+                    ("OCC should automatically switch to the firmware selection screen.", None),
+                    ("\n", None),
+                    ("If OCC detects a firmware already installed,", "bold"),
+                    ("You'll see the options to check for firmware updates and go into configuration screens.", None),
+                    ("\n", None),
+                    ("Check the Configuration Screens help tab for more information about Easy vs Advanced configurator.", None),
+                )),
                 ("Configuration Screens", _help_text(
                     ("Easy Configurator", "bold"),
                     ("Will walk you through the process of binding buttons of your controller one by one. It'll show you a screen to detect each button press, and at the end allow you to save your controller configuration. Simple!", None),
@@ -297,7 +315,7 @@ class MainMenu:
             if XINPUT_AVAILABLE:
                 try:
                     controllers = xinput_get_connected()
-                    SUBTYPE_LABELS = {8: "Drum Kit", 6: "Guitar", 7: "Guitar", 5: "Dongle"}
+                    SUBTYPE_LABELS = {8: "Drum Kit", 6: "6-Fret Guitar", 7: "Standard Guitar", 5: "Dongle"}
                     occ_devices = [c for c in controllers if c[1] in OCC_SUBTYPES]
                     # Separate dongles from configurable devices (guitar / drum kit).
                     dongle_devices    = [c for c in occ_devices if c[1] in DONGLE_XINPUT_SUBTYPES]
@@ -316,7 +334,7 @@ class MainMenu:
                             text=f"{first_label} detected via XInput  ({count} device{'s' if count > 1 else ''})",
                             fg=ACCENT_GREEN)
                         subtype = config_devices[0][1]
-                        EASY_CONFIG_SUBTYPES = {6, 7}  # guitar only
+                        EASY_CONFIG_SUBTYPES = {7}  # standard guitar only
                         has_easy = subtype in EASY_CONFIG_SUBTYPES
                         detail = (
                             "Click either Configure option to switch to Config Mode."
@@ -380,6 +398,12 @@ class MainMenu:
                 text=f"Guitar (Combined)  ·  Config mode  ·  {port}", fg=TEXT_DIM)
             self._cfg_btn.set_state("normal")
             self._easy_cfg_btn.set_state("normal")
+        elif dtype == "guitar_live_6fret":
+            self._ctrl_detail.config(
+                text=f"6-Fret Guitar  ·  Config mode  ·  {port}  ·  No Easy Configurator for 6-Fret yet",
+                fg=TEXT_DIM)
+            self._cfg_btn.set_state("normal")
+            self._easy_cfg_btn.set_state("disabled")
         elif dtype == "drum_kit":
             self._ctrl_detail.config(
                 text=f"Drum Kit  ·  Config mode  ·  {port}  ·  No Easy Configurator for Drums yet",
@@ -2509,14 +2533,17 @@ class MainMenu:
                                 pass
 
                 if "led_map_raw" in raw_cfg:
+                    led_input_names = get_led_input_names_for_device_type(
+                        raw_cfg.get("device_type", "guitar_alternate")
+                    )
                     for pair in raw_cfg["led_map_raw"].split(","):
                         pair = pair.strip()
                         if "=" not in pair:
                             continue
                         name_part, rest = pair.split("=", 1)
                         name_part = name_part.strip()
-                        if name_part in LED_INPUT_NAMES and ":" in rest:
-                            idx = LED_INPUT_NAMES.index(name_part)
+                        if name_part in led_input_names and ":" in rest:
+                            idx = led_input_names.index(name_part)
                             hex_mask, bright = rest.split(":", 1)
                             try:
                                 pico2.set_value(f"led_map_{idx}", hex_mask.strip())

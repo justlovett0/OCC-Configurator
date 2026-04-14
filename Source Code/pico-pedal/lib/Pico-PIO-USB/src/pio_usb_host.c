@@ -19,33 +19,8 @@
 #include "pio_usb_ll.h"
 #include "usb_crc.h"
 
-// Probe diagnostics — defined in xinput_host.c, incremented from this file
-extern volatile uint8_t _xinput_probe_fired;
-extern volatile uint8_t _xinput_probe_real;
-
-// Bus state visibility — updated each SOF frame, read by Core 0 for debug
-extern volatile uint8_t _xinput_root_connected;
-extern volatile uint8_t _xinput_root_suspended;
-// Enum progress counters — tells us how far enumeration gets
-extern volatile uint8_t _xinput_bus_reset_count;  // incremented in port_reset_start
-extern volatile uint8_t _xinput_setup_sent_count; // incremented in usb_setup_transaction
-extern volatile uint16_t _xinput_ep0_nak_count;
-extern volatile uint16_t _xinput_ep0_noresp_count;
-extern volatile uint16_t _xinput_ep0_badpid_count;
-extern volatile uint16_t _xinput_setup_ack_count;
-extern volatile uint16_t _xinput_setup_fail_count;
-extern volatile uint16_t _xinput_ep0_in_attempt_count;
-extern volatile uint16_t _xinput_ep0_out_attempt_count;
-extern volatile uint16_t _xinput_ep0_out_ack_count;
-extern volatile uint16_t _xinput_ep0_out_nak_count;
-extern volatile uint16_t _xinput_ep0_out_noresp_count;
-extern volatile uint16_t _xinput_ep0_out_stall_count;
-// Force-reconnect: set by Core 0 watchdog, cleared here inside SOF callback
-extern volatile bool    _xinput_force_reconnect;
-
 enum {
   TRANSACTION_MAX_RETRY = 3, // Number of times to retry a failed transaction
-  EP0_STATUS_OUT_NAK_COMPAT_THRESHOLD = 8,
 };
 
 static alarm_pool_t *_alarm_pool = NULL;
@@ -317,7 +292,7 @@ void __not_in_flash_func(pio_usb_host_frame)(void) {
       if ((ep->root_idx == root_idx) && ep->size) {
         bool const is_periodic = ((ep->attr & 0x03) == EP_ATTR_INTERRUPT);
 
-        if (ep->interval_counter > 0) {
+        if (is_periodic && (ep->interval_counter > 0)) {
           ep->interval_counter--;
           continue;
         }
@@ -360,24 +335,6 @@ void __not_in_flash_func(pio_usb_host_frame)(void) {
     if (root->initialized && !root->connected) {
       port_pin_status_t const line_state = pio_usb_bus_get_line_state(root);
       if (line_state == PORT_PIN_FS_IDLE || line_state == PORT_PIN_LS_IDLE) {
-        // Anti-phantom probe: PIO TX idles in J-state (D+=HIGH), and the RX
-        // path sets GPIO_OVERRIDE_INVERT so get_line_state() reads FS_IDLE even
-        // with no device. Distinguish real device (has 1.5k pull-up keeping the
-        // speed line HIGH without PIO drive) from phantom (line drops to
-        // gpio_pull_down when PIO drive is released).
-        //
-        // FS device: pull-up on D+ → probe D+
-        // LS device: pull-up on D- → probe D- (pin_dp+1)
-        uint pin_probe = (line_state == PORT_PIN_FS_IDLE) ?
-                         root->pin_dp : (root->pin_dp + 1);
-        gpio_set_oeover(pin_probe, GPIO_OVERRIDE_LOW); // disable PIO output
-        for (volatile int _pi = 0; _pi < 1500; _pi++) {} // ~10us at 120MHz
-        // With INOVER=INVERT: gpio_get==0 means physical HIGH = pull-up present
-        bool real_device = (gpio_get(pin_probe) == 0);
-        gpio_set_oeover(pin_probe, GPIO_OVERRIDE_NORMAL); // restore PIO control
-        _xinput_probe_fired++;
-        if (real_device) _xinput_probe_real++;
-        if (!real_device) break; // phantom J-state — skip connect
         root->is_fullspeed = (line_state == PORT_PIN_FS_IDLE);
         root->connected = true;
         root->suspended = true; // need a bus reset before operating
@@ -391,35 +348,6 @@ void __not_in_flash_func(pio_usb_host_frame)(void) {
     if (PIO_USB_ROOT_PORT(root_idx)->ints) {
       pio_usb_host_irq_handler(root_idx);
     }
-  }
-
-  // Update Core 0 bus state visibility
-  {
-    root_port_t *r0 = PIO_USB_ROOT_PORT(0);
-
-    // Core 0 watchdog requests a forced disconnect if guitar is detected but
-    // never mounts (enum failed, root->connected stuck true). Reset here
-    // inside SOF callback (Core 1) so GPIO state is never touched from Core 0.
-    //
-    // Complete any active endpoint with ERROR before faking the disconnect so
-    // TinyUSB can unwind a stuck EP0 control transfer and return its internal
-    // control state to IDLE.
-    if (_xinput_force_reconnect && r0->connected) {
-      for (int ep_idx = 0; ep_idx < PIO_USB_EP_POOL_CNT; ep_idx++) {
-        endpoint_t *ep = PIO_USB_ENDPOINT(ep_idx);
-        if (ep->root_idx == 0 && ep->size && ep->has_transfer) {
-          pio_usb_ll_transfer_complete(ep, PIO_USB_INTS_ENDPOINT_ERROR_BITS);
-        }
-      }
-
-      r0->connected = false;
-      r0->suspended = true;
-      r0->ints |= PIO_USB_INTS_DISCONNECT_BITS;
-      _xinput_force_reconnect = false;
-    }
-
-    _xinput_root_connected = r0->connected ? 1 : 0;
-    _xinput_root_suspended = r0->suspended ? 1 : 0;
   }
 
   sof_count++;
@@ -450,8 +378,6 @@ uint32_t pio_usb_host_get_frame_number(void) {
 
 void pio_usb_host_port_reset_start(uint8_t root_idx) {
   root_port_t *root = PIO_USB_ROOT_PORT(root_idx);
-
-  _xinput_bus_reset_count++;  // enum started — bus reset beginning
 
   // bus is not operating while in reset
   root->suspended = true;
@@ -613,10 +539,6 @@ static int __no_inline_not_in_flash_func(usb_in_transaction)(pio_port_t *pp,
   int res = 0;
   uint8_t expect_pid = (ep->data_id == 1) ? USB_PID_DATA1 : USB_PID_DATA0;
 
-  if ((ep->ep_num & 0x7f) == 0) {
-    _xinput_ep0_in_attempt_count++;
-  }
-
   pio_usb_bus_prepare_receive(pp);
   pio_usb_bus_send_token(pp, USB_PID_IN, ep->dev_addr, ep->ep_num);
   pio_usb_bus_start_receive(pp);
@@ -629,22 +551,13 @@ static int __no_inline_not_in_flash_func(usb_in_transaction)(pio_port_t *pp,
       memcpy(ep->app_buf, &pp->usb_rx_buffer[2], receive_len);
       pio_usb_ll_transfer_continue(ep, receive_len);
     } else {
-      if ((ep->ep_num & 0x7f) == 0) {
-        _xinput_ep0_badpid_count++;
-      }
       // DATA0/1 mismatched, 0 for re-try next frame
     }
   } else if (receive_pid == USB_PID_NAK) {
-    if ((ep->ep_num & 0x7f) == 0) {
-      _xinput_ep0_nak_count++;
-    }
     // NAK try again next frame
   } else if (receive_pid == USB_PID_STALL) {
     pio_usb_ll_transfer_complete(ep, PIO_USB_INTS_ENDPOINT_STALLED_BITS);
   } else {
-    if ((ep->ep_num & 0x7f) == 0) {
-      _xinput_ep0_noresp_count++;
-    }
     res = -1;
     if ((pp->pio_usb_rx->irq & IRQ_RX_COMP_MASK) == 0) {
       res = -2;
@@ -659,23 +572,6 @@ static int __no_inline_not_in_flash_func(usb_in_transaction)(pio_port_t *pp,
     ep->failed_count = 0; // reset failed count if we got a sound response
   }
 
-  // EP0 IN stall timeout: if EP0 DATA-IN gets no data for 200 consecutive frames
-  // (~200ms), abort the transfer so TinyUSB can retry/fail cleanly.
-  // Prevents permanent lock when a device NAKs or mismatches toggle on
-  // GET_DESCRIPTOR. Data EPs are excluded — NAK on those is normal.
-  {
-    static uint16_t _ep0_in_stall = 0;
-    bool const ep0_got_data = (receive_len >= 0 && receive_pid == expect_pid);
-    if ((ep->ep_num & 0x7f) == 0 && ep->has_transfer && res == 0 && !ep0_got_data) {
-      if (++_ep0_in_stall >= 200) {
-        _ep0_in_stall = 0;
-        pio_usb_ll_transfer_complete(ep, PIO_USB_INTS_ENDPOINT_ERROR_BITS);
-      }
-    } else {
-      _ep0_in_stall = 0;
-    }
-  }
-
   pio_sm_set_enabled(pp->pio_usb_rx, pp->sm_rx, false);
   pp->usb_rx_buffer[0] = 0;
   pp->usb_rx_buffer[1] = 0;
@@ -686,11 +582,6 @@ static int __no_inline_not_in_flash_func(usb_in_transaction)(pio_port_t *pp,
 static int __no_inline_not_in_flash_func(usb_out_transaction)(pio_port_t *pp,
                                                               endpoint_t *ep) {
   int res = 0;
-  bool got_sound_response = false;
-
-  if ((ep->ep_num & 0x7f) == 0) {
-    _xinput_ep0_out_attempt_count++;
-  }
 
   uint16_t const xact_len = pio_usb_ll_get_transaction_len(ep);
 
@@ -706,45 +597,19 @@ static int __no_inline_not_in_flash_func(usb_out_transaction)(pio_port_t *pp,
   uint8_t const receive_token = pp->usb_rx_buffer[1];
 
   if (receive_token == USB_PID_ACK) {
-    got_sound_response = true;
-    if ((ep->ep_num & 0x7f) == 0) {
-      _xinput_ep0_out_ack_count++;
-    }
     pio_usb_ll_transfer_continue(ep, xact_len);
   } else if (receive_token == USB_PID_NAK) {
-    if ((ep->ep_num & 0x7f) == 0) {
-      _xinput_ep0_out_nak_count++;
-      if (xact_len == 0 && ++ep->failed_count >= EP0_STATUS_OUT_NAK_COMPAT_THRESHOLD) {
-        // RP2040 native USB devices sometimes never ACK the zero-length status
-        // OUT after a successful control DATA-IN stage, but they still accept
-        // the next SETUP token. Treat repeated NAKs here as a compat-complete
-        // so enumeration can progress instead of wedging forever.
-        pio_usb_ll_transfer_complete(ep, PIO_USB_INTS_ENDPOINT_COMPLETE_BITS);
-        ep->failed_count = 0;
-        pio_sm_set_enabled(pp->pio_usb_rx, pp->sm_rx, false);
-        pp->usb_rx_buffer[0] = 0;
-        pp->usb_rx_buffer[1] = 0;
-        return 0;
-      }
-    }
     // NAK try again next frame
   } else if (receive_token == USB_PID_STALL) {
-    got_sound_response = true;
-    if ((ep->ep_num & 0x7f) == 0) {
-      _xinput_ep0_out_stall_count++;
-    }
     pio_usb_ll_transfer_complete(ep, PIO_USB_INTS_ENDPOINT_STALLED_BITS);
   } else {
-    if ((ep->ep_num & 0x7f) == 0) {
-      _xinput_ep0_out_noresp_count++;
-    }
     res = -1;
     if (++ep->failed_count >= TRANSACTION_MAX_RETRY) {
       pio_usb_ll_transfer_complete(ep, PIO_USB_INTS_ENDPOINT_ERROR_BITS);
     }
   }
 
-  if (got_sound_response) {
+  if (res == 0) {
     ep->failed_count = 0;// reset failed count if we got a sound response
   }
 
@@ -758,8 +623,6 @@ static int __no_inline_not_in_flash_func(usb_out_transaction)(pio_port_t *pp,
 static int __no_inline_not_in_flash_func(usb_setup_transaction)(
     pio_port_t *pp,  endpoint_t *ep) {
   int res = 0;
-
-  _xinput_setup_sent_count++;  // SETUP packet being sent to device
 
   // Setup token
   pio_usb_bus_prepare_receive(pp);
@@ -775,11 +638,9 @@ static int __no_inline_not_in_flash_func(usb_setup_transaction)(
   pio_sm_set_enabled(pp->pio_usb_rx, pp->sm_rx, false);
 
   if (handshake == USB_PID_ACK) {
-    _xinput_setup_ack_count++;
     ep->actual_len = 8;
     pio_usb_ll_transfer_complete(ep, PIO_USB_INTS_ENDPOINT_COMPLETE_BITS);
   } else {
-    _xinput_setup_fail_count++;
     res = -1;
     ep->data_id = USB_PID_SETUP; // retry setup
     if (++ep->failed_count >= TRANSACTION_MAX_RETRY) {
@@ -854,7 +715,6 @@ static void __no_inline_not_in_flash_func(handle_endpoint_irq)(
               ep->ep_num = 0x00;
               ep->is_tx = true;
               pio_usb_ll_transfer_start(ep, NULL, 0);
-              ep->interval_counter = 1;
             } else if (pipe->stage == STAGE_OUT) {
               pipe->stage = STAGE_STATUS;
               ep->ep_num = 0x80;

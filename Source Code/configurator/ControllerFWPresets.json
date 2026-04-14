@@ -3,12 +3,13 @@
     "Polybar Micro": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Polybar Micro.json" },
     "Polybar Mini":  { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Polybar Mini.json" },
     "Polybar Max":   { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Polybar Max.json" },
-    "PolyPedal":     { "firmware": "Pedal Accessory",  "preset_config": "PresetConfigs/PolyPedal.json" }
+    "Polypedal (Whammy)":     { "firmware": "Pedal Accessory",  "preset_config": "PresetConfigs/PolyPedal Whammy.json" },
+	"Polypedal (Tilt)":     { "firmware": "Pedal Accessory",  "preset_config": "PresetConfigs/PolyPedal Tilt.json" }
   },
   "RIFFSTICK Controllers": {
     "RIFFSTICK Lite": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json" },
     "RIFFSTICK 1.1":  { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json" },
-    "RIFFSTICK PRO":  { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json" }
+    "RIFFSTICK Pro":  { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json" }
   },
   "Phunky Customs": {
     "Monoboard RP": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Monoboard RP.json" }

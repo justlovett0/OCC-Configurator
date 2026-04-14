@@ -20,9 +20,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "apa102_leds.h"
 
 #define CONFIG_MAGIC              0x5045444C  // "PEDL"
-#define CONFIG_VERSION            2
+#define CONFIG_VERSION            4
 #define DEVICE_NAME_MAX           31          // + null terminator = 32 bytes
 
 // ── Device type identifier (sent as DEVTYPE: in GET_CONFIG response) ──
@@ -92,6 +93,15 @@ typedef struct __attribute__((packed)) {
     uint16_t adc_min[PEDAL_ADC_COUNT];     // Calibration floor  (raw ADC, 0–4095)
     uint16_t adc_max[PEDAL_ADC_COUNT];     // Calibration ceiling (raw ADC, 0–4095)
 
+    // USB host pin pair configuration.
+    // usb_host_pin is always the lower-numbered pin of the consecutive pair.
+    // usb_host_dm_first = 0 -> D+ on usb_host_pin, D- on usb_host_pin + 1
+    // usb_host_dm_first = 1 -> D- on usb_host_pin, D+ on usb_host_pin + 1
+    int8_t   usb_host_pin;
+    uint8_t  usb_host_dm_first;
+
+    led_config_t leds;
+
     uint32_t checksum;
 } pedal_config_t;
 
@@ -100,5 +110,9 @@ void config_save(const pedal_config_t *config);
 void config_set_defaults(pedal_config_t *config);
 bool config_is_valid(const pedal_config_t *config);
 void config_update_checksum(pedal_config_t *config);
+bool config_usb_host_pin_valid(int pin);
+bool config_pin_is_usb_host_reserved(const pedal_config_t *config, int pin);
+uint8_t config_usb_host_dp_pin(const pedal_config_t *config);
+uint8_t config_usb_host_dm_pin(const pedal_config_t *config);
 
 #endif /* _PEDAL_CONFIG_H_ */

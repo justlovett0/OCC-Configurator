@@ -27,6 +27,11 @@ add_executable(pico_guitar_controller_bt
     src/lis3dh.c
     src/bt_hid_gamepad.c
     src/controller_bt.c
+    src/xsm3/xsm3.c
+    src/xsm3/usbdsec.c
+    src/xsm3/excrypt_des.c
+    src/xsm3/excrypt_sha.c
+    src/xsm3/excrypt_parve.c
 )
 
 # Generate occ_controller_gatt.h from occ_controller.gatt (GATT profile constants)
@@ -36,6 +41,7 @@ pico_btstack_make_gatt_header(pico_guitar_controller_bt PRIVATE
 # Include directories
 target_include_directories(pico_guitar_controller_bt PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src
+    ${CMAKE_CURRENT_LIST_DIR}/src/xsm3
 )
 
 # Compile definitions

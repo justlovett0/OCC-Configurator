@@ -20,11 +20,17 @@ add_executable(pico_guitar_controller
     src/apa102_leds.c
     src/adxl345.c
     src/lis3dh.c
+    src/xsm3/xsm3.c
+    src/xsm3/usbdsec.c
+    src/xsm3/excrypt_des.c
+    src/xsm3/excrypt_sha.c
+    src/xsm3/excrypt_parve.c
 )
 
 # Include directories
 target_include_directories(pico_guitar_controller PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src
+    ${CMAKE_CURRENT_LIST_DIR}/src/xsm3
 )
 
 # Link required libraries

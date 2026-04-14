@@ -3,14 +3,16 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
                          TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
-                         DIGITAL_PINS, DIGITAL_PIN_LABELS, VALID_NAME_CHARS, OCC_SUBTYPES)
+                         DIGITAL_PINS, DIGITAL_PIN_LABELS, VALID_NAME_CHARS, OCC_SUBTYPES,
+                         MAX_LEDS, PEDAL_LED_INPUT_NAMES, PEDAL_LED_INPUT_LABELS)
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import (RoundedButton, HelpButton, HelpDialog, CustomDropdown,
-                       LiveBarGraph, CalibratedBarGraph, _help_text, _help_placeholder)
+                       SpeedSlider, LiveBarGraph, CalibratedBarGraph, _help_text)
 from .serial_comms import PicoSerial
 from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
-                              get_bundled_fw_date_str, find_rpi_rp2_drive)
+                              get_bundled_fw_date_str, find_rpi_rp2_drive,
+                              apply_config_to_pico)
 from .xinput_utils import (XINPUT_AVAILABLE, ERROR_SUCCESS, xinput_get_connected,
                            MAGIC_STEPS, xinput_send_vibration)
 from .utils import _centered_dialog, _center_window, _make_flash_popup, _find_preset_configs
@@ -18,8 +20,8 @@ class PedalApp:
     """
     Pedal Controller configurator screen.
 
-    Configures up to 4 pedal buttons: GPIO pin assignment and XInput button mapping.
-    The pedal firmware has no LED support, so this screen is intentionally simple.
+    Configures up to 4 pedal buttons, 2 analog inputs, USB host settings,
+    and pedal LED lighting.
     """
 
     PEDAL_COUNT = 4
@@ -48,6 +50,14 @@ class PedalApp:
     ADC_PINS        = [-1, 26, 27, 28]
     ADC_PIN_LABELS  = ["Disabled", "GPIO 26  (ADC0)", "GPIO 27  (ADC1)", "GPIO 28  (ADC2)"]
     ADC_AXIS_LABELS = ["Whammy", "Tilt"]
+    USB_HOST_START_PINS = [p for p in DIGITAL_PINS if p >= 0 and (p + 1) in DIGITAL_PINS]
+    USB_HOST_START_LABELS = [f"GPIO {p} / GPIO {p + 1}" for p in USB_HOST_START_PINS]
+    USB_HOST_ORDER_LABELS = [
+        "D+ on first pin, D- on second",
+        "D- on first pin, D+ on second",
+    ]
+    LED_SPI_PINS = {6, 7}
+    PEDAL_LED_INPUT_INDICES = [0, 1, 2, 3]
 
     def __init__(self, root, on_back=None):
         self.root = root
@@ -121,9 +131,48 @@ class PedalApp:
     def _open_help(self):
         if self._help_dialog is None:
             self._help_dialog = HelpDialog(self.root, [
-                ("Overview",       _help_placeholder()),
-                ("Pedal Inputs",   _help_placeholder()),
-                ("Calibration",    _help_placeholder()),
+                ("Pins & Detections", _help_text(
+                    ("Selecting Pins for Button Inputs", "bold"),
+                    ("\n\n", None),
+                    ("Next to each button input which the controller will send, you can manually or automatically choose the GPIO pin to correspond to that button input.", None),
+                    ("Use the dropdown menu to manually choose a GPIO Pin, or use the \"Detect\" button and OCC will attempt to detect you clicking that button on your device automatically and assign the pin in the dropdown.", None),
+                    ("\n\n", None),
+                    ("Reserved Pins & Conflicts", "bold"),
+                    ("\n\n", None),
+                    ("Keep in mind, you generally shouldn't set a pin to be multiple inputs, although it can work if you have a special use case.", None),
+                    ("Some inputs will automatically NOT allow you to duplicate pins for inputs, such as Up and Down not being the same button on your device.", None),
+                )),
+                ("Analog & Digital Inputs", _help_text(
+                    ("Analog vs Digital", "bold"),
+                    ("\n\n", None),
+                    ("A Digital pin input is a simple button press. Digital detection will see if you are pressing a button or not, no inbetween.", None),
+                    ("An Analog input is a variable input, basically. It will detect you NOT pressing anything, fully pressing an input, or the inbetween.", None),
+                    ("\n\n", None),
+                    ("Digital pin input is typically for buttons, Analog pin input is for things like accelerometers, joysticks, or triggers.", None),
+                )),
+                ("Lighting & Effects", _help_text(
+                    ("Controller LEDs are communicated through GPIO 6 and GPIO 7. Tell OCC how many LEDs are in series on those LED pins, and you can individually address each one.", None),
+                    ("\n\n", None),
+                    ("OCC has multiple lighting effects programmed in:", "bold"),
+                    ("\n\n", None),
+                    ("LED Color Loop", "bold"),
+                    ("\n\n", None),
+                    ("Set the starting and ending LED you'd like to loop, and while the controller is on, it will make the LEDs gradually fade into each other's color, looping.", None),
+                    ("\n\n", None),
+                    ("LED Breathe", "bold"),
+                    ("\n\n", None),
+                    ("Set the starting to ending LEDs you'd like to be affected, set their low and high brightness, and while the controller is on, the LEDs will gradually turn their brightness up and back down, looping.", None),
+                    ("\n\n", None),
+                    ("LED Wave", "bold"),
+                    ("\n\n", None),
+                    ("Set the LED origin point and on any pedal press, a ripple of brightness will wave through the LEDs in line from the pre-set origin point.", None),
+                    ("\n\n", None),
+                    ("Reactive LEDs", "bold"),
+                    ("\n\n", None),
+                    ("Rows in the reactive LED grid are Pedal 1 through Pedal 4. Match up in the grid which pedal goes with which LED number. On pedal press, the corresponding LED will get brighter.", None),
+                    ("\n\n", None),
+                    ("Analog inputs do not participate in reactive LED mappings for the pedal configurator.", None),
+                )),
             ])
         self._help_dialog.open()
 
@@ -136,6 +185,10 @@ class PedalApp:
         self._map_combos  = [None] * self.PEDAL_COUNT
         self._det_btns    = [None] * self.PEDAL_COUNT
         self._all_widgets = []
+        self._usb_host_pin_var = tk.IntVar(value=2)
+        self._usb_host_dm_first_var = tk.IntVar(value=0)
+        self._usb_host_pin_combo = None
+        self._usb_host_order_combo = None
 
         # Analog (ADC) input state — 2 slots
         self._adc_pin_vars    = [tk.IntVar(value=-1) for _ in range(2)]
@@ -166,6 +219,33 @@ class PedalApp:
 
         self.debounce_var = tk.IntVar(value=5)
         self.device_name  = tk.StringVar(value="Pedal Controller")
+        self.led_enabled = tk.BooleanVar(value=False)
+        self.led_count = tk.IntVar(value=0)
+        self.led_base_brightness = tk.IntVar(value=5)
+        self.led_colors = [tk.StringVar(value="FFFFFF") for _ in range(MAX_LEDS)]
+        self.led_maps = [tk.IntVar(value=0) for _ in range(len(self.PEDAL_LED_INPUT_INDICES))]
+        self.led_active_br = [tk.IntVar(value=7) for _ in range(len(self.PEDAL_LED_INPUT_INDICES))]
+        self.led_reactive = tk.BooleanVar(value=True)
+        self._led_maps_backup = [0] * len(self.PEDAL_LED_INPUT_INDICES)
+        self.led_loop_enabled = tk.BooleanVar(value=False)
+        self.led_loop_start = tk.IntVar(value=1)
+        self.led_loop_end = tk.IntVar(value=1)
+        self.led_breathe_enabled = tk.BooleanVar(value=False)
+        self.led_breathe_start = tk.IntVar(value=1)
+        self.led_breathe_end = tk.IntVar(value=1)
+        self.led_breathe_min = tk.IntVar(value=1)
+        self.led_breathe_max = tk.IntVar(value=9)
+        self.led_wave_enabled = tk.BooleanVar(value=False)
+        self.led_wave_origin = tk.IntVar(value=1)
+        self.led_loop_speed = tk.IntVar(value=3000)
+        self.led_breathe_speed = tk.IntVar(value=3000)
+        self.led_wave_speed = tk.IntVar(value=800)
+        self._led_widgets = []
+        self._led_sub_cards = []
+        self._led_color_btns = []
+        self._led_map_cbs = {}
+        self._led_map_widgets = []
+        self._led_map_pin_lbls = {}
 
         self.scanning     = False
         self.scan_target  = None
@@ -200,6 +280,18 @@ class PedalApp:
             conn_card, textvariable=self._status_var,
             bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9))
         self._status_lbl.pack(anchor="w", padx=14, pady=(8, 6))
+        tab_bar = tk.Frame(outer, bg=BG_MAIN)
+        tab_bar.pack(fill="x")
+        _TAB_NAMES = ["Pedal Controls", "Lighting"]
+        self._tab_labels = []
+        for _i, _name in enumerate(_TAB_NAMES):
+            _lbl = tk.Label(tab_bar, text=_name, bg=BG_MAIN, fg=TEXT_DIM,
+                            font=(FONT_UI, 10, "bold"), padx=18, pady=10,
+                            cursor="hand2")
+            _lbl.pack(side="left")
+            _lbl.bind("<Button-1>", lambda e, idx=_i: self._switch_tab(idx))
+            self._tab_labels.append(_lbl)
+        tk.Frame(outer, bg=BORDER, height=1).pack(fill="x")
 
         # ── Scrollable content area ──────────────────────────────────
         scroll_outer = tk.Frame(outer, bg=BG_MAIN)
@@ -221,12 +313,22 @@ class PedalApp:
         self._scroll_canvas.pack(side="left", fill="both", expand=True)
         self._scrollbar.pack(side="right", fill="y")
         self._scroll_canvas.bind("<Configure>", self._on_canvas_resize)
+        self._tab_frames = [tk.Frame(self.content, bg=BG_MAIN),
+                            tk.Frame(self.content, bg=BG_MAIN)]
+        self._active_tab = 0
+        self._tab_content = self._tab_frames[0]
 
         # ── Sections ─────────────────────────────────────────────────
         self._make_device_name_section()
+        self._make_usb_host_section()
         self._make_pedal_buttons_section()
         self._make_analog_inputs_section()
         self._make_debounce_section()
+        self._tab_content = self._tab_frames[1]
+        self._make_led_section()
+        self._tab_content = self._tab_frames[0]
+        self._tab_frames[0].pack(fill="both", expand=True)
+        self._update_tab_styling()
 
         # ── Bottom action bar ─────────────────────────────────────────
         bottom = tk.Frame(outer, bg=BG_MAIN)
@@ -254,6 +356,23 @@ class PedalApp:
         self._set_controls_enabled(False)
 
     # ── Scroll helpers ───────────────────────────────────────────────
+
+    def _switch_tab(self, idx):
+        if idx == self._active_tab:
+            return
+        self._tab_frames[self._active_tab].pack_forget()
+        self._tab_frames[idx].pack(fill="both", expand=True)
+        self._active_tab = idx
+        self._tab_content = self._tab_frames[idx]
+        self._scroll_target = None
+        self._scroll_animating = False
+        self._update_tab_styling()
+        self._update_scroll_state()
+
+    def _update_tab_styling(self):
+        for i, lbl in enumerate(self._tab_labels):
+            lbl.config(bg=BG_CARD if i == self._active_tab else BG_MAIN,
+                       fg=TEXT if i == self._active_tab else TEXT_DIM)
 
     def _update_scroll_state(self):
         self._scroll_canvas.update_idletasks()
@@ -311,7 +430,7 @@ class PedalApp:
     # ── Card helper ──────────────────────────────────────────────────
 
     def _make_card(self):
-        card = tk.Frame(self.content, bg=BG_CARD,
+        card = tk.Frame(self._tab_content, bg=BG_CARD,
                         highlightbackground=BORDER, highlightthickness=1)
         card.pack(fill="x", pady=(0, 6), padx=2)
         return card
@@ -349,6 +468,117 @@ class PedalApp:
 
     # ── Section: Pedal Button Mapping ────────────────────────────────
 
+    def _current_usb_host_reserved_pins(self, host_pin=None):
+        if host_pin is None:
+            host_pin = self._usb_host_pin_var.get()
+        if host_pin not in self.USB_HOST_START_PINS:
+            return set()
+        return {host_pin, host_pin + 1}
+
+    def _validate_usb_host_conflicts(self, host_pin=None, cfg=None):
+        if cfg is not None:
+            try:
+                host_pin = int(cfg.get("usb_host_pin", self._usb_host_pin_var.get()))
+            except (TypeError, ValueError):
+                return "USB host pair start pin must be a valid GPIO pair."
+            try:
+                dm_first = int(cfg.get("usb_host_dm_first", self._usb_host_dm_first_var.get()))
+            except (TypeError, ValueError):
+                return "USB host pin order must be 0 or 1."
+            if dm_first not in (0, 1):
+                return "USB host pin order must be 0 or 1."
+            try:
+                pedal_pins = [int(cfg.get(f"pedal{i}", self._pin_vars[i].get()))
+                              for i in range(self.PEDAL_COUNT)]
+                adc_pins = [int(cfg.get(f"adc{i}", self._adc_pin_vars[i].get()))
+                            for i in range(2)]
+                leds_enabled = int(cfg.get("led_enabled", 1 if self.led_enabled.get() else 0)) != 0
+            except (TypeError, ValueError):
+                return "One or more assigned GPIO pins are invalid."
+        else:
+            if host_pin is None:
+                host_pin = self._usb_host_pin_var.get()
+            pedal_pins = [v.get() for v in self._pin_vars]
+            adc_pins = [v.get() for v in self._adc_pin_vars]
+            leds_enabled = self.led_enabled.get()
+
+        if host_pin not in self.USB_HOST_START_PINS:
+            return "USB host pair must use a valid consecutive GPIO pair."
+
+        reserved = self._current_usb_host_reserved_pins(host_pin)
+        if leds_enabled and (reserved & self.LED_SPI_PINS):
+            pins_txt = ", ".join(f"GPIO {pin}" for pin in sorted(reserved & self.LED_SPI_PINS))
+            return f"LEDs use GP6 and GP7. Choose a different USB host pair because it overlaps {pins_txt}."
+        for idx, pin in enumerate(pedal_pins):
+            if pin in reserved:
+                return f"Pedal {idx + 1} uses GPIO {pin}, which is reserved for the USB host port."
+            if leds_enabled and pin in self.LED_SPI_PINS:
+                return f"Pedal {idx + 1} uses GPIO {pin}, which is reserved for LEDs when lighting is enabled."
+        for idx, pin in enumerate(adc_pins):
+            if pin in reserved:
+                return f"Analog {idx + 1} uses GPIO {pin}, which is reserved for the USB host port."
+        return None
+
+    def _show_usb_host_conflict(self, message):
+        messagebox.showwarning("USB Host Pin Conflict", message)
+
+    def _make_usb_host_section(self):
+        card = self._make_card()
+        inner = tk.Frame(card, bg=BG_CARD)
+        inner.pack(fill="x", padx=12, pady=10)
+
+        tk.Label(inner, text="USB HOST PORT", bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="w")
+        tk.Label(inner,
+                 text="Select the consecutive GPIO pair used by the pedal USB host port, "
+                      "then choose whether D+ or D- is wired to the first pin in that pair.",
+                 bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8), wraplength=820,
+                 justify="left", anchor="w").pack(fill="x", pady=(0, 8))
+
+        row = tk.Frame(inner, bg=BG_CARD)
+        row.pack(fill="x")
+
+        tk.Label(row, text="Pair:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        pin_combo = CustomDropdown(row, state="readonly", width=18,
+                                   values=self.USB_HOST_START_LABELS)
+        pin_combo.current(self.USB_HOST_START_PINS.index(2))
+        pin_combo.pack(side="left", padx=(0, 12))
+        pin_combo.bind("<<ComboboxSelected>>", self._on_usb_host_pin_combo)
+        self._usb_host_pin_combo = pin_combo
+        self._all_widgets.append(pin_combo)
+
+        tk.Label(row, text="Order:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        order_combo = CustomDropdown(row, state="readonly", width=30,
+                                     values=self.USB_HOST_ORDER_LABELS)
+        order_combo.current(0)
+        order_combo.pack(side="left")
+        order_combo.bind("<<ComboboxSelected>>", self._on_usb_host_order_combo)
+        self._usb_host_order_combo = order_combo
+        self._all_widgets.append(order_combo)
+
+    def _on_usb_host_pin_combo(self, _event=None):
+        combo = self._usb_host_pin_combo
+        if combo is None or combo.current() < 0:
+            return
+        new_pin = self.USB_HOST_START_PINS[combo.current()]
+        error = self._validate_usb_host_conflicts(host_pin=new_pin)
+        if error:
+            current_pin = self._usb_host_pin_var.get()
+            if current_pin in self.USB_HOST_START_PINS:
+                combo.current(self.USB_HOST_START_PINS.index(current_pin))
+            self._show_usb_host_conflict(error)
+            return
+        self._usb_host_pin_var.set(new_pin)
+
+    def _on_usb_host_order_combo(self, _event=None):
+        combo = self._usb_host_order_combo
+        if combo is None or combo.current() < 0:
+            return
+        self._usb_host_dm_first_var.set(combo.current())
+
     def _make_pedal_buttons_section(self):
         card = self._make_card()
         inner = tk.Frame(card, bg=BG_CARD)
@@ -373,7 +603,7 @@ class PedalApp:
         tk.Label(hdr, text="Maps to Button", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 7, "bold"), anchor="w").pack(side="left")
 
-        DEFAULT_PINS = [2, 3, 4, 5]
+        DEFAULT_PINS = [4, 5, 6, 7]
         DEFAULT_MAPS = [0, 1, 2, 3]  # Green, Red, Yellow, Blue
 
         for i in range(self.PEDAL_COUNT):
@@ -422,7 +652,26 @@ class PedalApp:
         self._all_widgets.append(map_combo)
 
     def _on_pin_combo(self, idx, combo):
-        self._pin_vars[idx].set(DIGITAL_PINS[combo.current()])
+        pin = DIGITAL_PINS[combo.current()]
+        if pin in self._current_usb_host_reserved_pins():
+            current_pin = self._pin_vars[idx].get()
+            if current_pin in DIGITAL_PINS:
+                combo.current(DIGITAL_PINS.index(current_pin))
+            self._show_usb_host_conflict(
+                f"GPIO {pin} is reserved for the USB host port. "
+                f"Choose a different pin for Pedal {idx + 1}."
+            )
+            return
+        if self.led_enabled.get() and pin in self.LED_SPI_PINS:
+            current_pin = self._pin_vars[idx].get()
+            if current_pin in DIGITAL_PINS:
+                combo.current(DIGITAL_PINS.index(current_pin))
+            self._show_usb_host_conflict(
+                f"GPIO {pin} is reserved for the LED strip when lighting is enabled. "
+                f"Choose a different pin for Pedal {idx + 1}."
+            )
+            return
+        self._pin_vars[idx].set(pin)
 
     def _on_map_combo(self, idx, combo):
         self._map_vars[idx].set(combo.current())
@@ -748,7 +997,17 @@ class PedalApp:
         self._all_widgets.append(reset_btn)
 
     def _on_adc_pin_combo(self, idx, combo):
-        self._adc_pin_vars[idx].set(self.ADC_PINS[combo.current()])
+        pin = self.ADC_PINS[combo.current()]
+        if pin in self._current_usb_host_reserved_pins():
+            current_pin = self._adc_pin_vars[idx].get()
+            if current_pin in self.ADC_PINS:
+                combo.current(self.ADC_PINS.index(current_pin))
+            self._show_usb_host_conflict(
+                f"GPIO {pin} is reserved for the USB host port. "
+                f"Choose a different pin for Analog {idx + 1}."
+            )
+            return
+        self._adc_pin_vars[idx].set(pin)
 
     def _on_adc_axis_combo(self, idx, combo):
         self._adc_axis_vars[idx].set(combo.current())
@@ -901,6 +1160,523 @@ class PedalApp:
 
     # ── Enable/disable all controls ───────────────────────────────────
 
+    def _make_sub_collapsible(self, parent, title, collapsed=True):
+        card = tk.Frame(parent, bg=BG_CARD, highlightbackground=BORDER, highlightthickness=1)
+        card.pack(fill="x", pady=(2, 2))
+        header = tk.Frame(card, bg=BG_CARD, cursor="hand2")
+        header.pack(fill="x", padx=10, pady=(6, 0))
+        arrow_var = tk.StringVar(value="\u25b6" if collapsed else "\u25bc")
+        arrow_lbl = tk.Label(header, textvariable=arrow_var, bg=BG_CARD, fg=ACCENT_BLUE,
+                             font=(FONT_UI, 8, "bold"))
+        arrow_lbl.pack(side="left", padx=(0, 5))
+        title_lbl = tk.Label(header, text=title, bg=BG_CARD, fg=ACCENT_BLUE,
+                             font=(FONT_UI, 8, "bold"), cursor="hand2")
+        title_lbl.pack(side="left")
+        sep = tk.Frame(card, bg=BORDER, height=1)
+        body = tk.Frame(card, bg=BG_CARD)
+        _open = [not collapsed]
+
+        def _toggle(_event=None):
+            if _open[0]:
+                body.pack_forget()
+                sep.pack_forget()
+                arrow_var.set("\u25b6")
+            else:
+                sep.pack(fill="x", padx=10, pady=(4, 0))
+                body.pack(fill="x", padx=10, pady=(6, 8))
+                arrow_var.set("\u25bc")
+            _open[0] = not _open[0]
+            self._update_scroll_state()
+
+        if not collapsed:
+            sep.pack(fill="x", padx=10, pady=(4, 0))
+            body.pack(fill="x", padx=10, pady=(6, 8))
+
+        for widget in (header, arrow_lbl, title_lbl):
+            widget.bind("<Button-1>", _toggle)
+
+        return card, body
+
+    def _make_led_section(self):
+        card = self._make_card()
+        inner = tk.Frame(card, bg=BG_CARD)
+        inner.pack(fill="x", padx=12, pady=10)
+        tk.Label(inner, text="LED STRIP  (APA102 / SK9822 / Dotstar)",
+                 bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="w", pady=(0, 4))
+        tk.Label(inner,
+                 text="Wire SCK (CI) -> GP6, MOSI (DI) -> GP7. Chain LEDs in series. "
+                      "VCC -> VBUS (5V), GND -> GND. "
+                      "WARNING: GP6 and GP7 are reserved for LEDs when enabled. "
+                      "Reactive LED mappings are available for Pedal 1-4 only; analog inputs do not trigger LED reactions.",
+                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8), wraplength=820,
+                 justify="left", anchor="w").pack(fill="x", pady=(0, 6))
+
+        top = tk.Frame(inner, bg=BG_CARD)
+        top.pack(fill="x", pady=2)
+        en_cb = ttk.Checkbutton(top, text="Enable LEDs", variable=self.led_enabled,
+                                command=self._on_led_toggle)
+        en_cb.pack(side="left", padx=(0, 14))
+        self._all_widgets.append(en_cb)
+        tk.Label(top, text="Count:", bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        cnt_wrap = tk.Frame(top, bg=BG_CARD, width=52, height=22)
+        cnt_wrap.pack(side="left", padx=(0, 12))
+        cnt_wrap.pack_propagate(False)
+        cnt_sp = ttk.Spinbox(cnt_wrap, from_=1, to=MAX_LEDS, width=4, textvariable=self.led_count,
+                             command=self._on_led_count_change)
+        cnt_sp.pack(fill="both", expand=True)
+        cnt_sp.bind("<Return>", lambda _e: self._on_led_count_change())
+        cnt_sp.bind("<FocusOut>", lambda _e: self._on_led_count_change())
+        self._all_widgets.append(cnt_sp)
+        self._led_widgets.append(cnt_sp)
+        tk.Label(top, text=f"(max {MAX_LEDS})", bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left", padx=(0, 10))
+        tk.Label(top, text="Base brightness:", bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        _bvcmd = (self.root.register(lambda P: P == "" or (P.isdigit() and 0 <= int(P) <= 9)), '%P')
+        br_wrap = tk.Frame(top, bg=BG_CARD, width=52, height=22)
+        br_wrap.pack(side="left")
+        br_wrap.pack_propagate(False)
+        br_sp = ttk.Spinbox(br_wrap, from_=0, to=9, width=4, textvariable=self.led_base_brightness,
+                            validate="key", validatecommand=_bvcmd)
+        br_sp.pack(fill="both", expand=True)
+        self._all_widgets.append(br_sp)
+        self._led_widgets.append(br_sp)
+        tk.Label(top, text="(0=off, 9=max)", bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left", padx=(4, 0))
+
+        self._led_colors_frame = tk.Frame(inner, bg=BG_CARD)
+        self._led_colors_frame.pack(fill="x", pady=(6, 0))
+        self._led_widgets.append(self._led_colors_frame)
+        self._rebuild_led_color_grid()
+
+        loop_card, loop_body = self._make_sub_collapsible(inner, "LED COLOR LOOP", collapsed=True)
+        self._led_sub_cards.append(loop_card)
+        lc_left = tk.Frame(loop_body, bg=BG_CARD)
+        lc_left.pack(side="left", fill="y", padx=(0, 20))
+        lc_right = tk.Frame(loop_body, bg=BG_CARD)
+        lc_right.pack(side="left")
+        loop_cb = ttk.Checkbutton(lc_left, text="Enable LED Color Loop",
+                                  variable=self.led_loop_enabled)
+        loop_cb.pack(anchor="w", pady=(0, 4))
+        self._all_widgets.append(loop_cb)
+        tk.Label(lc_left, text="Effect Range", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="w").pack(anchor="w", pady=(4, 1))
+        loop_range_row = tk.Frame(lc_left, bg=BG_CARD)
+        loop_range_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(loop_range_row, text="From LED:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        loop_start_sp = ttk.Spinbox(loop_range_row, from_=1, to=MAX_LEDS, width=4,
+                                    textvariable=self.led_loop_start)
+        loop_start_sp.pack(side="left", padx=(0, 8))
+        self._all_widgets.append(loop_start_sp)
+        tk.Label(loop_range_row, text="To LED:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        loop_end_sp = ttk.Spinbox(loop_range_row, from_=1, to=MAX_LEDS, width=4,
+                                  textvariable=self.led_loop_end)
+        loop_end_sp.pack(side="left")
+        self._all_widgets.append(loop_end_sp)
+        tk.Label(lc_right, text="Effect Speed", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="center").pack(pady=(4, 1))
+        loop_speed_sl = SpeedSlider(lc_right, self.led_loop_speed,
+                                    notch_ms=[9999, 5000, 3000, 1000, 100])
+        loop_speed_sl.pack()
+        self._all_widgets.append(loop_speed_sl)
+
+        breathe_card, breathe_body = self._make_sub_collapsible(inner, "LED BREATHE", collapsed=True)
+        self._led_sub_cards.append(breathe_card)
+        br_left = tk.Frame(breathe_body, bg=BG_CARD)
+        br_left.pack(side="left", fill="y", padx=(0, 20))
+        br_right = tk.Frame(breathe_body, bg=BG_CARD)
+        br_right.pack(side="left")
+        breathe_cb = ttk.Checkbutton(br_left, text="Enable LED Breathe",
+                                     variable=self.led_breathe_enabled,
+                                     command=lambda: self.led_wave_enabled.set(False) if self.led_breathe_enabled.get() else None)
+        breathe_cb.pack(anchor="w", pady=(0, 4))
+        self._all_widgets.append(breathe_cb)
+        tk.Label(br_left, text="Effect Range", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="w").pack(anchor="w", pady=(4, 1))
+        breathe_range_row = tk.Frame(br_left, bg=BG_CARD)
+        breathe_range_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(breathe_range_row, text="From LED:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        breathe_start_sp = ttk.Spinbox(breathe_range_row, from_=1, to=MAX_LEDS, width=4,
+                                       textvariable=self.led_breathe_start)
+        breathe_start_sp.pack(side="left", padx=(0, 8))
+        self._all_widgets.append(breathe_start_sp)
+        tk.Label(breathe_range_row, text="To LED:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        breathe_end_sp = ttk.Spinbox(breathe_range_row, from_=1, to=MAX_LEDS, width=4,
+                                     textvariable=self.led_breathe_end)
+        breathe_end_sp.pack(side="left")
+        self._all_widgets.append(breathe_end_sp)
+        tk.Label(br_left, text="Effect Brightness", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="w").pack(anchor="w", pady=(4, 1))
+        breathe_bright_row = tk.Frame(br_left, bg=BG_CARD)
+        breathe_bright_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(breathe_bright_row, text="Min:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        breathe_min_sp = ttk.Spinbox(breathe_bright_row, from_=0, to=9, width=4,
+                                     textvariable=self.led_breathe_min,
+                                     validate="key", validatecommand=_bvcmd)
+        breathe_min_sp.pack(side="left", padx=(0, 8))
+        self._all_widgets.append(breathe_min_sp)
+        tk.Label(breathe_bright_row, text="Max:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        breathe_max_sp = ttk.Spinbox(breathe_bright_row, from_=0, to=9, width=4,
+                                     textvariable=self.led_breathe_max,
+                                     validate="key", validatecommand=_bvcmd)
+        breathe_max_sp.pack(side="left")
+        self._all_widgets.append(breathe_max_sp)
+        tk.Label(br_right, text="Effect Speed", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="center").pack(pady=(4, 1))
+        breathe_speed_sl = SpeedSlider(br_right, self.led_breathe_speed,
+                                       notch_ms=[9999, 5000, 3000, 1000, 100])
+        breathe_speed_sl.pack()
+        self._all_widgets.append(breathe_speed_sl)
+
+        wave_card, wave_body = self._make_sub_collapsible(inner, "LED RIPPLE", collapsed=True)
+        self._led_sub_cards.append(wave_card)
+        wv_left = tk.Frame(wave_body, bg=BG_CARD)
+        wv_left.pack(side="left", fill="y", padx=(0, 20))
+        wv_right = tk.Frame(wave_body, bg=BG_CARD)
+        wv_right.pack(side="left")
+        wave_cb = ttk.Checkbutton(wv_left, text="Enable LED Ripple",
+                                  variable=self.led_wave_enabled,
+                                  command=lambda: self.led_breathe_enabled.set(False) if self.led_wave_enabled.get() else None)
+        wave_cb.pack(anchor="w", pady=(0, 4))
+        self._all_widgets.append(wave_cb)
+        wave_origin_row = tk.Frame(wv_left, bg=BG_CARD)
+        wave_origin_row.pack(anchor="w", pady=(0, 4))
+        tk.Label(wave_origin_row, text="Origin LED:", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        wave_origin_sp = ttk.Spinbox(wave_origin_row, from_=1, to=MAX_LEDS, width=4,
+                                     textvariable=self.led_wave_origin)
+        wave_origin_sp.pack(side="left")
+        self._all_widgets.append(wave_origin_sp)
+        tk.Label(wv_right, text="Effect Speed", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7), anchor="center").pack(pady=(4, 1))
+        wave_speed_sl = SpeedSlider(wv_right, self.led_wave_speed,
+                                    notch_ms=[9999, 2500, 800, 250, 100])
+        wave_speed_sl.pack()
+        self._all_widgets.append(wave_speed_sl)
+
+        react_card, react_body = self._make_sub_collapsible(inner, "REACTIVE LED ON KEYPRESS", collapsed=False)
+        self._led_sub_cards.append(react_card)
+        react_cb = ttk.Checkbutton(react_body, text="Reactive LEDs on keypress",
+                                   variable=self.led_reactive, command=self._on_reactive_toggle)
+        react_cb.pack(anchor="w", pady=(0, 4))
+        self._all_widgets.append(react_cb)
+        react_info = tk.Label(
+            react_body,
+            text="Input -> LED Mapping  (Pedal 1-4 only. Analog inputs do not trigger LED reactions.)",
+            bg=BG_CARD, fg=TEXT, font=(FONT_UI, 8, "bold"), anchor="w")
+        react_info.pack(fill="x", pady=(0, 4))
+        self._led_map_widgets.append(react_info)
+        self._led_map_frame = tk.Frame(react_body, bg=BG_CARD)
+        self._led_map_frame.pack(fill="x")
+        self._led_map_widgets.append(self._led_map_frame)
+        self._rebuild_led_map_grid()
+        self._on_led_toggle()
+
+    def _on_led_toggle(self):
+        show = self.led_enabled.get()
+        for w in self._led_widgets:
+            if show:
+                if not w.winfo_ismapped():
+                    w.pack(fill="x")
+            else:
+                w.pack_forget()
+        for card in self._led_sub_cards:
+            if show:
+                if not card.winfo_ismapped():
+                    card.pack(fill="x", pady=(2, 2))
+            else:
+                card.pack_forget()
+        if show:
+            self._led_colors_frame.pack(fill="x", pady=(6, 0))
+            self._rebuild_led_color_grid()
+            self._rebuild_led_map_grid()
+            self._on_reactive_toggle()
+            error = self._validate_usb_host_conflicts()
+            if error:
+                self._set_status(f"   {error}", ACCENT_ORANGE)
+
+    def _on_reactive_toggle(self):
+        reactive = self.led_reactive.get()
+        if not reactive:
+            for i in range(len(self.PEDAL_LED_INPUT_INDICES)):
+                cur = self.led_maps[i].get()
+                if cur != 0:
+                    self._led_maps_backup[i] = cur
+                self.led_maps[i].set(0)
+        else:
+            for i in range(len(self.PEDAL_LED_INPUT_INDICES)):
+                if self.led_maps[i].get() == 0 and self._led_maps_backup[i] != 0:
+                    self.led_maps[i].set(self._led_maps_backup[i])
+        for w in self._led_map_widgets:
+            if reactive:
+                if not w.winfo_ismapped():
+                    w.pack(fill="x")
+            else:
+                if w.winfo_ismapped():
+                    w.pack_forget()
+        if reactive and self.led_enabled.get():
+            self._rebuild_led_map_grid()
+
+    def _on_led_count_change(self):
+        count = self.led_count.get()
+        if count > MAX_LEDS:
+            self.led_count.set(MAX_LEDS)
+        elif count < 1:
+            self.led_count.set(1)
+        self._rebuild_led_color_grid()
+        if self.led_reactive.get():
+            self._rebuild_led_map_grid()
+
+    def _rebuild_led_color_grid(self):
+        for w in self._led_colors_frame.winfo_children():
+            w.destroy()
+        self._led_color_btns = []
+        count = self.led_count.get()
+        if count < 1:
+            return
+        tk.Label(self._led_colors_frame,
+                 text="LED Colors  (click swatch to change, Identify flashes the physical LED):",
+                 bg=BG_CARD, fg=TEXT, font=(FONT_UI, 8, "bold")).pack(anchor="w", pady=(0, 3))
+        grid = tk.Frame(self._led_colors_frame, bg=BG_CARD)
+        grid.pack(fill="x")
+        for i in range(min(count, MAX_LEDS)):
+            col = i % 4
+            row_num = i // 4
+            cell = tk.Frame(grid, bg=BG_CARD)
+            cell.grid(row=row_num, column=col, padx=4, pady=3, sticky="w")
+            tk.Label(cell, text=f"LED {i+1}", bg=BG_CARD, fg=TEXT_DIM,
+                     font=(FONT_UI, 7), width=5).pack(side="left")
+            color_hex = self.led_colors[i].get().strip().upper()
+            try:
+                display_color = f"#{color_hex}"
+                int(color_hex, 16)
+            except Exception:
+                display_color = "#FFFFFF"
+            swatch = tk.Canvas(cell, width=22, height=22, bg=BG_CARD,
+                               highlightthickness=1, highlightbackground=BORDER, bd=0)
+            swatch.create_rectangle(2, 2, 20, 20, fill=display_color, outline=display_color, tags="fill")
+            swatch.pack(side="left", padx=(2, 4))
+            swatch.bind("<Button-1>", lambda _e, idx=i: self._pick_led_color(idx))
+            self._led_color_btns.append(swatch)
+            id_btn = ttk.Button(cell, text="Identify", style="Det.TButton", width=7,
+                                command=lambda idx=i: self._identify_led(idx))
+            id_btn.pack(side="left")
+            self._all_widgets.append(id_btn)
+
+    def _rebuild_led_map_grid(self):
+        for w in self._led_map_frame.winfo_children():
+            w.destroy()
+        self._led_map_cbs = {}
+        self._led_map_pin_lbls = {}
+        count = self.led_count.get()
+        if count < 1:
+            return
+        grid = tk.Frame(self._led_map_frame, bg=BG_CARD)
+        grid.pack(fill="x")
+        led_col_start = 2
+        bright_col = led_col_start + min(count, MAX_LEDS)
+        tk.Label(grid, text="Input", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7, "bold"), anchor="w").grid(row=0, column=0, sticky="w", padx=(0, 2))
+        tk.Label(grid, text="Pin", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7, "bold"), anchor="w").grid(row=0, column=1, sticky="w", padx=(0, 4))
+        for j in range(min(count, MAX_LEDS)):
+            color_hex = self.led_colors[j].get().strip().upper()
+            if len(color_hex) != 6:
+                color_hex = "FFFFFF"
+            try:
+                bg_color = f"#{color_hex}"
+                int(color_hex, 16)
+            except Exception:
+                bg_color = "#FFFFFF"
+                color_hex = "FFFFFF"
+            fg_color = self._text_color_for_bg(color_hex)
+            tk.Label(grid, text=f" {j + 1} ", bg=bg_color, fg=fg_color,
+                     font=(FONT_UI, 7, "bold"), relief="flat", bd=0, padx=1, pady=0).grid(
+                         row=0, column=led_col_start + j, padx=1, pady=(0, 3))
+        tk.Label(grid, text="Bright", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 7, "bold")).grid(row=0, column=bright_col, padx=(6, 0))
+        _bvcmd = (self.root.register(lambda P: P == "" or (P.isdigit() and 0 <= int(P) <= 9)), '%P')
+        for inp_idx, label in enumerate(PEDAL_LED_INPUT_LABELS):
+            grid_row = inp_idx + 1
+            tk.Label(grid, text=label, bg=BG_CARD, fg=TEXT,
+                     font=(FONT_UI, 7), anchor="w").grid(row=grid_row, column=0, sticky="w", padx=(0, 2), pady=1)
+            pin_lbl = tk.Label(grid, text=str(self._pin_vars[inp_idx].get()), bg=BG_INPUT, fg=TEXT_DIM,
+                               font=("Consolas", 7), width=4, anchor="center", relief="flat", bd=0)
+            pin_lbl.grid(row=grid_row, column=1, padx=(0, 4), pady=1)
+            self._led_map_pin_lbls[inp_idx] = pin_lbl
+            cb_vars = []
+            current_mask = self.led_maps[inp_idx].get()
+            for j in range(min(count, MAX_LEDS)):
+                var = tk.BooleanVar(value=bool(current_mask & (1 << j)))
+                cb = ttk.Checkbutton(grid, variable=var,
+                                     command=lambda i=inp_idx: self._update_led_map(i))
+                cb.grid(row=grid_row, column=led_col_start + j, padx=0, pady=1)
+                self._all_widgets.append(cb)
+                cb_vars.append(var)
+            self._led_map_cbs[inp_idx] = cb_vars
+            br_sp = ttk.Spinbox(grid, from_=0, to=9, width=3,
+                                textvariable=self.led_active_br[inp_idx],
+                                validate="key", validatecommand=_bvcmd)
+            br_sp.grid(row=grid_row, column=bright_col, padx=(6, 0), pady=1)
+            self._all_widgets.append(br_sp)
+        self._schedule_pin_label_refresh()
+
+    def _identify_led(self, led_idx):
+        if not self.pico.connected:
+            return
+        try:
+            self.pico.led_flash(led_idx)
+        except Exception as exc:
+            messagebox.showerror("LED Flash", str(exc))
+
+    def _pick_led_color(self, led_idx):
+        dlg = tk.Toplevel(self.root)
+        dlg.title(f"LED #{led_idx+1} Color")
+        dlg.configure(bg=BG_CARD)
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+        f = tk.Frame(dlg, bg=BG_CARD)
+        f.pack(fill="both", expand=True, padx=16, pady=12)
+        tk.Label(f, text=f"Color for LED #{led_idx+1}", bg=BG_CARD, fg=TEXT_HEADER,
+                 font=(FONT_UI, 11, "bold")).pack(pady=(0, 8))
+        cur_hex = self.led_colors[led_idx].get().strip().upper()
+        try:
+            cr = int(cur_hex[0:2], 16)
+            cg = int(cur_hex[2:4], 16)
+            cb = int(cur_hex[4:6], 16)
+        except Exception:
+            cr, cg, cb = 255, 255, 255
+        r_var = tk.IntVar(value=cr)
+        g_var = tk.IntVar(value=cg)
+        b_var = tk.IntVar(value=cb)
+        preview = tk.Canvas(f, width=80, height=50, bg=BG_CARD,
+                            highlightthickness=1, highlightbackground=BORDER, bd=0)
+        preview.create_rectangle(2, 2, 78, 48, fill=f"#{cur_hex}", outline=f"#{cur_hex}", tags="fill")
+        preview.pack(pady=(0, 10))
+        hex_lbl = tk.Label(f, text=f"#{cur_hex}", bg=BG_CARD, fg=TEXT_DIM,
+                           font=("Consolas", 9))
+        hex_lbl.pack(pady=(0, 6))
+        def update_preview(*_args):
+            rv = max(0, min(255, r_var.get()))
+            gv = max(0, min(255, g_var.get()))
+            bv = max(0, min(255, b_var.get()))
+            h = f"#{rv:02X}{gv:02X}{bv:02X}"
+            preview.itemconfig("fill", fill=h, outline=h)
+            hex_lbl.config(text=h)
+        preset_colors = [
+            ("Green", "00FF00"), ("Red", "FF0000"), ("Yellow", "FFFF00"),
+            ("Blue", "0000FF"), ("Orange", "FF4600"), ("Purple", "FF00FF"),
+            ("Cyan", "00FFFF"), ("White", "FFFFFF"),
+        ]
+        tk.Label(f, text="Presets:", bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8)).pack(anchor="w", pady=(0, 4))
+        swatch_row = tk.Frame(f, bg=BG_CARD)
+        swatch_row.pack(anchor="w", pady=(0, 8))
+        def _apply_preset(hex_rgb):
+            r_var.set(int(hex_rgb[0:2], 16))
+            g_var.set(int(hex_rgb[2:4], 16))
+            b_var.set(int(hex_rgb[4:6], 16))
+            update_preview()
+        for name, hex_rgb in preset_colors:
+            display = f"#{hex_rgb}"
+            rc2, gc2, bc2 = int(hex_rgb[0:2], 16), int(hex_rgb[2:4], 16), int(hex_rgb[4:6], 16)
+            lum = 0.2126 * rc2 + 0.7152 * gc2 + 0.0722 * bc2
+            fg_text = "#000000" if lum > 100 else "#FFFFFF"
+            sw = tk.Canvas(swatch_row, width=32, height=32, bg=BG_CARD,
+                           highlightthickness=1, highlightbackground=BORDER, cursor="hand2", bd=0)
+            sw.create_rectangle(1, 1, 31, 31, fill=display, outline=display, tags="fill")
+            sw.create_text(16, 22, text=name[:3], fill=fg_text, font=(FONT_UI, 6, "bold"), tags="lbl")
+            sw.pack(side="left", padx=(0, 4))
+            sw.bind("<Button-1>", lambda _e, h=hex_rgb: _apply_preset(h))
+            sw.bind("<Enter>", lambda _e, canvas=sw: canvas.config(highlightbackground=ACCENT_BLUE, highlightthickness=2))
+            sw.bind("<Leave>", lambda _e, canvas=sw: canvas.config(highlightbackground=BORDER, highlightthickness=1))
+        tk.Frame(f, bg=BORDER, height=1).pack(fill="x", pady=(0, 8))
+        for label_text, var, accent in [("Red", r_var, "#e74c3c"),
+                                        ("Green", g_var, "#2ecc71"),
+                                        ("Blue", b_var, "#3498db")]:
+            row = tk.Frame(f, bg=BG_CARD)
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=label_text, bg=BG_CARD, fg=accent,
+                     width=6, font=(FONT_UI, 8, "bold"), anchor="w").pack(side="left")
+            tk.Scale(row, from_=0, to=255, orient="horizontal", variable=var,
+                     bg=BG_CARD, fg=TEXT, troughcolor=accent, highlightthickness=0,
+                     bd=2, sliderrelief="raised", relief="flat", activebackground=BG_INPUT,
+                     length=180, showvalue=False, command=lambda _v: update_preview()).pack(side="left", padx=(4, 4))
+            tk.Label(row, textvariable=var, bg=BG_CARD, fg=TEXT,
+                     font=("Consolas", 9), width=4).pack(side="left")
+        def apply():
+            rv = max(0, min(255, r_var.get()))
+            gv = max(0, min(255, g_var.get()))
+            bv = max(0, min(255, b_var.get()))
+            self.led_colors[led_idx].set(f"{rv:02X}{gv:02X}{bv:02X}")
+            self._rebuild_led_color_grid()
+            if self.led_reactive.get():
+                self._rebuild_led_map_grid()
+            dlg.destroy()
+        btn_row = tk.Frame(f, bg=BG_CARD)
+        btn_row.pack(pady=(10, 0))
+        RoundedButton(btn_row, text="Apply", command=apply,
+                      bg_color=ACCENT_BLUE, btn_width=80, btn_height=28,
+                      btn_font=(FONT_UI, 8, "bold")).pack(side="left", padx=(0, 8))
+        RoundedButton(btn_row, text="Cancel", command=dlg.destroy,
+                      bg_color="#555560", btn_width=80, btn_height=28,
+                      btn_font=(FONT_UI, 8, "bold")).pack(side="left")
+        _center_window(dlg, self.root)
+        dlg.grab_set()
+        dlg.wait_window()
+
+    @staticmethod
+    def _text_color_for_bg(hex_rgb):
+        try:
+            r = int(hex_rgb[0:2], 16)
+            g = int(hex_rgb[2:4], 16)
+            b = int(hex_rgb[4:6], 16)
+        except Exception:
+            return "#FFFFFF"
+        lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return "#000000" if lum > 140 else "#FFFFFF"
+
+    def _update_led_map(self, inp_idx):
+        if inp_idx not in self._led_map_cbs:
+            return
+        mask = 0
+        for j, var in enumerate(self._led_map_cbs[inp_idx]):
+            if var.get():
+                mask |= (1 << j)
+        self.led_maps[inp_idx].set(mask)
+
+    def _schedule_pin_label_refresh(self):
+        if not hasattr(self, '_led_map_pin_lbls') or not self._led_map_pin_lbls:
+            return
+        if not self.led_enabled.get() or not self.led_reactive.get():
+            return
+        for inp_idx, lbl in self._led_map_pin_lbls.items():
+            try:
+                if lbl.winfo_exists():
+                    lbl.config(text=str(self._pin_vars[inp_idx].get()))
+            except tk.TclError:
+                pass
+        self.root.after(500, self._schedule_pin_label_refresh)
+
+    @staticmethod
+    def _brightness_to_hw(user_val):
+        user_val = max(0, min(9, int(user_val)))
+        table = [0, 1, 2, 3, 5, 7, 11, 16, 23, 31]
+        return table[user_val]
+
+    @staticmethod
+    def _brightness_from_hw(hw_val):
+        hw_val = max(0, min(31, int(hw_val)))
+        table = [0, 1, 2, 3, 5, 7, 11, 16, 23, 31]
+        best = 0
+        for i, v in enumerate(table):
+            if abs(v - hw_val) <= abs(table[best] - hw_val):
+                best = i
+        return best
+
     def _set_controls_enabled(self, enabled):
         state = "normal" if enabled else "disabled"
         for w in self._all_widgets:
@@ -916,12 +1692,22 @@ class PedalApp:
 
     # ── Config load ───────────────────────────────────────────────────
 
-    def _load_config(self):
-        try:
-            cfg = self.pico.get_config()
-        except Exception as exc:
-            messagebox.showerror("Error", f"Failed to read config: {exc}")
-            return
+    def _load_config(self, cfg=None):
+        if cfg is None:
+            try:
+                cfg = self.pico.get_config()
+            except Exception as exc:
+                messagebox.showerror("Error", f"Failed to read config: {exc}")
+                return
+
+        host_pin = int(cfg.get("usb_host_pin", self._usb_host_pin_var.get()))
+        dm_first = int(cfg.get("usb_host_dm_first", self._usb_host_dm_first_var.get()))
+        self._usb_host_pin_var.set(host_pin)
+        self._usb_host_dm_first_var.set(dm_first)
+        if host_pin in self.USB_HOST_START_PINS and self._usb_host_pin_combo is not None:
+            self._usb_host_pin_combo.current(self.USB_HOST_START_PINS.index(host_pin))
+        if dm_first in (0, 1) and self._usb_host_order_combo is not None:
+            self._usb_host_order_combo.current(dm_first)
 
         for i in range(self.PEDAL_COUNT):
             pin_key = f"pedal{i}"
@@ -967,9 +1753,75 @@ class PedalApp:
             if max_key in cfg:
                 self._adc_max_vars[i].set(int(cfg[max_key]))
 
+        if "led_enabled" in cfg:
+            self.led_enabled.set(int(cfg["led_enabled"]) != 0)
+        if "led_count" in cfg:
+            self.led_count.set(int(cfg["led_count"]))
+        if "led_brightness" in cfg:
+            self.led_base_brightness.set(self._brightness_from_hw(int(cfg["led_brightness"])))
+        if "led_loop_enabled" in cfg:
+            self.led_loop_enabled.set(int(cfg["led_loop_enabled"]) != 0)
+        if "led_loop_start" in cfg:
+            self.led_loop_start.set(int(cfg["led_loop_start"]) + 1)
+        if "led_loop_end" in cfg:
+            self.led_loop_end.set(int(cfg["led_loop_end"]) + 1)
+        if "led_breathe_enabled" in cfg:
+            self.led_breathe_enabled.set(int(cfg["led_breathe_enabled"]) != 0)
+        if "led_breathe_start" in cfg:
+            self.led_breathe_start.set(int(cfg["led_breathe_start"]) + 1)
+        if "led_breathe_end" in cfg:
+            self.led_breathe_end.set(int(cfg["led_breathe_end"]) + 1)
+        if "led_breathe_min" in cfg:
+            self.led_breathe_min.set(round(int(cfg["led_breathe_min"]) * 9 / 31))
+        if "led_breathe_max" in cfg:
+            self.led_breathe_max.set(round(int(cfg["led_breathe_max"]) * 9 / 31))
+        if "led_wave_enabled" in cfg:
+            self.led_wave_enabled.set(int(cfg["led_wave_enabled"]) != 0)
+        if "led_wave_origin" in cfg:
+            self.led_wave_origin.set(int(cfg["led_wave_origin"]) + 1)
+        if "led_loop_speed" in cfg:
+            self.led_loop_speed.set(max(100, min(9999, int(cfg["led_loop_speed"]))))
+        if "led_breathe_speed" in cfg:
+            self.led_breathe_speed.set(max(100, min(9999, int(cfg["led_breathe_speed"]))))
+        if "led_wave_speed" in cfg:
+            self.led_wave_speed.set(max(100, min(9999, int(cfg["led_wave_speed"]))))
+        if "led_colors_raw" in cfg:
+            colors = cfg["led_colors_raw"].split(",")
+            for i, c in enumerate(colors):
+                c = c.strip()
+                if i < MAX_LEDS and len(c) == 6:
+                    self.led_colors[i].set(c.upper())
+        for i in range(len(self.PEDAL_LED_INPUT_INDICES)):
+            self.led_maps[i].set(0)
+        if "led_map_raw" in cfg:
+            for pair in cfg["led_map_raw"].split(","):
+                pair = pair.strip()
+                if "=" not in pair:
+                    continue
+                name, rest = pair.split("=", 1)
+                name = name.strip()
+                if name not in PEDAL_LED_INPUT_NAMES:
+                    continue
+                idx = PEDAL_LED_INPUT_NAMES.index(name)
+                if ":" in rest:
+                    hex_mask, bright = rest.split(":", 1)
+                    self.led_maps[idx].set(int(hex_mask, 16))
+                    self.led_active_br[idx].set(self._brightness_from_hw(int(bright)))
+        any_mapped = any(self.led_maps[i].get() != 0 for i in range(len(self.PEDAL_LED_INPUT_INDICES)))
+        self.led_reactive.set(any_mapped)
+        for i in range(len(self.PEDAL_LED_INPUT_INDICES)):
+            self._led_maps_backup[i] = self.led_maps[i].get()
+        self._on_led_toggle()
+        if self.led_enabled.get():
+            self._rebuild_led_color_grid()
+            if self.led_reactive.get():
+                self._rebuild_led_map_grid()
+
     # ── Push all values to firmware ───────────────────────────────────
 
     def _push_all_values(self):
+        self.pico.set_value("usb_host_pin", str(self._usb_host_pin_var.get()))
+        self.pico.set_value("usb_host_dm_first", str(self._usb_host_dm_first_var.get()))
         for i in range(self.PEDAL_COUNT):
             self.pico.set_value(f"pedal{i}", str(self._pin_vars[i].get()))
             self.pico.set_value(f"pedal{i}_map", str(self._map_vars[i].get()))
@@ -983,6 +1835,36 @@ class PedalApp:
         self.pico.set_value("debounce", str(self.debounce_var.get()))
         name = ''.join(c for c in self.device_name.get() if c in VALID_NAME_CHARS).strip() or "Pedal Controller"
         self.pico.set_value("device_name", name[:20])
+        self.pico.set_value("led_enabled", "1" if self.led_enabled.get() else "0")
+        self.pico.set_value("led_count", str(self.led_count.get()))
+        self.pico.set_value("led_brightness", str(self._brightness_to_hw(self.led_base_brightness.get())))
+        count = self.led_count.get()
+        for i in range(min(count, MAX_LEDS)):
+            color = self.led_colors[i].get().strip().upper()
+            if len(color) != 6:
+                color = "FFFFFF"
+            self.pico.set_value(f"led_color_{i}", color)
+        for ui_idx, fw_idx in enumerate(self.PEDAL_LED_INPUT_INDICES):
+            self.pico.set_value(f"led_map_{fw_idx}", f"{self.led_maps[ui_idx].get():04X}")
+            self.pico.set_value(f"led_active_{fw_idx}",
+                                str(self._brightness_to_hw(self.led_active_br[ui_idx].get())))
+        self.pico.set_value("led_loop_enabled", "1" if self.led_loop_enabled.get() else "0")
+        self.pico.set_value("led_loop_start", str(self.led_loop_start.get() - 1))
+        self.pico.set_value("led_loop_end", str(self.led_loop_end.get() - 1))
+        self.pico.set_value("led_breathe_enabled", "1" if self.led_breathe_enabled.get() else "0")
+        self.pico.set_value("led_breathe_start", str(self.led_breathe_start.get() - 1))
+        self.pico.set_value("led_breathe_end", str(self.led_breathe_end.get() - 1))
+        self.pico.set_value("led_breathe_min", str(round(self.led_breathe_min.get() * 31 / 9)))
+        self.pico.set_value("led_breathe_max", str(round(self.led_breathe_max.get() * 31 / 9)))
+        self.pico.set_value("led_wave_enabled", "1" if self.led_wave_enabled.get() else "0")
+        self.pico.set_value("led_wave_origin", str(self.led_wave_origin.get() - 1))
+        for _k, _v in [("led_loop_speed", str(self.led_loop_speed.get())),
+                       ("led_breathe_speed", str(self.led_breathe_speed.get())),
+                       ("led_wave_speed", str(self.led_wave_speed.get()))]:
+            try:
+                self.pico.set_value(_k, _v)
+            except ValueError:
+                pass
 
     # ── Save & Play Mode ──────────────────────────────────────────────
 
@@ -993,6 +1875,10 @@ class PedalApp:
             return
         self._stop_adc_monitoring()
         self._stop_detect()
+        error = self._validate_usb_host_conflicts()
+        if error:
+            self._show_usb_host_conflict(error)
+            return
         try:
             self._push_all_values()
             self.pico.save()
@@ -1001,9 +1887,12 @@ class PedalApp:
             time.sleep(0.4)
             self.pico.reboot()
             self.pico.disconnect()
-            self._set_status("   Saved. Controller is in play mode.", ACCENT_GREEN)
+            self._set_status("   Saved. Returning to main menu...", ACCENT_GREEN)
             self._set_controls_enabled(False)
             self._connect_btn.set_state("normal")
+            if self._on_back:
+                self.hide()
+                self._on_back()
         except Exception as exc:
             messagebox.showerror("Save Error", str(exc))
 
@@ -1044,6 +1933,10 @@ class PedalApp:
         self._stop_adc_monitoring()
         self._stop_detect()
         if self.pico.connected:
+            error = self._validate_usb_host_conflicts()
+            if error:
+                self._show_usb_host_conflict(error)
+                return
             self._set_status("   Saving configuration...", ACCENT_ORANGE)
             try:
                 self._push_all_values()
@@ -1110,13 +2003,21 @@ class PedalApp:
                 self.pico.disconnect()
                 self._set_status("   Not responding", ACCENT_RED)
                 return
+            cfg = self.pico.get_config()
+            if cfg.get("device_type") != "pedal":
+                self.pico.disconnect()
+                self._set_status("   Wrong device on config port", ACCENT_RED)
+                messagebox.showwarning(
+                    "Wrong Device",
+                    f"The configurator found '{cfg.get('device_type', 'unknown')}' on {port}, not a pedal.")
+                return
             self._set_status(f"   Connected  —  {port}", ACCENT_GREEN)
             try:
                 self._connect_btn.set_state("disabled")
             except Exception:
                 pass
             self._set_controls_enabled(True)
-            self._load_config()
+            self._load_config(cfg=cfg)
         except Exception as exc:
             self._set_status(f"   Connection failed: {exc}", ACCENT_RED)
 
@@ -1369,16 +2270,19 @@ class PedalApp:
 
     def _apply_config_dict(self, cfg):
         """Push all SET-able keys from cfg to the firmware. Returns list of error strings."""
-        SKIP_KEYS = {"device_type"}
-        errors = []
-        for key, val in cfg.items():
-            if key in SKIP_KEYS:
-                continue
-            try:
-                self.pico.set_value(key, val)
-            except Exception as exc:
-                errors.append(f"{key}: {exc}")
-        return errors
+        merged_cfg = {
+            "usb_host_pin": self._usb_host_pin_var.get(),
+            "usb_host_dm_first": self._usb_host_dm_first_var.get(),
+        }
+        for i in range(self.PEDAL_COUNT):
+            merged_cfg[f"pedal{i}"] = self._pin_vars[i].get()
+        for i in range(2):
+            merged_cfg[f"adc{i}"] = self._adc_pin_vars[i].get()
+        merged_cfg.update(cfg)
+        conflict = self._validate_usb_host_conflicts(cfg=merged_cfg)
+        if conflict:
+            return [conflict]
+        return apply_config_to_pico(self.pico, cfg, led_input_names=PEDAL_LED_INPUT_NAMES)
 
     def _import_config(self):
         if not self.pico.connected:
@@ -1403,6 +2307,7 @@ class PedalApp:
             messagebox.showwarning("Import Partial",
                 f"Some keys could not be set:\n" + "\n".join(errors[:10]))
         else:
+            self._load_config()
             if messagebox.askyesno("Import Successful",
                     "Configuration imported.\n\nSave to flash now?"):
                 try:
@@ -1429,6 +2334,7 @@ class PedalApp:
             messagebox.showwarning("Preset Partial",
                 f"Some keys could not be set:\n" + "\n".join(errors[:10]))
         else:
+            self._load_config()
             if messagebox.askyesno("Preset Loaded",
                     "Preset applied.\n\nSave to flash now?"):
                 try:
@@ -1538,6 +2444,8 @@ class PedalApp:
         ref_frame.pack(fill="x", padx=8, pady=(4, 0))
 
         REF_LINES = [
+            "SET:usb_host_pin=<0-27>      -> choose the first GPIO in the USB host pair",
+            "SET:usb_host_dm_first=<0|1>  -> 0=D+/D-, 1=D-/D+ on the selected pair",
             "PING                         → PONG  (connection check)",
             "GET_CONFIG                   → DEVTYPE:pedal + CFG: line",
             "SCAN                         → streams PIN:N on button press; send STOP to end",

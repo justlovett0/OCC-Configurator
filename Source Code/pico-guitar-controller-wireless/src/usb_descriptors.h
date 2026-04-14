@@ -39,7 +39,7 @@ extern const char *g_device_name;
 #define XINPUT_OUT_REPORT_SIZE    8
 #define XINPUT_EP_MAX_PACKET      32
 
-#define XINPUT_DESC_CONFIG_TOTAL  49
+#define XINPUT_DESC_CONFIG_TOTAL  83   // IF0(40) + IF1(19) + IF2(15) + header(9)
 
 //--------------------------------------------------------------------
 // Config Mode (CDC) Constants

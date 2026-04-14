@@ -7,6 +7,7 @@ public sealed class BindControllerForm : Form
     private readonly ListBox _deviceList = new()
     {
         Dock = DockStyle.Fill,
+        BorderStyle = BorderStyle.None,
     };
 
     public BindControllerForm(IReadOnlyList<DeviceCandidate> candidates)
@@ -32,6 +33,7 @@ public sealed class BindControllerForm : Form
         var header = new Label
         {
             AutoSize = true,
+            ForeColor = OccTheme.TextDim,
             Text = "Select the Bluetooth controller that represents your OCC guitar. The app will store its identity for automatic reconnects.",
             MaximumSize = new Size(680, 0),
         };
@@ -46,6 +48,10 @@ public sealed class BindControllerForm : Form
             _deviceList.SelectedIndex = 0;
         }
 
+        // Owner-draw so the selection highlight uses the OCC palette instead of system blue
+        _deviceList.DrawMode = DrawMode.OwnerDrawFixed;
+        _deviceList.DrawItem += DrawDeviceListItem;
+
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -53,31 +59,52 @@ public sealed class BindControllerForm : Form
             AutoSize = true,
         };
 
-        var okButton = new Button
-        {
-            Text = "Bind",
-            DialogResult = DialogResult.OK,
-            AutoSize = true,
-        };
+        var okButton = new Button { Text = "Bind", DialogResult = DialogResult.OK };
+        var cancelButton = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        var cancelButton = new Button
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            AutoSize = true,
-        };
+        OccTheme.StyleButton(okButton, OccTheme.AccentGreen);
+        OccTheme.StyleButton(cancelButton);
 
         buttons.Controls.Add(okButton);
         buttons.Controls.Add(cancelButton);
 
-        layout.Controls.Add(header, 0, 0);
+        layout.Controls.Add(header,      0, 0);
         layout.Controls.Add(_deviceList, 0, 1);
-        layout.Controls.Add(buttons, 0, 2);
+        layout.Controls.Add(buttons,     0, 2);
 
         Controls.Add(layout);
         AcceptButton = okButton;
         CancelButton = cancelButton;
+
+        OccTheme.ApplyDark(this);
+
+        // Override listbox colors after ApplyDark so they aren't reset
+        _deviceList.BackColor = OccTheme.BgInput;
+        _deviceList.ForeColor = OccTheme.TextHeader;
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        OccTheme.ApplyDarkTitleBar(this);
     }
 
     public DeviceCandidate? SelectedCandidate => _deviceList.SelectedItem as DeviceCandidate;
+
+    private void DrawDeviceListItem(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0)
+        {
+            return;
+        }
+
+        bool selected = (e.State & DrawItemState.Selected) != 0;
+        using var bg = new SolidBrush(selected ? OccTheme.BgHover : OccTheme.BgInput);
+        e.Graphics.FillRectangle(bg, e.Bounds);
+
+        var text = _deviceList.Items[e.Index]?.ToString() ?? string.Empty;
+        using var fg = new SolidBrush(OccTheme.TextHeader);
+        e.Graphics.DrawString(text, e.Font ?? OccTheme.UiFont, fg,
+            new RectangleF(e.Bounds.X + 4, e.Bounds.Y + 2, e.Bounds.Width - 4, e.Bounds.Height));
+    }
 }
