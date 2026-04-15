@@ -265,6 +265,7 @@ class ArcadeStickApp:
     def show(self):
         self.root.title("OCC - Arcade Stick Configurator")
         self.root.config(menu=self._menubar)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.frame.pack(fill="both", expand=True)
 
     def hide(self):
@@ -385,9 +386,16 @@ class ArcadeStickApp:
         try:
             self._push_config(self._config_payload())
             self.pico.save()
-            self._set_status("Configuration saved")
+            self._set_status("Saved - rebooting to play mode...")
+            self.root.update_idletasks()
+            time.sleep(0.4)
             self.pico.reboot()
+            self.pico.disconnect()
+            self._set_status("Saved. Returning to main menu...")
             self._set_controls_enabled(False)
+            if self._on_back:
+                self.hide()
+                self._on_back()
         except Exception as exc:
             messagebox.showerror("Save Error", str(exc))
 
@@ -471,3 +479,12 @@ class ArcadeStickApp:
     def _go_back(self):
         if self._on_back:
             self._on_back()
+
+    def _on_close(self):
+        if self.pico.connected:
+            try:
+                self.pico.reboot()
+            except Exception:
+                pass
+            self.pico.disconnect()
+        self.root.destroy()

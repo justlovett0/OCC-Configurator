@@ -14,6 +14,9 @@
 #include "pico/stdlib.h"
 #include "tusb.h"
 
+#define CONNECT_TIMEOUT_MS    30000
+#define DISCONNECT_TIMEOUT_MS 5000
+
 static void serial_write(const char *str) {
     uint32_t len = (uint32_t) strlen(str);
     uint32_t sent = 0;
@@ -229,19 +232,43 @@ static void run_scan(void) {
 void config_serial_loop(arcadestick_config_t *config) {
     char line[160];
     int idx = 0;
-    absolute_time_t last_activity = get_absolute_time();
-
-    while (!tud_cdc_connected()) {
-        tud_task();
-        sleep_ms(10);
-    }
+    bool was_connected = false;
+    uint32_t disconnect_time_ms = 0;
+    uint32_t start_time_ms = to_ms_since_boot(get_absolute_time());
 
     while (true) {
         tud_task();
+        uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+        bool connected = tud_cdc_connected();
+
+        if (!was_connected && !connected) {
+            if ((now_ms - start_time_ms) > CONNECT_TIMEOUT_MS) {
+                watchdog_reboot(0, 0, 10);
+                while (1) { tight_loop_contents(); }
+            }
+        }
+
+        if (was_connected && !connected) {
+            if (disconnect_time_ms == 0) {
+                disconnect_time_ms = now_ms;
+            } else if ((now_ms - disconnect_time_ms) > DISCONNECT_TIMEOUT_MS) {
+                watchdog_reboot(0, 0, 10);
+                while (1) { tight_loop_contents(); }
+            }
+        }
+
+        if (connected) {
+            was_connected = true;
+            disconnect_time_ms = 0;
+        }
+
+        if (!connected || !tud_cdc_available()) {
+            sleep_ms(1);
+            continue;
+        }
 
         while (tud_cdc_available()) {
             char ch = (char) tud_cdc_read_char();
-            last_activity = get_absolute_time();
 
             if (ch == '\r' || ch == '\n') {
                 if (idx == 0) {
@@ -284,10 +311,6 @@ void config_serial_loop(arcadestick_config_t *config) {
             } else if (idx < (int) sizeof(line) - 1) {
                 line[idx++] = ch;
             }
-        }
-
-        if (absolute_time_diff_us(last_activity, get_absolute_time()) > 1000 * 1000) {
-            sleep_ms(2);
         }
     }
 }
