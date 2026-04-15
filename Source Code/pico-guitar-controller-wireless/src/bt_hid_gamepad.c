@@ -311,8 +311,19 @@ static struct {
     bool             connected;
     bt_hid_report_t  pending;      // Buffered report
     bool             send_pending;
+    bt_hid_report_t  last_sent;    // Last report successfully handed to ATT
+    bool             have_last_sent;
+    uint32_t         send_fail_count;
     const char      *device_name;
 } _bt;
+
+static void print_conn_interval(const char *label, uint16_t conn_interval, uint16_t latency) {
+    printf("BT: %s interval %u.%02u ms, latency %u\n",
+           label,
+           conn_interval * 125 / 100,
+           25 * (conn_interval & 3),
+           latency);
+}
 
 // ATT read callback implementation (forward-declared above, after profile_data).
 // Serves the GAP Device Name at handle 0x0003 from _bt.device_name at runtime.
@@ -347,6 +358,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             _bt.con_handle   = HCI_CON_HANDLE_INVALID;
             _bt.connected    = false;
             _bt.send_pending = false;
+            _bt.have_last_sent = false;
             printf("BT: Disconnected — re-enabling advertisements\n");
             // ── BUG FIX 1: re-enable advertisements so Windows can find us again ──
             // Without this, the device vanishes after the first disconnect and
@@ -374,9 +386,42 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 
         // BLE connection events
         case HCI_EVENT_LE_META:
-            if (hci_event_le_meta_get_subevent_code(packet) == HCI_SUBEVENT_LE_CONNECTION_COMPLETE) {
-                printf("BT: LE Connection Complete\n");
+            switch (hci_event_le_meta_get_subevent_code(packet)) {
+                case HCI_SUBEVENT_LE_CONNECTION_COMPLETE:
+                    if (hci_subevent_le_connection_complete_get_status(packet) == ERROR_CODE_SUCCESS) {
+                        print_conn_interval(
+                            "LE connection complete:",
+                            hci_subevent_le_connection_complete_get_conn_interval(packet),
+                            hci_subevent_le_connection_complete_get_conn_latency(packet));
+                    } else {
+                        printf("BT: LE connection failed (status=%u)\n",
+                               hci_subevent_le_connection_complete_get_status(packet));
+                    }
+                    break;
+
+                case HCI_SUBEVENT_LE_CONNECTION_UPDATE_COMPLETE:
+                    if (hci_subevent_le_connection_update_complete_get_status(packet) == ERROR_CODE_SUCCESS) {
+                        print_conn_interval(
+                            "LE connection update:",
+                            hci_subevent_le_connection_update_complete_get_conn_interval(packet),
+                            hci_subevent_le_connection_update_complete_get_conn_latency(packet));
+                    } else {
+                        printf("BT: LE connection update failed (status=%u)\n",
+                               hci_subevent_le_connection_update_complete_get_status(packet));
+                    }
+                    break;
+
+                default:
+                    break;
             }
+            break;
+
+        case L2CAP_EVENT_CONNECTION_PARAMETER_UPDATE_RESPONSE:
+            printf("BT: Connection parameter update response: %s (result=0x%02x)\n",
+                   l2cap_event_connection_parameter_update_response_get_result(packet) == ERROR_CODE_SUCCESS
+                       ? "accepted"
+                       : "rejected",
+                   l2cap_event_connection_parameter_update_response_get_result(packet));
             break;
 
         // HIDS (HID Service) events
@@ -387,11 +432,12 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
                     _bt.con_handle = hids_subevent_input_report_enable_get_con_handle(packet);
                     _bt.connected  = true;
                     printf("BT: Host subscribed to input reports\n");
-                    // ── BUG FIX 3: use conservative connection interval Windows accepts ──
-                    // min=12 (15ms), max=24 (30ms), latency=0, timeout=200 (2000ms)
-                    // Windows commonly rejects sub-15ms requests and may drop the
-                    // connection in response. 15-30ms gives low latency without rejection.
-                    gap_request_connection_parameter_update(_bt.con_handle, 12, 24, 0, 200);
+                    // ── BUG FIX 3: use a conservative desktop-friendly connection interval ──
+                    // min=max=12 (15ms), latency=0, timeout=200 (2000ms)
+                    int status = gap_request_connection_parameter_update(_bt.con_handle, 12, 12, 0, 200);
+                    if (status != ERROR_CODE_SUCCESS) {
+                        printf("BT: Connection parameter update request failed (status=%d)\n", status);
+                    }
                     break;
 
                 case HIDS_SUBEVENT_OUTPUT_REPORT_ENABLE:
@@ -409,18 +455,33 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
 
                 // ── BUG FIX 2: send reports only when BLE stack is ready ──
                 // hids_device_send_input_report() calls att_server_notify() internally.
-                // If the ATT TX buffer is busy (which happens often at 250Hz vs
-                // 15-30ms BLE intervals), it silently drops the report and returns
+                // If the ATT TX buffer is busy (which happens often at 1kHz vs
+                // BLE connection intervals), it silently drops the report and returns
                 // an error we weren't checking. The correct pattern is:
                 //   1. Call hids_device_request_can_send_now_event() to queue a send
                 //   2. Send the actual report only in HIDS_SUBEVENT_CAN_SEND_NOW
                 // This guarantees the ATT layer is ready before we write.
                 case HIDS_SUBEVENT_CAN_SEND_NOW:
                     if (_bt.send_pending && _bt.con_handle != HCI_CON_HANDLE_INVALID) {
-                        uint8_t  *data     = (uint8_t *)&_bt.pending;
+                        bt_hid_report_t report_to_send = _bt.pending;
+                        uint8_t  *data     = (uint8_t *)&report_to_send;
                         uint16_t  data_len = sizeof(bt_hid_report_t) - 1; // skip report_id byte
-                        hids_device_send_input_report(_bt.con_handle, data + 1, data_len);
-                        _bt.send_pending = false;
+                        uint8_t status = hids_device_send_input_report(_bt.con_handle, data + 1, data_len);
+                        if (status == ERROR_CODE_SUCCESS) {
+                            _bt.last_sent = report_to_send;
+                            _bt.have_last_sent = true;
+                            _bt.send_pending = false;
+                        } else {
+                            _bt.send_fail_count++;
+                            printf("BT: Input report send failed (status=%u, failures=%lu)\n",
+                                   status, (unsigned long)_bt.send_fail_count);
+                            uint8_t retry_status = hids_device_request_can_send_now_event(_bt.con_handle);
+                            if (retry_status != ERROR_CODE_SUCCESS) {
+                                _bt.send_pending = false;
+                                printf("BT: Can-send retry request failed (status=%u)\n",
+                                       retry_status);
+                            }
+                        }
                     }
                     break;
 
@@ -500,10 +561,13 @@ void bt_hid_init(const char *device_name, const uint8_t *static_addr) {
     // ── Register event handlers ──
     static btstack_packet_callback_registration_t hci_cb;
     static btstack_packet_callback_registration_t sm_cb;
+    static btstack_packet_callback_registration_t l2cap_cb;
     hci_cb.callback = &packet_handler;
     sm_cb.callback  = &packet_handler;
+    l2cap_cb.callback = &packet_handler;
     hci_add_event_handler(&hci_cb);
     sm_add_event_handler(&sm_cb);
+    l2cap_add_event_handler(&l2cap_cb);
     hids_device_register_packet_handler(packet_handler);
 
     // ── Power on ──
@@ -525,10 +589,20 @@ bool bt_hid_ready(void) {
 bool bt_hid_send_report(const bt_hid_report_t *report) {
     if (!bt_hid_connected()) return false;
 
+    if (_bt.send_pending &&
+        memcmp(report, &_bt.pending, sizeof(bt_hid_report_t)) == 0) {
+        return true;
+    }
+
+    if (!_bt.send_pending && _bt.have_last_sent &&
+        memcmp(report, &_bt.last_sent, sizeof(bt_hid_report_t)) == 0) {
+        return true;
+    }
+
     // Buffer the report — the actual send happens in HIDS_SUBEVENT_CAN_SEND_NOW.
     // We must NOT call hids_device_send_input_report() directly here because
     // att_server_notify() (which it calls internally) silently drops the data
-    // if the ATT TX buffer is busy. At 250Hz vs 15-30ms BLE intervals, the
+    // if the ATT TX buffer is busy. At 1kHz vs BLE connection intervals, the
     // buffer is almost always busy — meaning no reports get through at all.
     //
     // The correct pattern: buffer the latest report, request a send slot,
@@ -539,7 +613,14 @@ bool bt_hid_send_report(const bt_hid_report_t *report) {
 
     if (!_bt.send_pending) {
         _bt.send_pending = true;
-        hids_device_request_can_send_now_event(_bt.con_handle);
+        uint8_t status = hids_device_request_can_send_now_event(_bt.con_handle);
+        if (status != ERROR_CODE_SUCCESS) {
+            _bt.send_pending = false;
+            _bt.send_fail_count++;
+            printf("BT: Can-send request failed (status=%u, failures=%lu)\n",
+                   status, (unsigned long)_bt.send_fail_count);
+            return false;
+        }
     }
     // If send_pending is already true, the latest report is already buffered
     // and the can_send_now callback will pick it up.

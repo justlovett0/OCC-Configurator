@@ -1176,7 +1176,7 @@ int main(void) {
 
                 if (now_us - last_report_us >= BT_REPORT_INTERVAL_US) {
                     last_report_us = now_us;
-                    if (bt_hid_connected() && bt_hid_ready()) {
+                    if (bt_hid_connected()) {
                         build_bt_hid_report(&bt_report);
                         bt_hid_send_report(&bt_report);
                     }
