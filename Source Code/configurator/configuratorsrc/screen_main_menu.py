@@ -315,7 +315,7 @@ class MainMenu:
             if XINPUT_AVAILABLE:
                 try:
                     controllers = xinput_get_connected()
-                    SUBTYPE_LABELS = {8: "Drum Kit", 6: "6-Fret Guitar", 7: "Standard Guitar", 5: "Dongle"}
+                    SUBTYPE_LABELS = {8: "Drum Kit", 6: "6-Fret Guitar", 7: "Standard Guitar", 5: "Dongle", 3: "Arcade Stick"}
                     occ_devices = [c for c in controllers if c[1] in OCC_SUBTYPES]
                     # Separate dongles from configurable devices (guitar / drum kit).
                     dongle_devices    = [c for c in occ_devices if c[1] in DONGLE_XINPUT_SUBTYPES]

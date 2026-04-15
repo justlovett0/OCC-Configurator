@@ -1,0 +1,33 @@
+/*
+ * xinput_driver.h - Custom TinyUSB class driver for XInput
+ */
+
+#ifndef _XINPUT_DRIVER_H_
+#define _XINPUT_DRIVER_H_
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "usb_descriptors.h"
+
+void xinput_driver_init(void);
+bool xinput_send_report(const xinput_report_t *report);
+bool xinput_ready(void);
+
+// Returns true if the magic vibration sequence was detected.
+// Calling this clears the flag.
+bool xinput_magic_detected(void);
+
+//--------------------------------------------------------------------
+// Diagnostics
+//--------------------------------------------------------------------
+
+// Bitmask: bit0=mounted, bit1=tx_busy, bit2=tud_ready, bit3=send_ever_failed
+uint8_t  xinput_diag_flags(void);
+uint32_t xinput_diag_send_ok(void);
+uint32_t xinput_diag_send_fail(void);
+uint32_t xinput_diag_cb_in(void);
+uint32_t xinput_diag_cb_out(void);
+uint32_t xinput_diag_ready_false(void);
+uint32_t xinput_diag_last_send_ms(void);
+
+#endif /* _XINPUT_DRIVER_H_ */
