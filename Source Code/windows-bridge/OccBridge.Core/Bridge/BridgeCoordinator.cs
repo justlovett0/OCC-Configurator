@@ -65,7 +65,7 @@ public sealed class BridgeCoordinator : IDisposable
         }
 
         var configuration = _configurationStore.Load();
-        if (configuration.BoundController is null)
+        if (!configuration.ControllerBoundByUser || configuration.BoundController is null)
         {
             PublishStatus(new BridgeRuntimeStatus
             {

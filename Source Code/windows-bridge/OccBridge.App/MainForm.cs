@@ -42,6 +42,7 @@ public sealed class MainForm : Form
     private readonly NotifyIcon _notifyIcon;
     private bool _allowClose;
     private bool _updatingUi;
+    private Size? _startButtonFixedSize;
 
     public MainForm(bool startHidden)
     {
@@ -174,6 +175,8 @@ public sealed class MainForm : Form
         OccTheme.StyleButton(_stopButton);
         OccTheme.StyleButton(_openLogsButton);
         OccTheme.StyleButton(_exitButton);
+        _startButtonFixedSize = _startButton.Size;
+        _startButton.MinimumSize = _startButtonFixedSize.Value;
 
         var primaryButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         primaryButtons.Controls.AddRange([_bindButton, _startButton, _stopButton]);
@@ -272,9 +275,13 @@ public sealed class MainForm : Form
             _startupCheckBox.Checked = configuration.AutoStartAtLogon;
             _hideCheckBox.Checked    = configuration.HidePhysicalController;
 
-            var name = configuration.BoundController?.ProductName;
+            var boundController = configuration.ControllerBoundByUser
+                ? configuration.BoundController
+                : null;
+            var name = boundController?.ProductName;
             _boundControllerValue.Text      = name ?? "None";
             _boundControllerValue.ForeColor = name is null ? OccTheme.TextDim : OccTheme.TextHeader;
+            UpdateStartButtonText(boundController is not null);
 
             var processPath = Environment.ProcessPath;
             if (!string.IsNullOrWhiteSpace(processPath))
@@ -361,10 +368,12 @@ public sealed class MainForm : Form
 
         var configuration = _configurationStore.Load();
         configuration.BoundController = _deviceBindingService.Bind(dialog.SelectedCandidate);
+        configuration.ControllerBoundByUser = true;
         _configurationStore.Save(configuration);
 
         _boundControllerValue.Text      = configuration.BoundController.ProductName;
         _boundControllerValue.ForeColor = OccTheme.TextHeader;
+        UpdateStartButtonText(hasBoundController: true);
         _log.Info($"Bound controller: {configuration.BoundController.ProductName}");
     }
 
@@ -405,9 +414,21 @@ public sealed class MainForm : Form
 
         _bridgeStatusValue.ForeColor = status.LastError is not null
             ? OccTheme.AccentRed
-            : status.StatusText.Contains("running", StringComparison.OrdinalIgnoreCase)
-                ? OccTheme.AccentBlue
-                : OccTheme.TextDim;
+                : status.StatusText.Contains("running", StringComparison.OrdinalIgnoreCase)
+                    ? OccTheme.AccentBlue
+                    : OccTheme.TextDim;
+    }
+
+    private void UpdateStartButtonText(bool hasBoundController)
+    {
+        _startButton.Text = hasBoundController
+            ? "Emulate Guitar"
+            : "Auto Select and Emulate Guitar";
+
+        if (_startButtonFixedSize is { } fixedSize)
+        {
+            _startButton.Size = fixedSize;
+        }
     }
 
     private void OpenLogs()
@@ -444,10 +465,23 @@ public sealed class MainForm : Form
         form.ShowDialog(this);
     }
 
+    private void ClearBoundController()
+    {
+        var configuration = _configurationStore.Load();
+        configuration.BoundController = null;
+        configuration.ControllerBoundByUser = false;
+        _configurationStore.Save(configuration);
+
+        _boundControllerValue.Text      = "None";
+        _boundControllerValue.ForeColor = OccTheme.TextDim;
+        UpdateStartButtonText(hasBoundController: false);
+    }
+
     private async Task ExitApplicationAsync()
     {
         _allowClose = true;
         await StopBridgeAsync();
+        ClearBoundController();
         Close();
     }
 }

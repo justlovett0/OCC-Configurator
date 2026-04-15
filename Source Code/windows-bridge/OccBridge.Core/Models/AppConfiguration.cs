@@ -8,6 +8,8 @@ public sealed class AppConfiguration
 
     public bool StartMinimizedToTray { get; set; } = true;
 
+    public bool ControllerBoundByUser { get; set; }
+
     public BoundControllerConfiguration? BoundController { get; set; }
 
     public static AppConfiguration CreateDefault() => new();
