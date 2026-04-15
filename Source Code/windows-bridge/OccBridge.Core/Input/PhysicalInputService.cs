@@ -238,6 +238,12 @@ public sealed class PhysicalInputService
 
     private static bool ControllerMatches(DeviceCandidate candidate, RawGameController controller)
     {
+        if (!string.IsNullOrWhiteSpace(candidate.RuntimeInstanceId) &&
+            string.Equals(candidate.RuntimeInstanceId, controller.NonRoamableId, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         if (!string.IsNullOrWhiteSpace(candidate.InstanceId) &&
             string.Equals(candidate.InstanceId, controller.NonRoamableId, StringComparison.OrdinalIgnoreCase))
         {
@@ -285,6 +291,7 @@ public sealed class PhysicalInputService
         IReadOnlyList<double> axes)
     {
         ushort mappedButtons = 0;
+        var hasNamedButtons = false;
 
         for (var index = 0; index < buttons.Count; index++)
         {
@@ -293,7 +300,13 @@ public sealed class PhysicalInputService
                 continue;
             }
 
-            switch (controller.GetButtonLabel(index).ToString())
+            var label = controller.GetButtonLabel(index).ToString();
+            if (!string.Equals(label, "None", StringComparison.OrdinalIgnoreCase))
+            {
+                hasNamedButtons = true;
+            }
+
+            switch (label)
             {
                 case "XboxUp":
                 case "Up":
@@ -344,7 +357,26 @@ public sealed class PhysicalInputService
             }
         }
 
-        if (buttons.Count >= 9)
+        if (!hasNamedButtons &&
+            switches.Count == 0 &&
+            buttons.Count >= 16 &&
+            controller.HardwareVendorId == 0x045E &&
+            controller.HardwareProductId == 0x028E)
+        {
+            mappedButtons |= buttons[0] ? OccButtonMasks.DPadUp : (ushort)0;
+            mappedButtons |= buttons[1] ? OccButtonMasks.DPadDown : (ushort)0;
+            mappedButtons |= buttons[2] ? OccButtonMasks.DPadLeft : (ushort)0;
+            mappedButtons |= buttons[3] ? OccButtonMasks.DPadRight : (ushort)0;
+            mappedButtons |= buttons[4] ? OccButtonMasks.Start : (ushort)0;
+            mappedButtons |= buttons[5] ? OccButtonMasks.Select : (ushort)0;
+            mappedButtons |= buttons[8] ? OccButtonMasks.Orange : (ushort)0;
+            mappedButtons |= buttons[10] ? OccButtonMasks.Guide : (ushort)0;
+            mappedButtons |= buttons[12] ? OccButtonMasks.Green : (ushort)0;
+            mappedButtons |= buttons[13] ? OccButtonMasks.Red : (ushort)0;
+            mappedButtons |= buttons[14] ? OccButtonMasks.Blue : (ushort)0;
+            mappedButtons |= buttons[15] ? OccButtonMasks.Yellow : (ushort)0;
+        }
+        else if (buttons.Count >= 9)
         {
             mappedButtons |= buttons[0] ? OccButtonMasks.Start : (ushort)0;
             mappedButtons |= buttons.Count > 1 && buttons[1] ? OccButtonMasks.Select : (ushort)0;

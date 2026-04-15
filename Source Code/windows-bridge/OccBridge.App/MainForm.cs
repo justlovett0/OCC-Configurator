@@ -346,7 +346,7 @@ public sealed class MainForm : Form
         {
             MessageBox.Show(
                 this,
-                "No compatible HID controller candidates were found. Make sure the OCC guitar is powered on, paired, and connected over Bluetooth before binding.",
+                "No compatible OCC controller candidates were found. Make sure the OCC guitar is powered on, paired, and connected over Bluetooth before binding.",
                 "No Controllers Found",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);

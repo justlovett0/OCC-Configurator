@@ -39,7 +39,9 @@ public sealed class HideService
         }
 
         // HidHide expects a real PnP instance ID, not a WinRT non-roamable ID.
-        return instanceId.Contains('\\') && !instanceId.Contains('{');
+        // BLE HID instance IDs legitimately contain braces because the HID service
+        // UUID is embedded in the hardware identifier, so brace checks are too strict.
+        return LooksLikePnpInstanceId(instanceId);
     }
 
     public bool ApplyHide(string? instanceId)
@@ -78,5 +80,18 @@ public sealed class HideService
             _control.RemoveBlockedInstanceId(instanceId);
             _log.Info($"Removed HidHide blocked instance: {instanceId}");
         }
+    }
+
+    private static bool LooksLikePnpInstanceId(string instanceId)
+    {
+        if (!instanceId.Contains('\\'))
+        {
+            return false;
+        }
+
+        return instanceId.StartsWith("HID\\", StringComparison.OrdinalIgnoreCase) ||
+               instanceId.StartsWith("USB\\", StringComparison.OrdinalIgnoreCase) ||
+               instanceId.StartsWith("BTH\\", StringComparison.OrdinalIgnoreCase) ||
+               instanceId.StartsWith("ROOT\\", StringComparison.OrdinalIgnoreCase);
     }
 }

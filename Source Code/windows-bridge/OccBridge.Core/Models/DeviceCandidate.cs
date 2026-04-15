@@ -10,6 +10,8 @@ public sealed class DeviceCandidate
 
     public string? InstanceId { get; init; }
 
+    public string? RuntimeInstanceId { get; init; }
+
     public string? SerialNumber { get; init; }
 
     public int VendorId { get; init; }
@@ -20,7 +22,17 @@ public sealed class DeviceCandidate
 
     public int OutputReportLength { get; init; }
 
-    public override string ToString() => $"{ProductName} (VID {VendorId:X4}, PID {ProductId:X4}) [{GetBackendLabel()}]";
+    public bool IsWireless { get; init; }
+
+    public bool IsOccController { get; init; }
+
+    public string? OccDetectionReason { get; init; }
+
+    public override string ToString()
+    {
+        var occLabel = IsOccController ? "OCC" : "Other";
+        return $"{ProductName} (VID {VendorId:X4}, PID {ProductId:X4}) [{GetBackendLabel()} | {occLabel}]";
+    }
 
     private string GetBackendLabel() => Backend switch
     {

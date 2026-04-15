@@ -150,14 +150,20 @@ public sealed class BridgeCoordinator : IDisposable
                 var hideApplied = false;
                 if (configuration.HidePhysicalController && prerequisites.CanHide)
                 {
+                    _log.Info(
+                        $"Attempting HidHide for '{candidate.ProductName}': runtimeId='{candidate.RuntimeInstanceId ?? candidate.DevicePath}', pnpId='{candidate.InstanceId ?? "<none>"}'.");
+
                     if (_hideService.ApplyHide(candidate.InstanceId))
                     {
                         _currentHiddenInstanceId = candidate.InstanceId;
                         hideApplied = true;
+                        _log.Info(
+                            $"HidHide applied to '{candidate.ProductName}'. joy.cpl should no longer show the physical controller while the bridge is active.");
                     }
                     else
                     {
-                        _log.Warn($"HidHide could not hide bound controller '{candidate.ProductName}' because backend '{candidate.Backend}' did not provide a usable PnP instance ID.");
+                        _log.Warn(
+                            $"HidHide could not hide bound controller '{candidate.ProductName}' because backend '{candidate.Backend}' did not provide a usable PnP instance ID. RuntimeId='{candidate.RuntimeInstanceId ?? candidate.DevicePath}', PnP='{candidate.InstanceId ?? "<none>"}'.");
                     }
                 }
 
@@ -228,6 +234,7 @@ public sealed class BridgeCoordinator : IDisposable
     {
         if (!string.IsNullOrWhiteSpace(_currentHiddenInstanceId))
         {
+            _log.Info($"Removing HidHide block for PnP instance '{_currentHiddenInstanceId}'.");
             _hideService.RemoveHide(_currentHiddenInstanceId);
             _currentHiddenInstanceId = null;
         }

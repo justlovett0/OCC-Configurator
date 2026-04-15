@@ -10,6 +10,8 @@ public sealed class BoundControllerConfiguration
 
     public string? InstanceId { get; init; }
 
+    public string? RuntimeInstanceId { get; init; }
+
     public string? SerialNumber { get; init; }
 
     public int VendorId { get; init; }
