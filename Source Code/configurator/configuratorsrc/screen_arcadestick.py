@@ -172,7 +172,7 @@ class ArcadeStickApp:
         return combo
 
     def _build_settings_card(self, parent):
-        body = self._make_card(parent, "SETTINGS", "Choose the host mode, default joystick output, optional DP/LS/RS selector pins, and device name.")
+        body = self._make_card(parent, "SETTINGS", "")
 
         row = tk.Frame(body, bg=BG_CARD)
         row.pack(fill="x", pady=3)
@@ -213,17 +213,17 @@ class ArcadeStickApp:
         self._widgets.append(self._debounce_spin)
 
     def _build_direction_card(self, parent):
-        body = self._make_card(parent, "DIRECTIONS", "These are the physical joystick microswitch inputs.")
+        body = self._make_card(parent, "DIRECTIONS", "")
         for key, primary, host in self.CONTROL_DEFS[:4]:
             self._make_pin_row(body, key, primary, host)
 
     def _build_attack_card(self, parent, defs, title):
-        body = self._make_card(parent, title, "Fight labels stay front-and-center while the host-visible mapping is shown alongside them.")
+        body = self._make_card(parent, title, "")
         for key, primary, host in defs:
             self._make_pin_row(body, key, primary, host)
 
     def _build_aux_card(self, parent):
-        body = self._make_card(parent, "AUX BUTTONS", "Tournament-standard side-panel inputs for start/select/guide and clickable stick buttons.")
+        body = self._make_card(parent, "AUX BUTTONS", "")
         for key, primary, host in self.CONTROL_DEFS[12:]:
             self._make_pin_row(body, key, primary, host)
 
