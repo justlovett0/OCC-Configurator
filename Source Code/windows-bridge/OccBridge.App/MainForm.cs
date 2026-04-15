@@ -23,6 +23,7 @@ public sealed class MainForm : Form
     private readonly Label _bridgeStatusValue  = new() { AutoSize = true };
     private readonly CheckBox _startupCheckBox = new() { Text = "Start OCC Bridge with Windows", AutoSize = true };
     private readonly CheckBox _hideCheckBox    = new() { Text = "Hide physical controller with HidHide when available", AutoSize = true };
+    private readonly CheckBox _autoScanBtGuitarCheckBox = new() { Text = "Autoscan for OCC BT Guitar Controller Always", AutoSize = true };
     private readonly Button _bindButton        = new() { Text = "Choose Controller" };
     private readonly Button _installButton     = new() { Text = "Install / Repair Drivers" };
     private readonly Button _startButton       = new() { Text = "Auto Select and Emulate Guitar" };
@@ -97,7 +98,11 @@ public sealed class MainForm : Form
         if (_startHidden)
         {
             HideToTray();
-            StartBridge();
+        }
+
+        if (_startHidden || _autoScanBtGuitarCheckBox.Checked)
+        {
+            StartBridge(saveSettings: false);
         }
     }
 
@@ -157,6 +162,7 @@ public sealed class MainForm : Form
         // --- Options ---
         _startupCheckBox.ForeColor = OccTheme.TextDim;
         _hideCheckBox.ForeColor    = OccTheme.TextDim;
+        _autoScanBtGuitarCheckBox.ForeColor = OccTheme.TextDim;
 
         var optionsPanel = new FlowLayoutPanel
         {
@@ -167,6 +173,7 @@ public sealed class MainForm : Form
         };
         optionsPanel.Controls.Add(_startupCheckBox);
         optionsPanel.Controls.Add(_hideCheckBox);
+        optionsPanel.Controls.Add(_autoScanBtGuitarCheckBox);
 
         // --- Buttons ---
         OccTheme.StyleButton(_bindButton,    OccTheme.AccentBlue);
@@ -249,6 +256,15 @@ public sealed class MainForm : Form
         _helpButton.Click     += (_, _) => ShowHelp();
         _startupCheckBox.CheckedChanged += (_, _) => SaveUiSettings();
         _hideCheckBox.CheckedChanged    += (_, _) => SaveUiSettings();
+        _autoScanBtGuitarCheckBox.CheckedChanged += (_, _) =>
+        {
+            SaveUiSettings();
+
+            if (_autoScanBtGuitarCheckBox.Checked)
+            {
+                StartBridge(saveSettings: false);
+            }
+        };
         _bridgeCoordinator.StatusChanged += status => BeginInvoke(() => UpdateBridgeStatus(status));
         _log.MessageLogged += line =>
         {
@@ -274,6 +290,7 @@ public sealed class MainForm : Form
             var configuration = _configurationStore.Load();
             _startupCheckBox.Checked = configuration.AutoStartAtLogon;
             _hideCheckBox.Checked    = configuration.HidePhysicalController;
+            _autoScanBtGuitarCheckBox.Checked = configuration.AutoScanBtGuitarAlways;
 
             var boundController = configuration.ControllerBoundByUser
                 ? configuration.BoundController
@@ -305,6 +322,7 @@ public sealed class MainForm : Form
         var configuration = _configurationStore.Load();
         configuration.AutoStartAtLogon       = _startupCheckBox.Checked;
         configuration.HidePhysicalController = _hideCheckBox.Checked;
+        configuration.AutoScanBtGuitarAlways = _autoScanBtGuitarCheckBox.Checked;
         _configurationStore.Save(configuration);
 
         var processPath = Environment.ProcessPath;
@@ -394,10 +412,14 @@ public sealed class MainForm : Form
         Process.Start(new ProcessStartInfo(installerPath) { UseShellExecute = true });
     }
 
-    private void StartBridge()
+    private void StartBridge(bool saveSettings = true)
     {
         RefreshPrerequisiteStatus();
-        SaveUiSettings();
+        if (saveSettings)
+        {
+            SaveUiSettings();
+        }
+
         _bridgeCoordinator.Start();
     }
 

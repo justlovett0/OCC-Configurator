@@ -6,6 +6,8 @@ public sealed class AppConfiguration
 
     public bool HidePhysicalController { get; set; } = true;
 
+    public bool AutoScanBtGuitarAlways { get; set; }
+
     public bool StartMinimizedToTray { get; set; } = true;
 
     public bool ControllerBoundByUser { get; set; }

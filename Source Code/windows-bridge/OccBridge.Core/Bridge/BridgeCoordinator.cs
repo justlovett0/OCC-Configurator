@@ -65,7 +65,8 @@ public sealed class BridgeCoordinator : IDisposable
         }
 
         var configuration = _configurationStore.Load();
-        if (!configuration.ControllerBoundByUser || configuration.BoundController is null)
+        if ((!configuration.ControllerBoundByUser || configuration.BoundController is null) &&
+            !configuration.AutoScanBtGuitarAlways)
         {
             PublishStatus(new BridgeRuntimeStatus
             {
@@ -117,7 +118,9 @@ public sealed class BridgeCoordinator : IDisposable
         {
             IsRunning = true,
             PrerequisitesReady = prerequisites.CanBridge,
-            StatusText = "Waiting for bound OCC controller...",
+            StatusText = configuration.AutoScanBtGuitarAlways && !HasManualBinding(configuration)
+                ? "Autoscan enabled. Waiting for OCC BT guitar..."
+                : "Waiting for bound OCC controller...",
         });
 
         try
@@ -130,17 +133,19 @@ public sealed class BridgeCoordinator : IDisposable
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var bound = configuration.BoundController!;
-                var candidate = _deviceBindingService.ResolveBoundDevice(bound);
+                var candidate = ResolveRuntimeCandidate(configuration, out var preferredName);
 
                 if (candidate is null)
                 {
+                    var autoScanOnly = configuration.AutoScanBtGuitarAlways && !HasManualBinding(configuration);
                     PublishStatus(new BridgeRuntimeStatus
                     {
                         IsRunning = true,
                         PrerequisitesReady = prerequisites.CanBridge,
-                        StatusText = "Waiting for bound OCC controller...",
-                        ActiveDeviceName = bound.ProductName,
+                        StatusText = autoScanOnly
+                            ? "Autoscan enabled. Waiting for OCC BT guitar..."
+                            : "Waiting for bound OCC controller...",
+                        ActiveDeviceName = preferredName,
                     });
 
                     await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
@@ -194,18 +199,25 @@ public sealed class BridgeCoordinator : IDisposable
                     },
                     cancellationToken).ConfigureAwait(false);
 
-                _virtualControllerService.Reset();
-
-                if (!completedNormally && !cancellationToken.IsCancellationRequested)
+                if (!cancellationToken.IsCancellationRequested)
                 {
+                    CleanupDisconnectedController();
+
+                    var autoScanOnly = configuration.AutoScanBtGuitarAlways && !HasManualBinding(configuration);
                     PublishStatus(new BridgeRuntimeStatus
                     {
                         IsRunning = true,
                         PrerequisitesReady = prerequisites.CanBridge,
-                        StatusText = "Physical OCC controller disconnected. Waiting to reconnect...",
+                        StatusText = autoScanOnly
+                            ? "Autoscan enabled. Waiting for OCC BT guitar..."
+                            : "Physical OCC controller disconnected. Waiting to reconnect...",
                         ActiveDeviceName = candidate.ProductName,
                     });
-                    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+
+                    if (!completedNormally)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+                    }
                 }
             }
         }
@@ -230,6 +242,23 @@ public sealed class BridgeCoordinator : IDisposable
         }
     }
 
+    private void CleanupDisconnectedController()
+    {
+        try
+        {
+            _virtualControllerService.Reset();
+        }
+        catch (Exception ex)
+        {
+            _log.Exception("Failed to reset virtual controller during disconnect cleanup", ex);
+        }
+        finally
+        {
+            _virtualControllerService.Disconnect();
+            TryRemoveHide();
+        }
+    }
+
     private void TryRemoveHide()
     {
         if (!string.IsNullOrWhiteSpace(_currentHiddenInstanceId))
@@ -238,6 +267,44 @@ public sealed class BridgeCoordinator : IDisposable
             _hideService.RemoveHide(_currentHiddenInstanceId);
             _currentHiddenInstanceId = null;
         }
+    }
+
+    private DeviceCandidate? ResolveRuntimeCandidate(AppConfiguration configuration, out string? preferredName)
+    {
+        preferredName = configuration.BoundController?.ProductName;
+
+        if (HasManualBinding(configuration))
+        {
+            var boundCandidate = _deviceBindingService.ResolveBoundDevice(configuration.BoundController!);
+            if (boundCandidate is not null)
+            {
+                return boundCandidate;
+            }
+        }
+
+        if (!configuration.AutoScanBtGuitarAlways)
+        {
+            return null;
+        }
+
+        var autoScanCandidate = _deviceBindingService.GetCandidates().FirstOrDefault();
+        if (autoScanCandidate is not null)
+        {
+            preferredName = autoScanCandidate.ProductName;
+            _log.Info(
+                $"Autoscan selected OCC BT guitar candidate '{autoScanCandidate.ProductName}' [{autoScanCandidate.Backend}] VID={autoScanCandidate.VendorId:X4} PID={autoScanCandidate.ProductId:X4}.");
+        }
+        else
+        {
+            preferredName = "OCC BT guitar";
+        }
+
+        return autoScanCandidate;
+    }
+
+    private static bool HasManualBinding(AppConfiguration configuration)
+    {
+        return configuration.ControllerBoundByUser && configuration.BoundController is not null;
     }
 
     private void PublishStatus(BridgeRuntimeStatus status)
