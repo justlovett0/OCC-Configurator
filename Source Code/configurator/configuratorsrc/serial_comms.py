@@ -182,16 +182,45 @@ class PicoSerial:
 
     def start_scan(self):
         """Start SCAN. Returns list of pre-scan lines (like I2C:ADXL345) before OK."""
+        # If the UI just navigated away from a scanning page, STOP may have been
+        # sent fire-and-forget. Give firmware a tiny chance to consume it before
+        # sending SCAN, otherwise the new SCAN can be read by the old scan loop
+        # and ignored while the UI already says "waiting".
+        old_timeout = self.ser.timeout
+        try:
+            self.ser.write(b"STOP\n")
+            self.ser.flush()
+            self.ser.timeout = 0.03
+            deadline = time.time() + 0.12
+            while time.time() < deadline:
+                line = self.ser.readline().decode("ascii", errors="replace").strip()
+                if not line:
+                    break
+                if line == "OK":
+                    break
+        except Exception:
+            pass
+        finally:
+            try:
+                self.ser.timeout = old_timeout
+            except Exception:
+                pass
+        self.flush_input()
         self.ser.write(b"SCAN\n")
         self.ser.flush()
         pre_lines = []
         deadline = time.time() + 5.0
-        while time.time() < deadline:
-            line = self.ser.readline().decode("ascii", errors="replace").strip()
-            if line == "OK":
-                return pre_lines
-            elif line:
-                pre_lines.append(line)
+        old_timeout = self.ser.timeout
+        self.ser.timeout = 0.05
+        try:
+            while time.time() < deadline:
+                line = self.ser.readline().decode("ascii", errors="replace").strip()
+                if line == "OK":
+                    return pre_lines
+                elif line:
+                    pre_lines.append(line)
+        finally:
+            self.ser.timeout = old_timeout
         raise ValueError("SCAN: no OK response")
 
     def stop_scan(self):
@@ -202,6 +231,15 @@ class PicoSerial:
             line = self.ser.readline().decode("ascii", errors="replace").strip()
             if line == "OK":
                 return
+
+    def request_stop_scan(self):
+        """Send STOP without waiting for the firmware acknowledgement."""
+        try:
+            if self.connected:
+                self.ser.write(b"STOP\n")
+                self.ser.flush()
+        except Exception:
+            pass
 
     def read_scan_line(self, timeout=0.15):
         old_timeout = self.ser.timeout
@@ -241,6 +279,10 @@ class PicoSerial:
     def stop_monitor(self):
         """Stop monitoring (same as stop_scan)."""
         self.stop_scan()
+
+    def request_stop_monitor(self):
+        """Send STOP for monitor mode without waiting for acknowledgement."""
+        self.request_stop_scan()
 
     def drain_monitor_latest(self, timeout=0.05):
         """Drain ALL buffered MVAL lines and return only the most recent value.

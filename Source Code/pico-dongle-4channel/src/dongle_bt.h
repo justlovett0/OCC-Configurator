@@ -22,6 +22,8 @@
 
 #define DONGLE_MAX_CONTROLLERS   4
 #define BLE_MAC_LEN              6
+#define DONGLE_CONTROLLER_KIND_GUITAR  0
+#define DONGLE_CONTROLLER_KIND_DRUM    1
 
 /* ── Report structure received from controller (12 bytes, unchanged) ── */
 typedef struct __attribute__((packed)) {
@@ -96,6 +98,7 @@ bool dongle_bt_connected(uint8_t slot);
  * Returns false (and leaves *out unchanged) if no report has ever arrived.
  */
 bool dongle_bt_get_report(uint8_t slot, dongle_report_t *out);
+uint8_t dongle_bt_get_controller_kind(uint8_t slot);
 
 /* Returns how many slots are currently active (connected). */
 uint8_t dongle_bt_active_count(void);

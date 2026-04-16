@@ -334,7 +334,7 @@ class MainMenu:
                             text=f"{first_label} detected via XInput  ({count} device{'s' if count > 1 else ''})",
                             fg=ACCENT_GREEN)
                         subtype = config_devices[0][1]
-                        EASY_CONFIG_SUBTYPES = {7}  # standard guitar only
+                        EASY_CONFIG_SUBTYPES = {7, 8}  # standard guitar and drum kit
                         has_easy = subtype in EASY_CONFIG_SUBTYPES
                         detail = (
                             "Click either Configure option to switch to Config Mode."
@@ -406,10 +406,16 @@ class MainMenu:
             self._easy_cfg_btn.set_state("disabled")
         elif dtype == "drum_kit":
             self._ctrl_detail.config(
-                text=f"Drum Kit  ·  Config mode  ·  {port}  ·  No Easy Configurator for Drums yet",
+                text=f"Drum Kit  ·  Config mode  ·  {port}",
                 fg=TEXT_DIM)
             self._cfg_btn.set_state("normal")
-            self._easy_cfg_btn.set_state("disabled")
+            self._easy_cfg_btn.set_state("normal")
+        elif dtype == "drum_combined":
+            self._ctrl_detail.config(
+                text=f"Drum Kit (Combined Wireless)  ·  Config mode  ·  {port}",
+                fg=TEXT_DIM)
+            self._cfg_btn.set_state("normal")
+            self._easy_cfg_btn.set_state("normal")
         elif dtype == "guitar_alternate":
             self._ctrl_detail.config(
                 text=f"Guitar  ·  Config mode  ·  {port}", fg=TEXT_DIM)

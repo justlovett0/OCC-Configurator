@@ -11,11 +11,25 @@ from .xinput_utils import (XINPUT_AVAILABLE, xinput_get_connected,
 
 def find_uf2_files():
     found = {}
+    search_dirs = []
     bundle_dir = getattr(sys, '_MEIPASS', None)
     if bundle_dir:
-        for f in os.listdir(bundle_dir):
-            if f.lower().endswith('.uf2') and f.lower() != NUKE_UF2_FILENAME.lower():
-                found[f] = os.path.join(bundle_dir, f)
+        search_dirs.append(bundle_dir)
+    # When running from source, look alongside the script and one level up (configurator/)
+    script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    src_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(src_dir)
+    for d in (script_dir, parent_dir, src_dir):
+        if d not in search_dirs:
+            search_dirs.append(d)
+    for d in search_dirs:
+        try:
+            for f in os.listdir(d):
+                if f.lower().endswith('.uf2') and f.lower() != NUKE_UF2_FILENAME.lower():
+                    if f not in found:
+                        found[f] = os.path.join(d, f)
+        except OSError:
+            pass
     return sorted(found.items())
 
 

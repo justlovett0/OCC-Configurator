@@ -147,6 +147,19 @@ static bool slot_was_connected[DONGLE_MAX_CONTROLLERS] = {false};
 static volatile bool slot_binding_save_pending[DONGLE_MAX_CONTROLLERS] = {false};
 static dongle_binding_t pending_slot_binding[DONGLE_MAX_CONTROLLERS];
 
+static bool sync_slot_subtype(uint8_t slot) {
+    if (slot >= DONGLE_MAX_CONTROLLERS) return false;
+
+    uint8_t kind = dongle_bt_get_controller_kind(slot);
+    uint8_t subtype = (kind == DONGLE_CONTROLLER_KIND_DRUM)
+        ? XINPUT_SUBTYPE_DRUM_KIT
+        : XINPUT_SUBTYPE_DONGLE;
+
+    if (g_controller_subtypes[slot] == subtype) return false;
+    g_controller_subtypes[slot] = subtype;
+    return true;
+}
+
 static void process_pending_binding_saves(void) {
     for (uint8_t s = 0; s < DONGLE_MAX_CONTROLLERS; s++) {
         if (!slot_binding_save_pending[s]) continue;
@@ -387,18 +400,16 @@ static void on_bind_complete(uint8_t slot, uint8_t addr_type, const uint8_t mac[
 
     /* Mark the slot as allocated so auto-rebind logic knows it exists */
     slot_allocated[slot]    = true;
-    slot_was_connected[slot] = true;
+    slot_was_connected[slot] = false;
     pending_slot_binding[slot].valid = true;
     pending_slot_binding[slot].addr_type = addr_type;
     memcpy(pending_slot_binding[slot].mac, mac, BLE_MAC_LEN);
     slot_binding_save_pending[slot] = true;
 
     /*
-     * A new (or returning) controller is now wirelessly connected on slot s.
-     * Recalculate how many interfaces Windows should see and schedule the
-     * USB update if the count changed.
+     * Wait for the first report before exposing this slot over USB. That
+     * report carries the optional controller-kind byte used for drum subtype.
      */
-    schedule_usb_update();
 }
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -418,6 +429,9 @@ static void rebind_disconnected_slots(void) {
         bool connected_now = dongle_bt_connected(s);
 
         if (connected_now) {
+            if (sync_slot_subtype(s)) {
+                any_changed = true;
+            }
             if (!slot_was_connected[s]) {
                 /*
                  * Slot just came back online (rebind completed and first
@@ -439,6 +453,7 @@ static void rebind_disconnected_slots(void) {
              *    dongle_bt_start_bind replaces it for this slot.)
              */
             slot_was_connected[s] = false;
+            g_controller_subtypes[s] = XINPUT_SUBTYPE_DONGLE;
             any_changed = true;
             /* Auto-reconnect is now handled internally by dongle_bt.c via
              * gap_connect(mac) — no need to call dongle_bt_start_bind here. */
@@ -541,6 +556,7 @@ int main(void) {
                     dongle_bindings_clear_slot(s);
                     slot_allocated[s] = false;
                     slot_was_connected[s] = false;
+                    g_controller_subtypes[s] = XINPUT_SUBTYPE_DONGLE;
                     slot_binding_save_pending[s] = false;
                     memset(&pending_slot_binding[s], 0, sizeof(pending_slot_binding[s]));
                     dongle_bt_start_bind(s, on_bind_complete);

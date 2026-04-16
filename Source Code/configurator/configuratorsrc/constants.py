@@ -101,6 +101,33 @@ PEDAL_LED_INPUT_LABELS = [
     "Pedal 1", "Pedal 2", "Pedal 3", "Pedal 4",
 ]
 
+DRUM_LED_INPUT_NAMES = [
+    "red_drum", "yellow_drum", "blue_drum", "green_drum",
+    "yellow_cym", "blue_cym", "green_cym",
+    "start", "select",
+    "dpad_up", "dpad_down", "dpad_left", "dpad_right",
+    "foot_pedal",
+]
+
+DRUM_LED_INPUT_LABELS = [
+    "Red Drum", "Yellow Drum", "Blue Drum", "Green Drum",
+    "Yellow Cymbal", "Blue Cymbal", "Green Cymbal",
+    "Start", "Select",
+    "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
+    "Foot Pedal",
+]
+
+DRUM_INPUT_COLORS = {
+    "red_drum": "#e74c3c",
+    "yellow_drum": "#f1c40f",
+    "blue_drum": "#3498db",
+    "green_drum": "#2ecc71",
+    "yellow_cym": "#d4a017",
+    "blue_cym": "#2980b9",
+    "green_cym": "#27ae60",
+    "foot_pedal": "#d4944a",
+}
+
 GUITAR_PROFILE_DEFS = {
     "standard": {
         "title": "Guitar Configurator",
@@ -198,10 +225,12 @@ DEVICE_TYPE_UF2_HINTS = {
     "guitar_combined":         "guitar",
     "guitar_live_6fret":       "6fret",
     "drum_kit":                "drum",
+    "drum_combined":           "drum",
     "dongle":                  "dongle",
     "pedal":                   "pedal",
     "pico_retro":              "retro",
     "pico_arcadestick":        "arcadestick",
+    "keyboard_macro":          "keyboard",
 }
 
 # Maps XInput subtype → DEVTYPE string (used before serial connection is open)

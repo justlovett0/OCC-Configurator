@@ -24,6 +24,7 @@ from configuratorsrc.utils import _fetch_latest_release, _version_is_newer, _sho
 from configuratorsrc.widgets import _DD_HEIGHT, _DD_CHAR_PX, _DD_PAD
 from configuratorsrc.screen_flash import FlashFirmwareScreen
 from configuratorsrc.screen_easy_config import EasyConfigScreen
+from configuratorsrc.screen_drum_easy_config import DrumEasyConfigScreen
 from configuratorsrc.screen_main_menu import MainMenu
 from configuratorsrc.screen_app import App
 from configuratorsrc.screen_drum import DrumApp
@@ -39,9 +40,11 @@ DEBUG_SCREEN_LABELS = (
   ("menu", "Main Menu"),
   ("flash", "Flash Firmware"),
   ("easy", "Easy Configuration"),
+  ("easy_drum", "Easy Drum Configuration"),
   ("guitar_alternate", "Guitar Config"),
   ("guitar_live_6fret", "6-Fret Guitar Config"),
   ("drum_kit", "Drum Config"),
+  ("drum_combined", "Wireless Drum Config"),
   ("pedal", "Pedal Config"),
   ("pico_retro", "Retro Config"),
   ("pico_arcadestick", "Arcade Stick Config"),
@@ -61,6 +64,7 @@ DEVICE_SCREEN_MAP = {
   "guitar_alternate_dongle": None,   # dongle guitar variant → same App screen
   "guitar_live_6fret":       None,   # filled in main() once App is instantiated
   "drum_kit":                None,   # filled in main() once DrumApp is instantiated
+  "drum_combined":           None,   # filled in main() once DrumApp is instantiated
   "pedal":                   None,   # filled in main() once PedalApp is instantiated
   "pico_retro":              None,   # filled in main() once RetroApp is instantiated
   "pico_arcadestick":        None,   # filled in main() once ArcadeStickApp is instantiated
@@ -74,6 +78,7 @@ DEVICE_SCREEN_CLASSES = {
   "guitar_combined":         lambda root, on_back: App(root, on_back=on_back, guitar_profile="standard"),
   "guitar_live_6fret":       lambda root, on_back: App(root, on_back=on_back, guitar_profile="six_fret"),
   "drum_kit":                DrumApp,
+  "drum_combined":           DrumApp,
   "pedal":                   PedalApp,
   "pico_retro":              RetroApp,
   "pico_arcadestick":        ArcadeStickApp,
@@ -473,6 +478,9 @@ def main():
   easy_config_screen = EasyConfigScreen(root, on_back=None)
   easy_config_screen.hide()
 
+  drum_easy_config_screen = DrumEasyConfigScreen(root, on_back=None)
+  drum_easy_config_screen.hide()
+
   flash_screen = FlashFirmwareScreen(root, on_back=None)
   flash_screen.hide()
 
@@ -523,6 +531,7 @@ def main():
           s.hide()
       flash_screen.hide()
       easy_config_screen.hide()
+      drum_easy_config_screen.hide()
       menu.hide()
 
       if screen_key == "menu":
@@ -544,7 +553,19 @@ def main():
           )
           easy_config_screen.show()
           if connect_port:
+              root.update()   # flush layout + WM_PAINT so screen renders before serial blocks
               easy_config_screen._connect_serial(connect_port)
+          return
+
+      if screen_key == "easy_drum":
+          debug_log(
+              "Screen -> Easy Drum Configuration"
+              + (f" (connecting to {connect_port})" if connect_port else " (preview mode)")
+          )
+          drum_easy_config_screen.show()
+          if connect_port:
+              root.update()   # flush layout + WM_PAINT so screen renders before serial blocks
+              drum_easy_config_screen._connect_serial(connect_port)
           return
 
       screen = device_screens.get(screen_key)
@@ -564,6 +585,24 @@ def main():
   def go_to_menu():
       show_screen("menu")
 
+  def _easy_screen_for_port(port):
+      ps = None
+      try:
+          ps = PicoSerial()
+          ps.connect(port)
+          cfg = ps.get_config()
+          if cfg.get("device_type") in ("drum_kit", "drum_combined"):
+              return "easy_drum"
+      except Exception:
+          pass
+      finally:
+          try:
+              if ps is not None:
+                  ps.disconnect()
+          except Exception:
+              pass
+      return "easy"
+
   def go_to_easy_config(port):
       """
       Route to Easy Configuration.  Mirrors go_to_configurator() — handles
@@ -572,9 +611,18 @@ def main():
       _cancel_menu_poll()
 
       if port:
-          # Already in config mode
+          # Already in config mode — detect device type in background so the
+          # main thread doesn't freeze while serial ops run (drum Pico W init
+          # can take a few seconds before GET_CONFIG responds).
           debug_log(f"Easy config path entered via config port {port}")
-          show_screen("easy", connect_port=port)
+          menu._cfg_btn.set_state("disabled")
+          menu._easy_cfg_btn.set_state("disabled")
+          menu._ctrl_detail.config(text="Connecting\u2026", fg=TEXT_DIM)
+          root.update_idletasks()
+          def _com_worker(p=port):
+              sk = _easy_screen_for_port(p)
+              root.after(0, lambda: show_screen(sk, connect_port=p))
+          threading.Thread(target=_com_worker, daemon=True).start()
 
       elif XINPUT_AVAILABLE:
           debug_log("Easy config path entered via XInput")
@@ -644,7 +692,10 @@ def main():
               time.sleep(0.5)
               debug_log(f"Config port found for easy config: {found_port}")
 
-              root.after(0, lambda fp=found_port: show_screen("easy", connect_port=fp))
+              # Evaluate _easy_screen_for_port here in the background thread so the
+              # blocking serial GET_CONFIG doesn't stall the Tk main thread.
+              sk = _easy_screen_for_port(found_port)
+              root.after(0, lambda sk=sk, fp=found_port: show_screen(sk, connect_port=fp))
 
           threading.Thread(target=_worker, daemon=True).start()
 
@@ -806,6 +857,7 @@ def main():
       debug_log("Device screen construction complete")
       flash_screen._on_back = go_to_menu
       easy_config_screen._on_back = go_to_menu
+      drum_easy_config_screen._on_back = go_to_menu
       menu._on_configure = go_to_configurator
       menu._on_flash_screen = go_to_flash_screen
       menu._on_easy_config = go_to_easy_config

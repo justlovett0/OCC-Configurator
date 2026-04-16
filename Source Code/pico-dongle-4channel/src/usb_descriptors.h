@@ -22,7 +22,10 @@
 
 /* ── Global ──────────────────────────────────────────────────────── */
 
+#define XINPUT_MAX_CONTROLLERS    4
+
 extern uint8_t  g_num_controllers;   /* 1-4: how many XInput interfaces to present */
+extern uint8_t  g_controller_subtypes[XINPUT_MAX_CONTROLLERS];
 
 /* ── XInput protocol constants ───────────────────────────────────── */
 
@@ -42,6 +45,7 @@ extern uint8_t  g_num_controllers;   /* 1-4: how many XInput interfaces to prese
 // NOTE: Do NOT use 0x05 — that is XINPUT_DEVSUBTYPE_DANCE_PAD and causes
 // Windows to suppress all analog axis output.
 #define XINPUT_SUBTYPE_DONGLE     0x0B
+#define XINPUT_SUBTYPE_DRUM_KIT   0x08
 
 /* Endpoint addresses — indexed by slot number */
 #define XINPUT_EP_IN_SLOT(n)   (0x81 + ((n) * 2))   /* 0x81, 0x83, 0x85, 0x87 */

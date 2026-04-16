@@ -60,6 +60,7 @@ typedef struct {
     dongle_report_t   report;
     bool              report_new;
     uint32_t          last_report_ms;
+    uint8_t           controller_kind;
 } slot_state_t;
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -253,8 +254,8 @@ static void gatt_client_handler(uint8_t packet_type, uint16_t channel,
                 case GATT_SUBSCRIBING:
                     /* Subscribed — reports will now arrive as notifications */
                     _d.slots[s].gatt_state    = GATT_READY;
-                    _d.slots[s].last_report_ms =
-                        to_ms_since_boot(get_absolute_time());
+                    _d.slots[s].last_report_ms = 0;
+                    _d.slots[s].report_new = false;
                     printf("DONGLE BT: Slot %d READY (%02X:%02X:%02X:%02X:%02X:%02X)\n",
                            s,
                            _d.slots[s].mac[0], _d.slots[s].mac[1],
@@ -287,10 +288,18 @@ static void gatt_client_handler(uint8_t packet_type, uint16_t channel,
             if (vlen < sizeof(dongle_report_t)) break;
 
             const uint8_t *val = gatt_event_notification_get_value(packet);
+            uint8_t kind = DONGLE_CONTROLLER_KIND_GUITAR;
+            if (vlen > sizeof(dongle_report_t)) {
+                kind = val[sizeof(dongle_report_t)];
+                if (kind != DONGLE_CONTROLLER_KIND_DRUM) {
+                    kind = DONGLE_CONTROLLER_KIND_GUITAR;
+                }
+            }
 
             /* IRQ-safe copy — main loop reads this without disable */
             uint32_t irq = save_and_disable_interrupts();
             memcpy(&_d.slots[s].report, val, sizeof(dongle_report_t));
+            _d.slots[s].controller_kind = kind;
             _d.slots[s].report_new    = true;
             _d.slots[s].last_report_ms = to_ms_since_boot(get_absolute_time());
             restore_interrupts(irq);
@@ -389,6 +398,8 @@ static void packet_handler(uint8_t packet_type, uint16_t channel,
             printf("DONGLE BT: Slot %d disconnected\n", s);
             _d.slots[s].gatt_state  = GATT_IDLE;
             _d.slots[s].con_handle  = HCI_CON_HANDLE_INVALID;
+            _d.slots[s].last_report_ms = 0;
+            _d.slots[s].report_new = false;
 
             /* If this slot was mid-bind, cancel */
             if (_d.binding && _d.bind_slot == s) {
@@ -491,6 +502,8 @@ void dongle_bt_set_bound_mac(uint8_t slot, uint8_t addr_type, const uint8_t mac[
     memcpy(_d.slots[slot].mac, mac, BLE_MAC_LEN);
     _d.slots[slot].addr_type = addr_type;
     _d.slots[slot].bound     = true;
+    _d.slots[slot].controller_kind = DONGLE_CONTROLLER_KIND_GUITAR;
+    _d.slots[slot].last_report_ms = 0;
     /* Actual connection starts when HCI is ready via try_start_pending_connections */
 }
 
@@ -549,7 +562,8 @@ uint8_t dongle_bt_binding_slot(void) {
 
 bool dongle_bt_connected(uint8_t slot) {
     if (slot >= DONGLE_MAX_CONTROLLERS) return false;
-    return _d.slots[slot].gatt_state == GATT_READY;
+    return _d.slots[slot].gatt_state == GATT_READY &&
+           _d.slots[slot].last_report_ms != 0;
 }
 
 bool dongle_bt_get_report(uint8_t slot, dongle_report_t *out) {
@@ -562,6 +576,11 @@ bool dongle_bt_get_report(uint8_t slot, dongle_report_t *out) {
     _d.slots[slot].report_new = false;
     restore_interrupts(irq);
     return was_new;
+}
+
+uint8_t dongle_bt_get_controller_kind(uint8_t slot) {
+    if (slot >= DONGLE_MAX_CONTROLLERS) return DONGLE_CONTROLLER_KIND_GUITAR;
+    return _d.slots[slot].controller_kind;
 }
 
 uint8_t dongle_bt_active_count(void) {

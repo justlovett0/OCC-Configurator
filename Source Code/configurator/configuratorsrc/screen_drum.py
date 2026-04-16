@@ -4,7 +4,10 @@ from tkinter import ttk, messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
                          TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
                          DIGITAL_PINS, DIGITAL_PIN_LABELS, MAX_LEDS, LED_INPUT_NAMES,
-                         LED_INPUT_LABELS, VALID_NAME_CHARS, OCC_SUBTYPES)
+                         LED_INPUT_LABELS, VALID_NAME_CHARS, OCC_SUBTYPES,
+                         DRUM_LED_INPUT_NAMES as FW_DRUM_LED_INPUT_NAMES,
+                         DRUM_LED_INPUT_LABELS as FW_DRUM_LED_INPUT_LABELS,
+                         DRUM_INPUT_COLORS)
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import (RoundedButton, HelpButton, HelpDialog, CustomDropdown,
                        SpeedSlider, LiveBarGraph, _help_text)
@@ -70,6 +73,7 @@ class DrumApp:
                             command=lambda: self._flash_firmware(None))
 
         adv.add_command(label="Enter BOOTSEL Mode", command=self._enter_bootsel)
+        adv.add_command(label="Switch Dongle/BT Default", command=self._switch_wireless_default)
         adv.add_separator()
         adv.add_command(label="Export Configuration...", command=self._export_config)
         adv.add_command(label="Import Configuration...", command=self._import_config)
@@ -81,7 +85,7 @@ class DrumApp:
 
         pm = tk.Menu(mb, tearoff=0, bg=BG_CARD, fg=TEXT,
                      activebackground=ACCENT_BLUE, activeforeground="#fff")
-        presets = _find_preset_configs({"drum_kit"})
+        presets = _find_preset_configs({"drum_kit", "drum_combined"})
         if presets:
             for display_name, fpath in presets:
                 pm.add_command(label=display_name,
@@ -142,18 +146,8 @@ class DrumApp:
     }
 
     # LED input names parallel to drum buttons (for LED map grid)
-    DRUM_LED_INPUT_NAMES = [
-        "red_drum", "yellow_drum", "blue_drum", "green_drum",
-        "yellow_cym", "blue_cym", "green_cym", "foot_pedal",
-        "start", "select",
-        "dpad_up", "dpad_down", "dpad_left", "dpad_right",
-    ]
-    DRUM_LED_INPUT_LABELS = [
-        "Red Drum", "Yellow Drum", "Blue Drum", "Green Drum",
-        "Yellow Cymbal", "Blue Cymbal", "Green Cymbal", "Foot Pedal",
-        "Start", "Select",
-        "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
-    ]
+    DRUM_LED_INPUT_NAMES = list(FW_DRUM_LED_INPUT_NAMES)
+    DRUM_LED_INPUT_LABELS = list(FW_DRUM_LED_INPUT_LABELS)
 
     def _open_help(self):
         if self._help_dialog is None:
@@ -203,6 +197,63 @@ class DrumApp:
         self._help_dialog.open()
 
     # ── Full UI build ────────────────────────────────────────────────
+
+    def _switch_wireless_default(self):
+        if not self.pico.connected:
+            messagebox.showerror("Not Connected",
+                                 "No drum controller is connected. Please connect first.")
+            return
+
+        try:
+            cfg = self.pico.get_config()
+        except Exception as exc:
+            messagebox.showerror("Read Error",
+                                 f"Could not read configuration from controller:\n{exc}")
+            return
+
+        if "wireless_default_mode" not in cfg:
+            messagebox.showinfo(
+                "Wireless Setting Not Available",
+                "This setting is only available for wireless drum firmware.\n\n"
+                "Flash Wireless Drum Controller firmware to use Dongle/BT defaults."
+            )
+            return
+
+        try:
+            current = int(cfg["wireless_default_mode"])
+        except ValueError:
+            current = 0
+        if current not in (0, 1):
+            current = 0
+
+        new_val = 1 - current
+        mode_name = "Bluetooth HID" if new_val == 1 else "Dongle"
+        old_name = "Dongle" if new_val == 1 else "Bluetooth HID"
+
+        if not messagebox.askyesno(
+            "Switch Wireless Default",
+            f"Current default:  {old_name}\n"
+            f"Switch to:        {mode_name}\n\n"
+            f"After saving, the drum controller will boot into {mode_name} mode\n"
+            f"by default when not connected via USB.\n\n"
+            f"Apply change?"
+        ):
+            return
+
+        try:
+            self.pico.set_value("wireless_default_mode", str(new_val))
+            self.pico.save()
+        except Exception as exc:
+            messagebox.showerror("Write Error",
+                                 f"Could not save setting:\n{exc}")
+            return
+
+        messagebox.showinfo(
+            "Wireless Default Updated",
+            f"Default wireless mode set to:  {mode_name}\n\n"
+            "Hold Start+Select for 3 seconds during wireless play to switch\n"
+            "modes for the current session without changing this default."
+        )
 
     def _build_ui(self):
         # Init drum-specific state variables
@@ -1293,7 +1344,9 @@ class DrumApp:
         _bvcmd = (self.root.register(lambda P: P == "" or (P.isdigit() and 0 <= int(P) <= 9)), '%P')
         for inp_idx in range(self.DRUM_INPUT_COUNT):
             grid_row = inp_idx + 1
-            key, lbl_text, dot_color = self.DRUM_BUTTON_DEFS[inp_idx]
+            key = self.DRUM_LED_INPUT_NAMES[inp_idx]
+            lbl_text = self.DRUM_LED_INPUT_LABELS[inp_idx]
+            dot_color = DRUM_INPUT_COLORS.get(key)
 
             name_frame = tk.Frame(grid, bg=BG_CARD)
             name_frame.grid(row=grid_row, column=0, sticky="w", padx=(0, 2), pady=1)
@@ -1405,6 +1458,11 @@ class DrumApp:
         except Exception as exc:
             messagebox.showerror("Error", f"Failed to read config: {exc}")
             return
+        self._last_raw_cfg = cfg
+
+        device_type = cfg.get("device_type", "drum_kit")
+        if device_type == "drum_combined" and self.pico.connected:
+            self._set_status(f"   Wireless Drum Kit  —  {self.pico.ser.port}", ACCENT_GREEN)
 
         # Load drum pin assignments
         for key, _, _ in self.DRUM_BUTTON_DEFS:
@@ -1720,7 +1778,9 @@ class DrumApp:
             self._set_status("   Controller didn't enter config mode", ACCENT_RED)
             messagebox.showwarning("Timeout",
                 "The drum kit didn't switch to config mode.\n"
-                "Close any games or apps using the controller and retry.")
+                "Close any games or apps using the controller and retry.\n\n"
+                "If this is a wireless drum connected through an OCC dongle, "
+                "plug the drum controller directly into USB and try Connect again.")
 
     def _wait_for_port(self, timeout=8.0):
         deadline = time.time() + timeout

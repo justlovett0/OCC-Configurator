@@ -34,6 +34,12 @@
 /* ── Globals ─────────────────────────────────────────────────────── */
 
 uint8_t     g_num_controllers = 1;      /* Start with one XInput interface */
+uint8_t     g_controller_subtypes[XINPUT_MAX_CONTROLLERS] = {
+    XINPUT_SUBTYPE_DONGLE,
+    XINPUT_SUBTYPE_DONGLE,
+    XINPUT_SUBTYPE_DONGLE,
+    XINPUT_SUBTYPE_DONGLE,
+};
 static const char *g_device_name = "Guitar Controller Dongle";
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -70,14 +76,15 @@ uint8_t const* tud_descriptor_device_cb(void) {
 #define XINPUT_BYTES_PER_INTERFACE   40
 #define XINPUT_CONFIG_HEADER_LEN      9
 #define XINPUT_CONFIG_MAX_LEN        (XINPUT_CONFIG_HEADER_LEN + \
-                                      4 * XINPUT_BYTES_PER_INTERFACE)
+                                      XINPUT_MAX_CONTROLLERS * XINPUT_BYTES_PER_INTERFACE)
 
 static uint8_t _xinput_cfg_buf[XINPUT_CONFIG_MAX_LEN];
 static uint8_t _xinput_cfg_built_for = 0;   /* rebuild when g_num_controllers changes */
+static uint8_t _xinput_cfg_subtypes[XINPUT_MAX_CONTROLLERS] = {0};
 
 static void build_xinput_config_desc(uint8_t num) {
     if (num < 1) num = 1;
-    if (num > 4) num = 4;
+    if (num > XINPUT_MAX_CONTROLLERS) num = XINPUT_MAX_CONTROLLERS;
 
     uint16_t total_len = XINPUT_CONFIG_HEADER_LEN + num * XINPUT_BYTES_PER_INTERFACE;
     uint8_t *p = _xinput_cfg_buf;
@@ -113,7 +120,7 @@ static void build_xinput_config_desc(uint8_t num) {
         *p++ = 0x21;
         *p++ = 0x00;
         *p++ = 0x01;
-        *p++ = XINPUT_SUBTYPE_DONGLE;      /* 0x0B */
+        *p++ = g_controller_subtypes[i];
         *p++ = 0x25;
         *p++ = ep_in;                      /* IN endpoint address  */
         *p++ = XINPUT_REPORT_SIZE;         /* 20 */
@@ -147,13 +154,15 @@ static void build_xinput_config_desc(uint8_t num) {
     }
 
     _xinput_cfg_built_for = num;
+    memcpy(_xinput_cfg_subtypes, g_controller_subtypes, sizeof(_xinput_cfg_subtypes));
 }
 
 uint8_t const* tud_descriptor_configuration_cb(uint8_t index) {
     (void)index;
 
     /* Rebuild config descriptor if controller count changed */
-    if (_xinput_cfg_built_for != g_num_controllers) {
+    if (_xinput_cfg_built_for != g_num_controllers ||
+        memcmp(_xinput_cfg_subtypes, g_controller_subtypes, sizeof(_xinput_cfg_subtypes)) != 0) {
         build_xinput_config_desc(g_num_controllers);
     }
 

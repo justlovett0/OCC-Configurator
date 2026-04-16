@@ -452,7 +452,7 @@ class EasyConfigScreen:
                 pass
             self._scan_timeout_after_id = None
 
-    def _schedule_auto_detect(self, callback, delay_ms=300):
+    def _schedule_auto_detect(self, callback, delay_ms=75):
         self._cancel_detection_jobs()
         def _run():
             self._auto_detect_after_id = None
@@ -485,16 +485,10 @@ class EasyConfigScreen:
         self.scanning = False
         self._preview_active = False
         if need_stop_scan:
-            try:
-                self.pico.stop_scan()
-            except Exception:
-                pass
+            self._request_stop_scan()
         if self._monitoring:
             self._monitoring = False
-            try:
-                self.pico.stop_monitor()
-            except Exception:
-                pass
+            self._request_stop_monitor()
         if reset_detection_ui and callable(self._page_detection_reset):
             try:
                 self._page_detection_reset()
@@ -502,6 +496,26 @@ class EasyConfigScreen:
                 pass
         if reset_detection_ui:
             self._page_detection_reset = None
+
+    def _request_stop_scan(self):
+        try:
+            if hasattr(self.pico, "request_stop_scan"):
+                self.pico.request_stop_scan()
+            else:
+                self.pico.stop_scan()
+        except Exception:
+            pass
+
+    def _request_stop_monitor(self):
+        try:
+            if hasattr(self.pico, "request_stop_monitor"):
+                self.pico.request_stop_monitor()
+            elif hasattr(self.pico, "request_stop_scan"):
+                self.pico.request_stop_scan()
+            else:
+                self.pico.stop_monitor()
+        except Exception:
+            pass
 
     def _page_is_active(self, token, *widgets):
         if token != self._page_token:
@@ -984,7 +998,7 @@ class EasyConfigScreen:
                 self._auto_detect_after_id = None
                 if self._page_is_active(page_token, status_lbl, gpio_lbl) and key not in self.detected:
                     start_detect()
-            self._schedule_auto_detect(_auto_start, delay_ms=300)
+            self._schedule_auto_detect(_auto_start, delay_ms=75)
 
     # ── D-Pad page ────────────────────────────────────────────────
 
