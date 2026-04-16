@@ -41,6 +41,88 @@ class FlashFirmwareScreen:
 
     # ── Layout ────────────────────────────────────────────────────
 
+    # Firmware name → (buttons, joysticks, axes, variants, description)
+    _FW_INFO = [
+        ("Guitar Controller",      14, 0, 1, "Wired + Wireless", "5-fret guitar for Guitar Hero / Rock Band style games. Whammy bar axis, optional tilt."),
+        ("Guitar Controller 6Fret", 16, 0, 1, "Wired only",       "6-fret GHL-style guitar. Two rows of 3 frets (white/black). Whammy bar axis."),
+        ("Drum Controller",        14, 0, 7, "Wired + Wireless", "4 drum pads, 3 cymbals, kick pedal. Pad hits are velocity-sensitive analog axes."),
+        ("Retro Controller",       13, 0, 2, "Wired only",       "Generic XInput gamepad. Great for emulators. Analog LT/RT triggers."),
+        ("Arcade Stick",           17, 1, 0, "Wired only",       "Fight stick layout: 4 directional + 8 action + 5 nav buttons. Stick maps to D-Pad, L-Stick, or R-Stick."),
+        ("Pedal Accessory",         4, 0, 0, "Wired only",       "Auxiliary foot pedal device. Adds up to 4 kick/pedal inputs — often paired with drums."),
+        ("Keyboard Macro Pad",     16, 0, 0, "Wired only",       "Programmable macro board. Each button maps to a custom keyboard shortcut."),
+        ("Dongle 4Channel",         0, 0, 0, "Wireless (receiver)", "USB wireless receiver. Bridges up to 4 OCC wireless controllers to a single USB port. No input config."),
+    ]
+
+    def _open_firmware_info(self):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("OCC Firmware Reference")
+        dlg.configure(bg=BG_CARD)
+        dlg.resizable(True, False)
+        dlg.transient(self.root)
+
+        # Header
+        hdr_frame = tk.Frame(dlg, bg=BG_CARD)
+        hdr_frame.pack(fill="x", padx=24, pady=(18, 12))
+        tk.Label(hdr_frame, text="OCC Firmware Reference",
+                 bg=BG_CARD, fg=TEXT_HEADER, font=(FONT_UI, 13, "bold")).pack(anchor="w")
+        tk.Label(hdr_frame, text="Configurable inputs and intended use for each available firmware.",
+                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9)).pack(anchor="w", pady=(2, 0))
+
+        # Separator
+        tk.Frame(dlg, bg=BORDER, height=1).pack(fill="x")
+
+        # Table
+        tbl = tk.Frame(dlg, bg=BG_MAIN)
+        tbl.pack(fill="both", expand=True, padx=16, pady=12)
+
+        COL_DEFS = [
+            ("Firmware",    170, "w"),
+            ("Variants",    110, "center"),
+            ("Buttons",      58, "center"),
+            ("Joysticks",    66, "center"),
+            ("Axes",         46, "center"),
+            ("Description",   0, "w"),
+        ]
+
+        for ci, (name, minw, _) in enumerate(COL_DEFS):
+            tbl.columnconfigure(ci, weight=1 if ci == 5 else 0, minsize=minw)
+
+        # Column headers
+        for ci, (name, _, anchor) in enumerate(COL_DEFS):
+            cell = tk.Frame(tbl, bg=ACCENT_BLUE)
+            cell.grid(row=0, column=ci, sticky="ew", padx=(0, 1), pady=(0, 2))
+            tk.Label(cell, text=name, bg=ACCENT_BLUE, fg="#ffffff",
+                     font=(FONT_UI, 9, "bold"), padx=8, pady=6,
+                     anchor=anchor, justify="left").pack(fill="x")
+
+        # Data rows
+        for ri, (fw_name, buttons, joysticks, axes, variants, desc) in enumerate(self._FW_INFO, 1):
+            row_bg = BG_CARD if ri % 2 == 1 else "#232327"
+            vals = [fw_name, variants, str(buttons) if buttons else "—",
+                    str(joysticks) if joysticks else "—",
+                    str(axes) if axes else "—", desc]
+            for ci, (val, (_, _, anchor)) in enumerate(zip(vals, COL_DEFS)):
+                cell = tk.Frame(tbl, bg=row_bg)
+                cell.grid(row=ri, column=ci, sticky="ew", padx=(0, 1), pady=0)
+                tk.Label(cell, text=val, bg=row_bg, fg=TEXT,
+                         font=(FONT_UI, 8), padx=8, pady=5,
+                         anchor=anchor, justify="left" if ci == 5 else "center",
+                         wraplength=300 if ci == 5 else 0).pack(fill="x")
+
+        # Separator + close button
+        tk.Frame(dlg, bg=BORDER, height=1).pack(fill="x", pady=(4, 0))
+        RoundedButton(dlg, text="Close", command=dlg.destroy,
+                      bg_color="#555560", btn_width=80, btn_height=28,
+                      btn_font=(FONT_UI, 8, "bold")).pack(pady=12)
+
+        dlg.update_idletasks()
+        pw, ph = self.root.winfo_width(), self.root.winfo_height()
+        px, py = self.root.winfo_rootx(), self.root.winfo_rooty()
+        dw = max(dlg.winfo_reqwidth(), 820)
+        dh = dlg.winfo_reqheight()
+        dlg.geometry(f"{dw}x{dh}+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
+        dlg.grab_set()
+
     def _open_help(self):
         if self._help_dialog is None:
             self._help_dialog = HelpDialog(self.root, [
@@ -90,30 +172,41 @@ class FlashFirmwareScreen:
                  bg=BG_CARD, fg=ACCENT_BLUE,
                  font=(FONT_UI, 13)).pack(anchor="w")
 
-        # ── Page heading ──────────────────────────────────────
+        # ── Page heading (button left | title+subtitle+combo centered right) ──
         heading_frame = tk.Frame(self.frame, bg=BG_MAIN)
-        heading_frame.pack(fill="x", pady=(16, 4))
+        heading_frame.pack(fill="x", pady=(12, 4))
 
-        tk.Label(heading_frame, text="Firmware Installation",
+        # Right balancing spacer — mirrors the button's footprint (padx 40 + btn 200 = 240)
+        # so the center content is truly centered on the full screen width.
+        tk.Frame(heading_frame, bg=BG_MAIN, width=240).pack(side="right")
+
+        # Left: large info button, vertically centered
+        RoundedButton(heading_frame, text="Tell me about\nOCC Firmwares",
+                      command=self._open_firmware_info,
+                      bg_color=ACCENT_BLUE,
+                      btn_width=200, btn_height=66,
+                      btn_font=(FONT_UI, 10, "bold")).pack(side="left", padx=(40, 0), pady=8)
+
+        # Center: title + subtitle + dropdown, truly centered in remaining space
+        right_frame = tk.Frame(heading_frame, bg=BG_MAIN)
+        right_frame.pack(side="left", fill="both", expand=True)
+
+        tk.Label(right_frame, text="Firmware Installation",
                  bg=BG_MAIN, fg=ACCENT_BLUE,
-                 font=(FONT_UI, 16, "bold")).pack()
+                 font=(FONT_UI, 16, "bold")).pack(pady=(10, 0))
 
-        self._subtitle = tk.Label(heading_frame,
+        self._subtitle = tk.Label(right_frame,
                                   text="Pico in BOOTSEL detected!\nConfirm device and choose firmware.",
                                   bg=BG_MAIN, fg=TEXT_HEADER,
                                   font=(FONT_UI, 10), justify="center")
         self._subtitle.pack()
 
-        # ── Device dropdown ───────────────────────────────────
-        combo_frame = tk.Frame(self.frame, bg=BG_MAIN)
-        combo_frame.pack(pady=(8, 14))
-
+        # Dropdown sits below subtitle, inside the right frame
         self._device_var = tk.StringVar(value="Scanning for USB devices…")
-        self._device_combo = CustomDropdown(combo_frame, state="readonly",
-                                          textvariable=self._device_var,
-                                          width=32,
-                                          values=[])
-        self._device_combo.pack()
+        self._device_combo = CustomDropdown(right_frame, state="readonly",
+                                            textvariable=self._device_var,
+                                            width=32, values=[])
+        self._device_combo.pack(pady=(6, 10))
         self._refresh_device_combo()
 
         # ── Tabbed panel (OCC Firmware / Controller Presets) ─────

@@ -29,6 +29,7 @@ class MainMenu:
     """
 
     POLL_MS = 1000
+    FACTORY_RESET_SCREEN_HOLD_MS = 4000
 
     def __init__(self, root, on_configure):
         self.root = root
@@ -43,6 +44,8 @@ class MainMenu:
         self._check_in_progress = False   # suppress poll rebuilds during update check
         self._probing_ctrl = False        # background serial probe in flight
         self._factory_reset_in_progress = False  # suppress flash screen during factory reset
+        self._factory_reset_hold_until = 0.0
+        self._factory_reset_handoff_job = None
         self._flash_screen_job = None           # delayed auto-open from firmware card
         # BOOTSEL debounce: drive must be seen for this many consecutive polls
         # before we switch screens.  POLL_MS=1000ms so 2 polls = ~2s minimum.
@@ -59,6 +62,18 @@ class MainMenu:
         self._build()
         # poll starts in show() via after(50, self._poll) — don't call here or
         # the job it schedules gets orphaned when show() overwrites _poll_job
+
+    def _clear_factory_reset_screen_hold(self):
+        self._factory_reset_hold_until = 0.0
+        if self._factory_reset_handoff_job:
+            try:
+                self.root.after_cancel(self._factory_reset_handoff_job)
+            except Exception:
+                pass
+            self._factory_reset_handoff_job = None
+
+    def _factory_reset_screen_hold_active(self):
+        return time.time() < self._factory_reset_hold_until
 
     def _open_help(self):
         if self._help_dialog is None:
@@ -266,9 +281,11 @@ class MainMenu:
         drive = find_rpi_rp2_drive()
         if drive:
             self._bootsel_stable_count += 1
+            hold_active = self._factory_reset_screen_hold_active()
             if self._bootsel_stable_count >= self._BOOTSEL_STABLE_NEEDED \
                     and self._on_flash_screen \
-                    and not self._factory_reset_in_progress:
+                    and not self._factory_reset_in_progress \
+                    and not hold_active:
                 self._bootsel_stable_count = 0
                 self._on_flash_screen(drive)
                 return   # poll stops here; flash screen has its own poll loop
@@ -1587,12 +1604,11 @@ class MainMenu:
                                 self.root.after(0, lambda: _centered_dialog(
                                     self.root,
                                     "Firmware Switcher",
-                                    "resetFW.uf2 flashed successfully!\n\n"
-                                    "The Pico will reboot clean.\n\n"   
-									"!!WAIT 10 seconds!! for software \n"
-									"to catch up. ALPHA BUGGINESS.\n\n"
-									"PLEASE power off and power on your controller!\n"
-                                    "Unplug and plug in, then flash your OCC firmware normally.",
+                                    "resetFW.uf2 is flashing\n\n"
+                                    "The 'Flash Firmware' screen will appear soon.\n\n"   
+									"This process will take about 10 seconds.\n\n"
+									"Once the flash firmware screen appears, please"
+                                    " unplug and plug in your controller to reset config & LEDs.",
                                     kind="info"
                                 ))
                             except Exception as exc:
@@ -1611,7 +1627,7 @@ class MainMenu:
                             "Firmware Switcher",
                             "RPI-RP2 drive did not appear within 30 seconds.\n\n"
                             "Try unplugging and re-plugging the Pico while holding BOOTSEL,\n"
-                            "then manually copy resetFW.uf2 to the drive.",
+                            "then install OCC firmware.",
                             kind="error"
                         ))
 
@@ -2727,9 +2743,21 @@ class MainMenu:
             dlg.update_idletasks()
 
         def _handoff_to_flash_screen():
+            self._factory_reset_handoff_job = None
+            remaining_ms = max(
+                0,
+                int((self._factory_reset_hold_until - time.time()) * 1000)
+            )
+            if remaining_ms > 0:
+                self._factory_reset_handoff_job = self.root.after(
+                    remaining_ms, _handoff_to_flash_screen
+                )
+                return
+
             drive = find_rpi_rp2_drive()
             self._bootsel_stable_count = 0
             self._factory_reset_in_progress = False
+            self._clear_factory_reset_screen_hold()
 
             if drive and self._on_flash_screen:
                 if self._poll_job:
@@ -2751,11 +2779,16 @@ class MainMenu:
 
         def finish_err(msg, detail=""):
             self._factory_reset_in_progress = False
+            self._clear_factory_reset_screen_hold()
             set_status(msg, detail, ACCENT_RED)
             close_btn.set_state("normal")
             dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
 
         self._factory_reset_in_progress = True
+        self._clear_factory_reset_screen_hold()
+        self._factory_reset_hold_until = (
+            time.time() + self.FACTORY_RESET_SCREEN_HOLD_MS / 1000.0
+        )
         self._bootsel_stable_count = 0
 
         def worker():
@@ -2949,6 +2982,8 @@ class MainMenu:
         # Clear any configurator menu bar left over from App / DrumApp
         self._empty_menu = getattr(self, '_empty_menu', None) or tk.Menu(self.root)
         self.root.config(menu=self._empty_menu)
+        self._clear_factory_reset_screen_hold()
+        self._factory_reset_in_progress = False
         if self._flash_screen_job:
             try:
                 self._fw_btn_frame.after_cancel(self._flash_screen_job)
@@ -2974,6 +3009,7 @@ class MainMenu:
         self._poll_job = self.root.after(50, self._poll)
 
     def hide(self):
+        self._clear_factory_reset_screen_hold()
         if self._poll_job:
             self.root.after_cancel(self._poll_job)
             self._poll_job = None

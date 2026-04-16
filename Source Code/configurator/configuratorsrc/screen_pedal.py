@@ -1222,9 +1222,12 @@ class PedalApp:
         cnt_wrap = tk.Frame(top, bg=BG_CARD, width=52, height=22)
         cnt_wrap.pack(side="left", padx=(0, 12))
         cnt_wrap.pack_propagate(False)
+        _cvcmd = (self.root.register(lambda P: P == "" or P.isdigit()), '%P')
         cnt_sp = ttk.Spinbox(cnt_wrap, from_=1, to=MAX_LEDS, width=4, textvariable=self.led_count,
-                             command=self._on_led_count_change)
+                             command=self._on_led_count_change,
+                             validate="key", validatecommand=_cvcmd)
         cnt_sp.pack(fill="both", expand=True)
+        cnt_sp.bind("<KeyRelease>", lambda _e, widget=cnt_sp: self._on_led_count_live_change(widget))
         cnt_sp.bind("<Return>", lambda _e: self._on_led_count_change())
         cnt_sp.bind("<FocusOut>", lambda _e: self._on_led_count_change())
         self._all_widgets.append(cnt_sp)
@@ -1430,6 +1433,16 @@ class PedalApp:
         self._rebuild_led_color_grid()
         if self.led_reactive.get():
             self._rebuild_led_map_grid()
+
+    def _on_led_count_live_change(self, widget):
+        raw = widget.get().strip()
+        if not raw:
+            return
+        try:
+            self.led_count.set(int(raw))
+        except (ValueError, tk.TclError):
+            return
+        self._on_led_count_change()
 
     def _rebuild_led_color_grid(self):
         for w in self._led_colors_frame.winfo_children():

@@ -248,7 +248,7 @@ class HelpDialog:
 
 class SpeedSlider(tk.Canvas):
     """Speed slider with 5 named notches. Left=slow (high ms), right=fast (low ms)."""
-    _LABELS = ["uber slow", "slow", "normal", "fast", "sonic fast"]
+    _LABELS = ["snail", "slow", "normal", "fast", "sonic"]
 
     def __init__(self, parent, variable, notch_ms, width=260, height=58):
         try:
@@ -282,7 +282,7 @@ class SpeedSlider(tk.Canvas):
                 t = max(0.0, min(1.0, t))
                 frac = (i + t) / 4.0
                 return self._PAD + frac * tw
-        return self._PAD + tw   # at sonic fast end
+        return self._PAD + tw   # at sonic end
 
     def _x_to_ms(self, x):
         tw   = self._W - 2 * self._PAD

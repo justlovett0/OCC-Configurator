@@ -2030,10 +2030,13 @@ class EasyConfigScreen:
                  font=(FONT_UI, 8)).pack(side="left", padx=(0,3))
         cnt_w = tk.Frame(ctrl_row, bg=BG_CARD, width=52, height=24)
         cnt_w.pack(side="left", padx=(0,8)); cnt_w.pack_propagate(False)
+        _cvcmd = (self.root.register(lambda P: P == "" or P.isdigit()), '%P')
         cnt_sp = ttk.Spinbox(cnt_w, from_=1, to=MAX_LED_COUNT, width=4,
                               textvariable=led_count_var,
-                              command=lambda: [_sync(), _rebuild_colors(), _rebuild_map()])
+                              command=lambda: [_sync(), _rebuild_colors(), _rebuild_map()],
+                              validate="key", validatecommand=_cvcmd)
         cnt_sp.pack(fill="both", expand=True)
+        cnt_sp.bind("<KeyRelease>", lambda _e, widget=cnt_sp: _on_count_live_change(widget))
         cnt_sp.bind("<Return>",   lambda _e: [_sync(), _rebuild_colors(), _rebuild_map()])
         cnt_sp.bind("<FocusOut>", lambda _e: [_sync(), _rebuild_colors(), _rebuild_map()])
         tk.Label(ctrl_row, text=f"(max {MAX_LEDS})", bg=BG_CARD, fg=TEXT_DIM,
@@ -2266,6 +2269,18 @@ class EasyConfigScreen:
                             command=_sync,
                             validate="key", validatecommand=_bvcmd).pack(fill="both", expand=True)
                 grid_row += 1
+
+        def _on_count_live_change(widget):
+            raw = widget.get().strip()
+            if not raw:
+                return
+            try:
+                led_count_var.set(int(raw))
+            except (ValueError, tk.TclError):
+                return
+            _sync()
+            _rebuild_colors()
+            _rebuild_map()
 
         _rebuild_map()
 

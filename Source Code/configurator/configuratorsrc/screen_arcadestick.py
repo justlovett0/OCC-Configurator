@@ -1,5 +1,6 @@
 import datetime
 import json
+import threading
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -250,6 +251,16 @@ class ArcadeStickApp:
     def _set_status(self, text, color=TEXT_DIM):
         self._status_var.set(text)
 
+    def _update_connect_btn(self):
+        if self.pico.connected:
+            self._connect_btn._label = "Disconnect"
+            self._connect_btn._bg = ACCENT_RED
+            self._connect_btn._render(ACCENT_RED)
+        else:
+            self._connect_btn._label = "Connect to Arcade Stick"
+            self._connect_btn._bg = ACCENT_BLUE
+            self._connect_btn._render(ACCENT_BLUE)
+
     def _set_controls_enabled(self, enabled):
         state = "readonly" if enabled else "disabled"
         for combo in self._widgets:
@@ -292,6 +303,7 @@ class ArcadeStickApp:
             self.pico.disconnect()
             self._set_controls_enabled(False)
             self._set_status("Disconnected")
+            self._update_connect_btn()
             return
 
         port = PicoSerial.find_config_port()
@@ -301,6 +313,7 @@ class ArcadeStickApp:
             self._connect_xinput()
 
     def _connect_serial(self, port):
+        self._connect_btn.set_state("normal")
         try:
             self.pico.connect(port)
             for _ in range(5):
@@ -314,8 +327,10 @@ class ArcadeStickApp:
             self._load_config(cfg)
             self._set_controls_enabled(True)
             self._set_status(f"Connected on {port}")
+            self._update_connect_btn()
         except Exception as exc:
             self._set_status(f"Connection failed: {exc}")
+            self._update_connect_btn()
             try:
                 self.pico.disconnect()
             except Exception:
@@ -331,23 +346,35 @@ class ArcadeStickApp:
             return
 
         self._set_status("Sending config signal over XInput...")
+        self._connect_btn.set_state("disabled")
         slot = controllers[0][0]
-        try:
-            for left, right in MAGIC_STEPS:
-                xinput_send_vibration(slot, left, right)
-                time.sleep(0.08)
-            xinput_send_vibration(slot, 0, 0)
-        except Exception as exc:
-            self._set_status(f"XInput signal failed: {exc}")
-            return
 
-        port = self._wait_for_port(10.0)
-        if not port:
-            self._set_status("Config mode timed out")
-            messagebox.showwarning("Timeout", "The arcade stick did not switch to config mode. Close any game using the controller and try again.")
-            return
-        time.sleep(0.4)
-        self._connect_serial(port)
+        def _worker():
+            try:
+                for left, right in MAGIC_STEPS:
+                    xinput_send_vibration(slot, left, right)
+                    time.sleep(0.08)
+                xinput_send_vibration(slot, 0, 0)
+            except Exception as exc:
+                self.root.after(0, lambda e=str(exc): [
+                    self._set_status(f"XInput signal failed: {e}"),
+                    self._connect_btn.set_state("normal"),
+                ])
+                return
+
+            self.root.after(0, lambda: self._set_status("Waiting for config port\u2026"))
+            port = self._wait_for_port(10.0)
+            if not port:
+                self.root.after(0, lambda: [
+                    self._set_status("Config mode timed out"),
+                    self._connect_btn.set_state("normal"),
+                    messagebox.showwarning("Timeout", "The arcade stick did not switch to config mode. Close any game using the controller and try again."),
+                ])
+                return
+            time.sleep(0.4)
+            self.root.after(0, lambda p=port: self._connect_serial(p))
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _load_config(self, cfg):
         for key, _, _ in self.CONTROL_DEFS:

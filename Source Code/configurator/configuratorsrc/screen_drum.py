@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
                          TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
-                         DIGITAL_PINS, DIGITAL_PIN_LABELS, MAX_LEDS, LED_INPUT_NAMES,
+                         DIGITAL_PINS, DIGITAL_PIN_LABELS, ANALOG_PINS, MAX_LEDS, LED_INPUT_NAMES,
                          LED_INPUT_LABELS, VALID_NAME_CHARS, OCC_SUBTYPES,
                          DRUM_LED_INPUT_NAMES as FW_DRUM_LED_INPUT_NAMES,
                          DRUM_LED_INPUT_LABELS as FW_DRUM_LED_INPUT_LABELS,
@@ -679,19 +679,20 @@ class DrumApp:
         row = tk.Frame(parent, bg=BG_CARD)
         row.pack(fill="x", pady=3)
 
+        # Fixed-width dot container so all rows' Pin:/dropdown/Detect align
+        dot_frame = tk.Frame(row, width=22, height=16, bg=BG_CARD)
+        dot_frame.pack(side="left", padx=(0, 6))
+        dot_frame.pack_propagate(False)
         if dot_color:
             is_cym = key.endswith("_cym")
             if is_cym:
-                # Cymbals: hollow ring character to distinguish from pad dots
-                tk.Label(row, text="◎", bg=BG_CARD, fg=dot_color,
-                         font=(FONT_UI, 11)).pack(side="left", padx=(0, 4))
+                tk.Label(dot_frame, text="◎", bg=BG_CARD, fg=dot_color,
+                         font=(FONT_UI, 11)).place(relx=0.5, rely=0.5, anchor="center")
             else:
-                dot = tk.Canvas(row, width=16, height=16, bg=BG_CARD,
+                dot = tk.Canvas(dot_frame, width=16, height=16, bg=BG_CARD,
                                 highlightthickness=0, bd=0)
                 dot.create_oval(2, 2, 14, 14, fill=dot_color, outline=dot_color)
-                dot.pack(side="left", padx=(0, 6))
-        else:
-            tk.Frame(row, width=22, bg=BG_CARD).pack(side="left")
+                dot.place(relx=0.5, rely=0.5, anchor="center")
 
         tk.Label(row, text=label, bg=BG_CARD, fg=TEXT,
                  width=14, anchor="w",
@@ -699,9 +700,11 @@ class DrumApp:
         tk.Label(row, text="Pin:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
 
+        # Drum/cymbal inputs are all digital — exclude ADC-capable pins (26-28)
+        _digital_only = [p for p in DIGITAL_PINS if p not in ANALOG_PINS]
         combo = CustomDropdown(
             row, state="readonly", width=18,
-            values=[DIGITAL_PIN_LABELS[p] for p in DIGITAL_PINS])
+            values=[DIGITAL_PIN_LABELS[p] for p in _digital_only])
         # Default pins match drum_config.c defaults; anything not listed defaults to Disabled (-1)
         _default_pins = {
             "red_drum": 0, "yellow_drum": 1, "blue_drum": 2, "green_drum": 3,
@@ -709,8 +712,9 @@ class DrumApp:
             "start": 7, "select": 8,
         }
         default_pin = _default_pins.get(key, -1)
-        default_combo_idx = DIGITAL_PINS.index(default_pin) if default_pin in DIGITAL_PINS else 0
+        default_combo_idx = _digital_only.index(default_pin) if default_pin in _digital_only else 0
         combo.current(default_combo_idx)
+        combo._pin_list = _digital_only  # stash so the callback can resolve idx → pin
         self._drum_pin_vars[key].set(default_pin)
         combo.pack(side="left", padx=(0, 8))
         combo.bind("<<ComboboxSelected>>",
@@ -727,7 +731,8 @@ class DrumApp:
 
     def _on_drum_pin_combo(self, key, combo):
         idx = combo.current()
-        self._drum_pin_vars[key].set(DIGITAL_PINS[idx])
+        pin_list = getattr(combo, "_pin_list", DIGITAL_PINS)
+        self._drum_pin_vars[key].set(pin_list[idx])
 
     def _start_drum_detect(self, key, name):
         if not self.pico.connected:
@@ -768,10 +773,11 @@ class DrumApp:
 
     def _drum_detect_result(self, key, pin):
         self._stop_drum_detect()
-        if pin in DIGITAL_PINS:
-            idx = DIGITAL_PINS.index(pin)
+        combo = self._drum_pin_combos.get(key)
+        pin_list = getattr(combo, "_pin_list", DIGITAL_PINS) if combo else DIGITAL_PINS
+        if pin in pin_list:
+            idx = pin_list.index(pin)
             self._drum_pin_vars[key].set(pin)
-            combo = self._drum_pin_combos.get(key)
             if combo:
                 combo.current(idx)
             self._set_status(
@@ -846,10 +852,13 @@ class DrumApp:
         cnt_wrap = tk.Frame(top, bg=BG_CARD, width=52, height=22)
         cnt_wrap.pack(side="left", padx=(0, 12))
         cnt_wrap.pack_propagate(False)
+        _cvcmd = (self.root.register(lambda P: P == "" or P.isdigit()), '%P')
         cnt_sp = ttk.Spinbox(cnt_wrap, from_=1, to=MAX_LEDS, width=4,
                               textvariable=self.led_count,
-                              command=self._on_drum_led_count_change)
+                              command=self._on_drum_led_count_change,
+                              validate="key", validatecommand=_cvcmd)
         cnt_sp.pack(fill="both", expand=True)
+        cnt_sp.bind("<KeyRelease>", lambda _e, widget=cnt_sp: self._on_drum_led_count_live_change(widget))
         cnt_sp.bind("<Return>", lambda _e: self._on_drum_led_count_change())
         cnt_sp.bind("<FocusOut>", lambda _e: self._on_drum_led_count_change())
         self._drum_all_widgets.append(cnt_sp)
@@ -1112,6 +1121,16 @@ class DrumApp:
         self._rebuild_drum_led_color_grid()
         if self.led_reactive.get():
             self._rebuild_drum_led_map_grid()
+
+    def _on_drum_led_count_live_change(self, widget):
+        raw = widget.get().strip()
+        if not raw:
+            return
+        try:
+            self.led_count.set(int(raw))
+        except (ValueError, tk.TclError):
+            return
+        self._on_drum_led_count_change()
 
     def _rebuild_drum_led_color_grid(self):
         for w in self._led_colors_frame.winfo_children():
@@ -1471,8 +1490,10 @@ class DrumApp:
                 pin = int(cfg[serial_key])
                 self._drum_pin_vars[key].set(pin)
                 combo = self._drum_pin_combos.get(key)
-                if combo and pin in DIGITAL_PINS:
-                    combo.current(DIGITAL_PINS.index(pin))
+                if combo:
+                    pin_list = getattr(combo, "_pin_list", DIGITAL_PINS)
+                    if pin in pin_list:
+                        combo.current(pin_list.index(pin))
 
         if "debounce" in cfg:
             self.debounce_var.set(int(cfg["debounce"]))
