@@ -39,18 +39,18 @@ class FlashFirmwareScreen:
         self.frame = tk.Frame(root, bg=BG_MAIN)
         self._build()
 
-    # ── Layout ────────────────────────────────────────────────────
+    # Layout
 
-    # Firmware name → (buttons, joysticks, axes, variants, description)
+    # Firmware name -> (buttons, joysticks, axes, variants, description)
     _FW_INFO = [
-        ("Guitar Controller",      14, 0, 1, "Wired + Wireless", "5-fret guitar for Guitar Hero / Rock Band style games. Whammy bar axis, optional tilt."),
-        ("Guitar Controller 6Fret", 16, 0, 1, "Wired only",       "6-fret GHL-style guitar. Two rows of 3 frets (white/black). Whammy bar axis."),
-        ("Drum Controller",        14, 0, 7, "Wired + Wireless", "4 drum pads, 3 cymbals, kick pedal. Pad hits are velocity-sensitive analog axes."),
-        ("Retro Controller",       13, 0, 2, "Wired only",       "Generic XInput gamepad. Great for emulators. Analog LT/RT triggers."),
-        ("Arcade Stick",           17, 1, 0, "Wired only",       "Fight stick layout: 4 directional + 8 action + 5 nav buttons. Stick maps to D-Pad, L-Stick, or R-Stick."),
-        ("Pedal Accessory",         4, 0, 0, "Wired only",       "Auxiliary foot pedal device. Adds up to 4 kick/pedal inputs — often paired with drums."),
-        ("Keyboard Macro Pad",     16, 0, 0, "Wired only",       "Programmable macro board. Each button maps to a custom keyboard shortcut."),
-        ("Dongle 4Channel",         0, 0, 0, "Wireless (receiver)", "USB wireless receiver. Bridges up to 4 OCC wireless controllers to a single USB port. No input config."),
+        ("Guitar Controller",      14, 1, 2, "Wired + Wireless",     "5-fret guitar for Guitar Hero / Rock Band style games. All buttons and whammy/tilt."),
+        ("Drum Controller",        14, 0, 1, "Wired + Wireless",     "4 drum pads, 3 cymbals, kick pedal, Start/Select, DPad. Pad and Cymbal inputs are digital."),
+        ("Guitar Controller 6Fret", 16, 1, 2, "Wired only",          "6-fret GH Live-style guitar. Two rows of 3 frets (white/black), whammy/tilt."),
+        ("Pedal Accessory",         4, 0, 0, "Wired only",           "Auxiliary guitar pedal device. Adds up to 4 inputs - intended to pair with guitar."),
+        ("Retro Controller",       13, 0, 2, "Wired only",           "Generic XInput gamepad. Great for emulators. Analog or digital LT/RT triggers."),
+        ("Arcade Stick",           17, 1, 0, "Wired only",           "Fight stick layout: 4 directional + 8 action + 5 nav buttons. Stick maps to D-Pad, L-Stick, or R-Stick."),
+        ("Keyboard Macro Pad",     16, 0, 0, "Wired only",           "Programmable macro board. Each button maps to a custom keyboard shortcut."),
+        ("Dongle 4Channel",         0, 0, 0, "Wireless (receiver)", "USB wireless receiver. Bridges up to 4 OCC wireless controllers to a single USB port. Non-configurable."),
     ]
 
     def _open_firmware_info(self):
@@ -80,7 +80,7 @@ class FlashFirmwareScreen:
             ("Variants",    110, "center"),
             ("Buttons",      58, "center"),
             ("Joysticks",    66, "center"),
-            ("Axes",         46, "center"),
+            ("Axis",         46, "center"),
             ("Description",   0, "w"),
         ]
 
@@ -98,9 +98,9 @@ class FlashFirmwareScreen:
         # Data rows
         for ri, (fw_name, buttons, joysticks, axes, variants, desc) in enumerate(self._FW_INFO, 1):
             row_bg = BG_CARD if ri % 2 == 1 else "#232327"
-            vals = [fw_name, variants, str(buttons) if buttons else "—",
-                    str(joysticks) if joysticks else "—",
-                    str(axes) if axes else "—", desc]
+            vals = [fw_name, variants, str(buttons) if buttons else "--",
+                    str(joysticks) if joysticks else "--",
+                    str(axes) if axes else "--", desc]
             for ci, (val, (_, _, anchor)) in enumerate(zip(vals, COL_DEFS)):
                 cell = tk.Frame(tbl, bg=row_bg)
                 cell.grid(row=ri, column=ci, sticky="ew", padx=(0, 1), pady=0)
@@ -156,7 +156,7 @@ class FlashFirmwareScreen:
         self._help_dialog.open()
 
     def _build(self):
-        # ── Title bar — identical to MainMenu ─────────────────
+        # Title bar - identical to MainMenu
         title_bar = tk.Frame(self.frame, bg=BG_CARD,
                              highlightbackground=BORDER, highlightthickness=1)
         title_bar.pack(fill="x", padx=0, pady=(0, 0))
@@ -172,11 +172,11 @@ class FlashFirmwareScreen:
                  bg=BG_CARD, fg=ACCENT_BLUE,
                  font=(FONT_UI, 13)).pack(anchor="w")
 
-        # ── Page heading (button left | title+subtitle+combo centered right) ──
+        # Page heading (button left | title+subtitle+combo centered right)
         heading_frame = tk.Frame(self.frame, bg=BG_MAIN)
         heading_frame.pack(fill="x", pady=(12, 4))
 
-        # Right balancing spacer — mirrors the button's footprint (padx 40 + btn 200 = 240)
+        # Right balancing spacer - mirrors the button footprint (padx 40 + btn 200 = 240)
         # so the center content is truly centered on the full screen width.
         tk.Frame(heading_frame, bg=BG_MAIN, width=240).pack(side="right")
 
@@ -202,14 +202,14 @@ class FlashFirmwareScreen:
         self._subtitle.pack()
 
         # Dropdown sits below subtitle, inside the right frame
-        self._device_var = tk.StringVar(value="Scanning for USB devices…")
+        self._device_var = tk.StringVar(value="Scanning for USB devices...")
         self._device_combo = CustomDropdown(right_frame, state="readonly",
                                             textvariable=self._device_var,
                                             width=32, values=[])
         self._device_combo.pack(pady=(6, 10))
         self._refresh_device_combo()
 
-        # ── Tabbed panel (OCC Firmware / Controller Presets) ─────
+        # Tabbed panel (OCC Firmware / Controller Presets)
         tab_outer = tk.Frame(self.frame, bg=BORDER,
                              highlightbackground=BORDER, highlightthickness=1)
         tab_outer.pack(fill="both", expand=True, padx=40, pady=(0, 14))
@@ -246,7 +246,7 @@ class FlashFirmwareScreen:
         self._build_presets_tab(self._presets_content)
         self._switch_tab("firmware")
 
-        # ── Reset Pico card (bottom) ──────────────────────────
+        # Reset Pico card (bottom)
         rst_card = tk.Frame(self.frame, bg=BG_CARD,
                             highlightbackground=BORDER, highlightthickness=1)
         rst_card.pack(fill="x", padx=40, pady=(0, 10))
@@ -261,7 +261,7 @@ class FlashFirmwareScreen:
         rst_body = tk.Frame(rst_inner, bg=BG_CARD)
         rst_body.pack(fill="x")
 
-        self._rst_icon = tk.Label(rst_body, text="●", bg=BG_CARD,
+        self._rst_icon = tk.Label(rst_body, text="o", bg=BG_CARD,
                                   fg=ACCENT_RED, font=(FONT_UI, 14))
         self._rst_icon.pack(side="left", padx=(0, 10))
 
@@ -269,12 +269,12 @@ class FlashFirmwareScreen:
         rst_text.pack(side="left", fill="x", expand=True)
 
         self._rst_drive_label = tk.Label(rst_text,
-                                         text="Pico USB Detected: —",
+                                         text="Pico USB Detected: --",
                                          bg=BG_CARD, fg=ACCENT_GREEN,
                                          font=(FONT_UI, 9), anchor="w")
         self._rst_drive_label.pack(anchor="w")
 
-        tk.Label(rst_text, text="Want to wipe pico flash to factory?",
+        tk.Label(rst_text, text="Want to wipe pico flash to factory",
                  bg=BG_CARD, fg=TEXT_HEADER,
                  font=(FONT_UI, 10, "bold"), anchor="w").pack(anchor="w")
 
@@ -288,13 +288,13 @@ class FlashFirmwareScreen:
                                       btn_width=160, btn_height=36)
         self._rst_btn.pack(side="right")
 
-        # ── Alpha hint ────────────────────────────────────────
+        # Alpha hint
         tk.Label(self.frame,
                  text="Firmware is in ALPHA Development. Nothing is final, get over it.",
                  bg=BG_MAIN, fg=TEXT_DIM, font=(FONT_UI, 8)).pack(
                      anchor="e", padx=40, pady=(0, 8))
 
-    # ── Tile grid helpers ─────────────────────────────────────────
+    # Tile grid helpers
 
     def _refresh_device_combo(self):
         """Populate the device dropdown from live USB detection."""
@@ -308,7 +308,7 @@ class FlashFirmwareScreen:
             self._device_combo.config(values=["No USB device detected"])
             self._device_var.set("No USB device detected")
 
-    # ── Tab management ────────────────────────────────────────────
+    # Tab management
 
     def _switch_tab(self, name):
         """Show the named tab ('firmware' or 'presets'), hide the other.
@@ -419,11 +419,11 @@ class FlashFirmwareScreen:
         hdr = tk.Frame(section, bg=BG_CARD, cursor="hand2")
         hdr.pack(fill="x")
 
-        arrow = tk.Label(hdr, text="▶", bg=BG_CARD, fg=ACCENT_BLUE,
+        arrow = tk.Label(hdr, text=">", bg=BG_CARD, fg=ACCENT_BLUE,
                          font=(FONT_UI, 10), width=2, anchor="center")
         arrow.pack(side="left", padx=(12, 4), pady=10)
 
-        # Section icon — load PresetConfigs/<title>.gif at 24×24.
+        # Section icon - load PresetConfigs/<title>.gif at 24x24.
         # Falls back to a blank spacer if the file is missing or unreadable.
         _icon_img = None
         _icon_path = _resource_path("PresetConfigs", title + ".gif")
@@ -444,7 +444,7 @@ class FlashFirmwareScreen:
                  font=(FONT_UI, 11, "bold"), anchor="w").pack(
                      side="left", fill="x", expand=True, pady=10)
 
-        # Items frame — hidden until expanded
+        # Items frame - hidden until expanded
         items_frame = tk.Frame(section, bg=BG_MAIN)
 
         for item_name, item_info in section_data.items():
@@ -489,17 +489,17 @@ class FlashFirmwareScreen:
             if is_open[0]:
                 is_open[0] = False
                 items_frame.pack_forget()
-                arrow.config(text="▶")
+                arrow.config(text=">")
                 canvas.after(1, _update_scrollregion)
 
         def _toggle(e=None):
             is_open[0] = not is_open[0]
             if is_open[0]:
                 items_frame.pack(fill="x")
-                arrow.config(text="▼")
+                arrow.config(text="v")
             else:
                 items_frame.pack_forget()
-                arrow.config(text="▶")
+                arrow.config(text=">")
             canvas.after(1, _update_scrollregion)
 
         # Register close callback so the tab reset can collapse all sections
@@ -526,7 +526,7 @@ class FlashFirmwareScreen:
             w.bind("<Button-1>", _toggle)
 
     def _do_preset_flash(self, preset_name, wired_path, wireless_path, preset_cfg_path):
-        """Wired/wireless popup → flash firmware → XInput boot → config mode → apply preset → save."""
+        """Wired/wireless popup -> flash firmware -> XInput boot -> config mode -> apply preset -> save."""
         drive = find_rpi_rp2_drive()
         if not drive:
             return
@@ -540,7 +540,7 @@ class FlashFirmwareScreen:
         if not uf2_path:
             return
 
-        # ── Progress popup ────────────────────────────────────────────
+        # Progress popup
         dlg = tk.Toplevel(self.root)
         dlg.title("Installing Preset")
         dlg.configure(bg=BG_CARD)
@@ -555,7 +555,7 @@ class FlashFirmwareScreen:
                  bg=BG_CARD, fg=TEXT_HEADER,
                  font=(FONT_UI, 12, "bold")).pack(anchor="w", pady=(0, 12))
 
-        status_var = tk.StringVar(value="Starting…")
+        status_var = tk.StringVar(value="Starting...")
         status_lbl = tk.Label(dlg_frame, textvariable=status_var,
                               bg=BG_CARD, fg=ACCENT_BLUE,
                               font=(FONT_UI, 9), anchor="w", wraplength=1100, justify="left")
@@ -607,9 +607,9 @@ class FlashFirmwareScreen:
         self._busy = True
 
         def worker():
-            # ── Step 1 / 5: Flash firmware ────────────────────────
+            # Step 1 / 5: Flash firmware
             self.root.after(0, lambda: set_status(
-                "Step 1 / 5  —  Flashing firmware…",
+                "Step 1 / 5  -  Flashing firmware...",
                 f"Installing firmware for {preset_name}"))
             try:
                 flash_uf2_with_reboot(uf2_path, drive)
@@ -617,9 +617,9 @@ class FlashFirmwareScreen:
                 fail("Firmware flash failed.", str(exc))
                 return
 
-            # ── Step 2 / 5: Wait for XInput boot ─────────────────
+            # Step 2 / 5: Wait for XInput boot
             self.root.after(0, lambda: set_status(
-                "Step 2 / 5  —  Waiting for controller to boot…",
+                "Step 2 / 5  -  Waiting for controller to boot...",
                 "Up to 30 seconds after firmware loads"))
             xinput_slot = None
             deadline = time.time() + 30.0
@@ -637,14 +637,14 @@ class FlashFirmwareScreen:
             if xinput_slot is None:
                 fail("Controller did not appear as an XInput device.",
                      "Firmware was flashed. Apply the preset manually\n"
-                     "via Configure Controller → Import Configuration.")
+                     "via Configure Controller -> Import Configuration.")
                 return
 
             time.sleep(2.0)   # let Windows fully enumerate
 
-            # ── Step 3 / 5: Enter config mode ────────────────────
+            # Step 3 / 5: Enter config mode
             self.root.after(0, lambda: set_status(
-                "Step 3 / 5  —  Entering configuration mode…",
+                "Step 3 / 5  -  Entering configuration mode...",
                 "Sending config signal to controller"))
             try:
                 for left, right in MAGIC_STEPS:
@@ -666,12 +666,12 @@ class FlashFirmwareScreen:
             if not port:
                 fail("Controller did not enter config mode.",
                      "Firmware was flashed. Apply the preset manually\n"
-                     "via Configure Controller → Import Configuration.")
+                     "via Configure Controller -> Import Configuration.")
                 return
 
-            # ── Step 4 / 5: Apply preset config ──────────────────
+            # Step 4 / 5: Apply preset config
             self.root.after(0, lambda: set_status(
-                "Step 4 / 5  —  Applying preset configuration…",
+                "Step 4 / 5  -  Applying preset configuration...",
                 f"Sending settings for {preset_name}"))
             try:
                 pico = PicoSerial()
@@ -684,8 +684,8 @@ class FlashFirmwareScreen:
                         break
                     except PermissionError:
                         self.root.after(0, lambda: set_status(
-                            "Step 4 / 5  —  Applying preset configuration…",
-                            "Waiting for Windows to release the COM port…"))
+                            "Step 4 / 5  -  Applying preset configuration...",
+                            "Waiting for Windows to release the COM port..."))
                         time.sleep(1.5)
                     except Exception as exc:
                         fail("Could not open config port.", str(exc))
@@ -705,9 +705,9 @@ class FlashFirmwareScreen:
 
                 _apply_preset_config(pico, preset_cfg_path)
 
-                # ── Step 5 / 5: Save ──────────────────────────────
+                # Step 5 / 5: Save
                 self.root.after(0, lambda: set_status(
-                    "Step 5 / 5  —  Saving configuration…",
+                    "Step 5 / 5  -  Saving configuration...",
                     "Writing settings to flash"))
                 pico.save()
                 pico.reboot()
@@ -767,10 +767,10 @@ class FlashFirmwareScreen:
                            width=198, height=self.TILE_LBL_H)
             lbl_area.pack_propagate(False)
 
-            # ── Rounded corners via overlay corner masks ──────────
+            # Rounded corners via overlay corner masks
             # Each canvas is _cr x _cr, placed over a tile corner.
             # A full oval (_d x _d) is offset so only the correct
-            # quadrant shows — colored to match the adjacent interior
+            # quadrant shows - colored to match the adjacent interior
             # area so the corner blends seamlessly into the background.
             _cr = 10
             _d  = _cr * 2
@@ -790,7 +790,7 @@ class FlashFirmwareScreen:
             if idx < len(groups):
                 display_name, wired_path, wireless_path = groups[idx]
 
-                # ── GIF: try wired path, then wireless path, then core name ──
+                # GIF: try wired path, then wireless path, then core name
                 # GIFs may be named after the core firmware name (no Wired_/Wireless_ prefix)
                 # e.g. Guitar_Controller.gif instead of Wired_Guitar_Controller.gif
                 gif_path = None
@@ -807,18 +807,18 @@ class FlashFirmwareScreen:
                 if gif_path:
                     self._start_gif(img_label, gif_path, img_area)
                 else:
-                    # No GIF — show a dim placeholder icon
-                    img_label.config(text="▶", fg=TEXT_DIM,
+                    # No GIF - show a dim placeholder icon
+                    img_label.config(text=">", fg=TEXT_DIM,
                                      font=(FONT_UI, 28))
 
-                # ── Name label below the image ────────────────────
+                # Name label below the image
                 name_lbl = tk.Label(lbl_area, text=display_name,
                                     bg="#222226", fg=TEXT_HEADER,
                                     font=(FONT_UI, 8, "bold"),
                                     anchor="center", justify="center")
                 name_lbl.place(relx=0.5, rely=0.5, anchor="center")
 
-                # ── Hover + click on the whole tile ──────────────
+                # Hover + click on the whole tile
                 hover_bg   = "#3a3a3f"
                 lbl_hover  = "#2a2a2e"
 
@@ -877,13 +877,13 @@ class FlashFirmwareScreen:
         return None
 
     def _on_tile_right_click(self, wired_path, wireless_path, display_name, x, y):
-        """Right-click context menu on a firmware tile — manually pick wired or wireless."""
+        """Right-click context menu on a firmware tile - manually pick wired or wireless."""
         drive = find_rpi_rp2_drive()
         if not drive:
             return
 
         def _flash_wireless():
-            # User explicitly picked Wireless from context menu — just flash it
+            # User explicitly picked Wireless from context menu - just flash it
             self._do_flash(wireless_path, drive, "Wireless")
 
         menu = tk.Menu(self.root, tearoff=0, bg=BG_CARD, fg=TEXT,
@@ -902,7 +902,7 @@ class FlashFirmwareScreen:
     def _start_gif(self, label, gif_path, container):
         """
         Load all GIF frames and loop continuously for as long as the
-        Firmware screen is visible.  No hover logic — plays immediately.
+        Firmware screen is visible.  No hover logic - plays immediately.
         """
         try:
             frames = []
@@ -918,7 +918,7 @@ class FlashFirmwareScreen:
             if not frames:
                 return
 
-            # Keep every frame reference alive — tkinter GCs PhotoImages
+            # Keep every frame reference alive - tkinter GCs PhotoImages
             # as soon as the Python object is collected.
             self._gif_refs.extend(frames)
 
@@ -980,13 +980,13 @@ class FlashFirmwareScreen:
     def _on_mousewheel(self, event):
         self._canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
-    # ── Flashing ──────────────────────────────────────────────────
+    # Flashing
 
     def _do_flash(self, uf2_path, drive, variant_label="", no_wireless_note=False):
-        # Go back to main menu before flashing — prevents stale config screen
+        # Go back to main menu before flashing - prevents stale config screen
         if self._on_back:
             self._on_back()
-        # ── 1. Show a non-blocking "please wait" popup ──────────────
+        # 1. Show a non-blocking "please wait" popup
         wait_dlg = tk.Toplevel(self.root)
         wait_dlg.title("Flashing Firmware")
         wait_dlg.configure(bg=BG_CARD)
@@ -995,11 +995,11 @@ class FlashFirmwareScreen:
         wait_dlg.protocol("WM_DELETE_WINDOW", lambda: None)  # prevent closing
 
         if no_wireless_note:
-            wait_text = "⚡  Wired Firmware Installing…\nNo wireless version available."
+            wait_text = "Wired Firmware Installing...\nNo wireless version available."
         elif variant_label:
-            wait_text = f"⚡  Flashing {variant_label} Firmware…\nplease wait"
+            wait_text = f"Flashing {variant_label} Firmware...\nplease wait"
         else:
-            wait_text = "⚡  Flashing firmware… please wait"
+            wait_text = "Flashing firmware... please wait"
 
         tk.Label(wait_dlg, text=wait_text,
                  bg=BG_CARD, fg=TEXT, font=(FONT_UI, 11),
@@ -1014,7 +1014,7 @@ class FlashFirmwareScreen:
         wait_dlg.geometry(f"{dw}x{dh}+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
         wait_dlg.grab_set()
 
-        # ── 2. Run the flash in a background thread ──────────────────
+        # 2. Run the flash in a background thread
         def _worker():
             error = None
             try:
@@ -1032,7 +1032,7 @@ class FlashFirmwareScreen:
                                  f"Failed to copy firmware:\n{error}", kind="error")
                 return
 
-            # ── 3. Success dialog — auto-closes after 3 seconds ─────
+            # 3. Success dialog - auto-closes after 3 seconds
             done_dlg = tk.Toplevel(self.root)
             done_dlg.title("Done")
             done_dlg.configure(bg=BG_CARD)
@@ -1040,7 +1040,7 @@ class FlashFirmwareScreen:
             done_dlg.transient(self.root)
             done_dlg.protocol("WM_DELETE_WINDOW", done_dlg.destroy)
 
-            tk.Label(done_dlg, text="✅  Firmware flashed successfully!\n",
+            tk.Label(done_dlg, text="Firmware flashed successfully!\n",
                      bg=BG_CARD, fg=TEXT, font=(FONT_UI, 11),
                      justify="center", padx=32, pady=24).pack()
 
@@ -1055,7 +1055,7 @@ class FlashFirmwareScreen:
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    # ── Factory Reset ─────────────────────────────────────────────
+    # Factory Reset
 
     def _do_factory_reset(self):
         drive = find_rpi_rp2_drive()
@@ -1072,14 +1072,14 @@ class FlashFirmwareScreen:
         if not messagebox.askyesno("Factory Reset",
                                    "This will COMPLETELY ERASE all firmware and "
                                    "settings on the Pico.\n\n"
-                                   "Continue?", icon="warning"):
+                                   "Continue", icon="warning"):
             return
         try:
             flash_uf2(resetFW, drive)
         except Exception as e:
             messagebox.showerror("Reset Error", f"Failed:\n{e}")
 
-    # ── Polling ───────────────────────────────────────────────────
+    # Polling
 
     def _poll(self):
         info = find_rpi_rp2_drive_info()
@@ -1094,7 +1094,7 @@ class FlashFirmwareScreen:
                 return
         self._poll_job = self.root.after(self.POLL_MS, self._poll)
 
-    # ── Show / Hide ───────────────────────────────────────────────
+    # Show / Hide
 
     def show(self, drive=None):
         self.root.title("OCC - Firmware Installation")

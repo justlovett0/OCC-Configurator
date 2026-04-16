@@ -51,14 +51,16 @@
 
 ## Firmware Variants
 
-| Firmware | Device Type | Protocol | Wireless | Config Mode |
-|----------|-------------|----------|----------|-------------|
-| Wired Guitar Controller | Guitar (XInput subtype 0x07) | USB XInput | No | CDC Serial |
-| Wired Drum Controller | Drum Kit (XInput subtype 0x08) | USB XInput | No | CDC Serial |
-| Wireless Guitar Controller | Guitar (XInput subtype 0x07) | USB XInput + BLE HID | Yes — BLE HID or Dongle | CDC Serial |
-| Wireless Dongle | Dongle (XInput subtype 0x0B) | USB XInput (relay) | Yes — BLE central | None |
-| Wireless Dongle 4-Channel | Dongle (XInput subtype 0x0B) | USB XInput (relay) | Yes — BLE central | None |
-| Keyboard Macro Pad | USB HID Keyboard | USB HID | No | CDC Serial (always-on) |
+| Firmware | Variants | Buttons | Joysticks | Axis | Description |
+|----------|----------|---------|-----------|------|-------------|
+| Guitar Controller | Wired + Wireless | 14 | 1 | 2 | 5-fret guitar for Guitar Hero / Rock Band style games. All buttons and whammy/tilt. |
+| Drum Controller | Wired + Wireless | 14 | -- | 1 | 4 drum pads, 3 cymbals, kick pedal, Start/Select, DPad. Pad and Cymbal inputs are digital. |
+| Guitar Controller 6Fret | Wired only | 16 | 1 | 2 | 6-fret GH Live-style guitar. Two rows of 3 frets (white/black), whammy/tilt. |
+| Pedal Accessory | Wired only | 4 | — | — | Auxiliary guitar pedal device. Adds up to 4 inputs — intended to pair with guitar. |
+| Retro Controller | Wired only | 13 | — | 2 | Generic XInput gamepad. Great for emulators. Analog or digital LT/RT triggers. |
+| Arcade Stick | Wired only | 17 | 1 | — | Fight stick layout: 4 directional + 8 action + 5 nav buttons. Stick maps to D-Pad, L-Stick, or R-Stick. |
+| Keyboard Macro Pad | Wired only | 16 | — | — | Programmable macro board. Each button maps to a custom keyboard shortcut. |
+| Dongle 4Channel | Wireless (receiver) | — | — | — | USB wireless receiver. Bridges up to 4 OCC wireless controllers to a single USB port. Non-configurable. |
 
 ## Getting Started
 
