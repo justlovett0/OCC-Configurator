@@ -1,5 +1,0 @@
-Add preset option in advanced menu. Have configurator compiler look for configs in the compile folder and add them as presets in the final EXE
-Support for PS4/PS5, Xbox360, Fortnite Festival
-Support for sending desktop battery percentage via bluetooth
-Make everything prettier
-Finish easy mode "review" section (show all inputs for user to confirm working... somehow)
