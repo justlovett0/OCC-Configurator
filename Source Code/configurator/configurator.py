@@ -51,7 +51,7 @@ DEBUG_SCREEN_LABELS = (
   ("keyboard_macro", "Keyboard Macro Config"),
 )
 
-#  DEVICE TYPE → SCREEN CLASS  routing table
+#  DEVICE TYPE SCREEN CLASS  routing table
 #
 #  To add a new device type:
 #    1. Create a new App class (e.g. BassApp) above.
@@ -71,7 +71,7 @@ DEVICE_SCREEN_MAP = {
   "keyboard_macro":          None,   # filled in main() once KeyMacroApp is instantiated
 }
 
-# Map device_type → the constructor to call (used to build instances in main())
+# Map device_type the constructor to call (used to build instances in main())
 DEVICE_SCREEN_CLASSES = {
   "guitar_alternate":        lambda root, on_back: App(root, on_back=on_back, guitar_profile="standard"),
   "guitar_alternate_dongle": lambda root, on_back: App(root, on_back=on_back, guitar_profile="standard"),
@@ -346,7 +346,7 @@ def main():
 
   root = tk.Tk()
   # Hide the window immediately so the blank white frame is never visible
-  # while Python/tkinter finishes initialising.  We reveal it below once
+  # while Python/tkinter finishes initialising. reveal it below once
   # everything is built and ready.
   root.withdraw()
 
@@ -430,7 +430,7 @@ def main():
   _tk_base_scale = root.tk.call('tk', 'scaling')
   root.tk.call('tk', 'scaling', _tk_base_scale * _scale)
 
-  # ── Unified window geometry — set once, never changed by screens ──
+  # Unified window geometry
   def _S(n):
       """Scale a pixel dimension to the current display resolution."""
       return max(1, round(n * _scale))
@@ -452,10 +452,10 @@ def main():
   # Play startup sound immediately (async, non-blocking)
   play_startup_sound()
 
-  # ── Patch pixel-dimension globals to match display scale ─────────
+  # Patch pixel-dimension globals to match display scale
   # Only module-level constants used as pixel sizes need adjusting.
   # Font sizes are handled automatically by tk.scaling() above.
-  # Character-width args (Label width=, Entry width=, etc.) are NOT touched.
+  # Character width args (Label width=, Entry width=, etc.) are NOT touched.
   if _scale > 1.0:
       _widgets_mod._DD_HEIGHT  = _S(30)
       _widgets_mod._DD_CHAR_PX = _S(7)
@@ -468,7 +468,7 @@ def main():
       FlashFirmwareScreen.TILE_PAD   = _S(10)
 
 
-  # ── Build lightweight screens first ─────────────────────────────
+  # Build lightweight screens first
   # MainMenu, EasyConfig and FlashScreen are fast to construct.
   # The heavy device configurator screens (App, DrumApp) are deferred
   # until after the window is visible so the splash appears instantly.
@@ -484,7 +484,7 @@ def main():
   flash_screen = FlashFirmwareScreen(root, on_back=None)
   flash_screen.hide()
 
-  # ── Show splash first, then reveal the window behind it ──────────
+  # Show splash first, then reveal the window behind it
   # SplashOverlay is created while root is still withdrawn so the
   # overlay is fully painted before deiconify() makes everything visible.
   menu.show()
@@ -496,7 +496,7 @@ def main():
       debug_log("Debug activity console created")
   debug_log("Splash shown")
 
-  # ── Startup update check (background, non-blocking) ──────────────
+  # Startup update check (background, non-blocking)
   def _startup_update_check():
       if APP_VERSION == "dev":
           debug_log("Update check skipped (dev build)")
@@ -513,7 +513,7 @@ def main():
           debug_log_exception("Update check failed", exc)
   threading.Thread(target=_startup_update_check, daemon=True).start()
 
-  # ── Deferred device screen construction ─────────────────────────
+  # Deferred device screen construction
   device_screens = {}
   debug_launcher = [None]
 
@@ -611,7 +611,7 @@ def main():
       _cancel_menu_poll()
 
       if port:
-          # Already in config mode — detect device type in background so the
+          # Already in config mode detect device type in background so the
           # main thread doesn't freeze while serial ops run (drum Pico W init
           # can take a few seconds before GET_CONFIG responds).
           debug_log(f"Easy config path entered via config port {port}")
@@ -626,7 +626,7 @@ def main():
 
       elif XINPUT_AVAILABLE:
           debug_log("Easy config path entered via XInput")
-          # XInput play mode — stay on menu, run magic sequence in background
+          # XInput play mode stay on menu, run magic sequence in background
           menu._cfg_btn.set_state("disabled")
           menu._easy_cfg_btn.set_state("disabled")
           menu._ctrl_icon.config(text="\u25cc", fg=ACCENT_BLUE)

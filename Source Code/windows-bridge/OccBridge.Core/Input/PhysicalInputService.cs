@@ -8,6 +8,7 @@ namespace OccBridge.Core.Input;
 public sealed class PhysicalInputService
 {
     private readonly FileLog _log;
+    private string? _lastLoggedRawAxisSignature;
 
     public PhysicalInputService(FileLog log)
     {
@@ -191,7 +192,9 @@ public sealed class PhysicalInputService
                 }
 
                 current.GetCurrentReading(buttons, switches, axes);
-                await onState(MapRawGameControllerReading(current, buttons, switches, axes)).ConfigureAwait(false);
+                var state = MapRawGameControllerReading(current, buttons, switches, axes);
+                LogRawAxisSampleIfNeeded(current, axes, state);
+                await onState(state).ConfigureAwait(false);
                 await Task.Delay(8, cancellationToken).ConfigureAwait(false);
             }
         }
@@ -204,6 +207,29 @@ public sealed class PhysicalInputService
         }
 
         return true;
+    }
+
+    private void LogRawAxisSampleIfNeeded(
+        RawGameController controller,
+        IReadOnlyList<double> axes,
+        OccState state)
+    {
+        if (!IsBtGuitarRawController(controller) || axes.Count < 6)
+        {
+            return;
+        }
+
+        var signature =
+            $"{Math.Round(axes[3], 2):0.00}|{Math.Round(axes[5], 2):0.00}|{state.LeftStickX}|{state.RightStickY}";
+
+        if (string.Equals(signature, _lastLoggedRawAxisSignature, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastLoggedRawAxisSignature = signature;
+        _log.Info(
+            $"Raw BT axis sample: axes=[{axes[0]:0.00}, {axes[1]:0.00}, {axes[2]:0.00}, {axes[3]:0.00}, {axes[4]:0.00}, {axes[5]:0.00}] -> OccState LX={state.LeftStickX}, LY={state.LeftStickY}, RX={state.RightStickX}, RY={state.RightStickY}");
     }
 
     private void LogRawControllerCapabilities(RawGameController controller)
@@ -357,11 +383,13 @@ public sealed class PhysicalInputService
             }
         }
 
-        if (!hasNamedButtons &&
+        var usedBtGuitarButtonFallback = !hasNamedButtons &&
             switches.Count == 0 &&
             buttons.Count >= 16 &&
             controller.HardwareVendorId == 0x045E &&
-            controller.HardwareProductId == 0x028E)
+            controller.HardwareProductId == 0x028E;
+
+        if (usedBtGuitarButtonFallback)
         {
             mappedButtons |= buttons[0] ? OccButtonMasks.DPadUp : (ushort)0;
             mappedButtons |= buttons[1] ? OccButtonMasks.DPadDown : (ushort)0;
@@ -387,7 +415,7 @@ public sealed class PhysicalInputService
             mappedButtons |= buttons.Count > 8 && buttons[8] ? OccButtonMasks.Orange : (ushort)0;
         }
 
-        if (switches.Count == 0 && buttons.Count >= 14)
+        if (!usedBtGuitarButtonFallback && switches.Count == 0 && buttons.Count >= 14)
         {
             mappedButtons |= buttons[10] ? OccButtonMasks.DPadUp : (ushort)0;
             mappedButtons |= buttons[11] ? OccButtonMasks.DPadDown : (ushort)0;
@@ -426,6 +454,21 @@ public sealed class PhysicalInputService
             }
         }
 
+        if (IsBtGuitarRawController(controller))
+        {
+            return new OccState
+            {
+                Buttons = mappedButtons,
+                LeftTrigger = 0,
+                RightTrigger = 0,
+                LeftStickX = NormalizeBtWhammyAxis(axes.Count > 3 ? axes[3] : 0d),
+                LeftStickY = 0,
+                RightStickX = 0,
+                RightStickY = NormalizeBtTiltAxis(axes.Count > 5 ? axes[5] : 0d),
+                TimestampUtc = DateTimeOffset.UtcNow,
+            };
+        }
+
         return new OccState
         {
             Buttons = mappedButtons,
@@ -449,5 +492,26 @@ public sealed class PhysicalInputService
     {
         var clamped = Math.Clamp(value, -1d, 1d);
         return (short)Math.Round(clamped * short.MaxValue);
+    }
+
+    private static short NormalizeBtWhammyAxis(double value)
+    {
+        var clamped = Math.Clamp(value, 0d, 1d);
+        return (short)Math.Round((clamped * 65535d) - 32768d);
+    }
+
+    private static short NormalizeBtTiltAxis(double value)
+    {
+        var clamped = Math.Clamp(value, 0d, 1d);
+        return (short)Math.Round(clamped * short.MaxValue);
+    }
+
+    private static bool IsBtGuitarRawController(RawGameController controller)
+    {
+        return controller.HardwareVendorId == 0x045E &&
+               controller.HardwareProductId == 0x028E &&
+               controller.AxisCount >= 6 &&
+               controller.ButtonCount >= 16 &&
+               controller.SwitchCount == 0;
     }
 }

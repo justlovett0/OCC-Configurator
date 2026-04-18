@@ -20,7 +20,7 @@ public sealed class OccState
 
     public bool IsPressed(ushort mask) => (Buttons & mask) != 0;
 
-    public short WhammyAxis => LeftStickX != 0 ? LeftStickX : RightStickX;
+    public short WhammyAxis => LeftStickX;
 
     public short TiltAxis => RightStickY;
 }
