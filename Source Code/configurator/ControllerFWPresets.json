@@ -1,8 +1,6 @@
 {
   "POLYBAR System": {
-    "Polybar Micro": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Polybar Micro.json" },
-    "Polybar Mini":  { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Polybar Mini.json" },
-    "Polybar Max":   { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Polybar Max.json" },
+    "Polybar Guitar": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Polybar Guitar.json" },
     "Polypedal (Whammy)":     { "firmware": "Pedal Accessory",  "preset_config": "PresetConfigs/PolyPedal Whammy.json" },
 	"Polypedal (Tilt)":     { "firmware": "Pedal Accessory",  "preset_config": "PresetConfigs/PolyPedal Tilt.json" }
   },

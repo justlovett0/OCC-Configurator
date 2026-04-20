@@ -113,6 +113,9 @@ class App:
         # Device name
         self.device_name = tk.StringVar(value=self._default_device_name)
 
+        # Exported JSON metadata used by the preset installer only.
+        self.quick_tune_enabled = tk.BooleanVar(value=False)
+
         # Analog smoothing.
         # ema_alpha_var holds the actual firmware EMA alpha value used internally.
         # smooth_level_var is the 0-9 user-facing slider position.
@@ -257,6 +260,9 @@ class App:
         fw.add_separator()
         fw.add_command(label="Export Configuration...", command=self._export_config)
         fw.add_command(label="Import Configuration...", command=self._import_config)
+        fw.add_separator()
+        fw.add_checkbutton(label="Quick Tune on Preset Install",
+                           variable=self.quick_tune_enabled)
         fw.add_separator()
         fw.add_command(label="Switch Dongle/BT Default", command=self._switch_wireless_default)
         fw.add_separator()
@@ -3217,6 +3223,7 @@ class App:
         cfg["wireless_default_mode"] = int(raw.get("wireless_default_mode", 0))
         # device_type makes exports self-describing (needed for preset filtering)
         cfg["device_type"] = raw.get("device_type", self._default_device_type)
+        cfg["quick_tune_enabled"] = 1 if self.quick_tune_enabled.get() else 0
 
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -3227,7 +3234,12 @@ class App:
             messagebox.showerror("Export Error", str(exc))
 
     def _apply_config_dict(self, cfg):
-        """Apply a config dict to the UI. Raises on error — callers wrap in try/except."""
+        """Apply a config dict to the UI. Raises on error - callers wrap in try/except."""
+        self.quick_tune_enabled.set(
+            str(cfg.get("quick_tune_enabled", "")).strip().lower()
+            in ("1", "true", "yes", "on")
+        )
+
         # Buttons
         for key, _, _ in self._button_defs:
             if key in cfg:

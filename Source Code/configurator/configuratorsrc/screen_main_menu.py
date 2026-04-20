@@ -43,6 +43,7 @@ class MainMenu:
         self._backup_in_progress = False  # suppress poll's serial open during worker
         self._check_in_progress = False   # suppress poll rebuilds during update check
         self._probing_ctrl = False        # background serial probe in flight
+        self._fw_check_result = None      # persisted result for current firmware target
         self._factory_reset_in_progress = False  # suppress flash screen during factory reset
         self._factory_reset_hold_until = 0.0
         self._factory_reset_handoff_job = None
@@ -499,6 +500,7 @@ class MainMenu:
         self._flash_btn = None
 
         if state == "bootsel":
+            self._clear_fw_check_result()
             self._fw_icon.config(text="●", fg=ACCENT_GREEN)
             self._fw_status.config(
                 text=f"Pico in USB mode  ·  {value}", fg=ACCENT_GREEN)
@@ -526,14 +528,12 @@ class MainMenu:
                 text=f"{device_name}  —  Config mode  ·  {value}", fg=ACCENT_GREEN)
             if uf2:
                 bundled_date_str = get_bundled_fw_date_str(uf2)
-                self._fw_detail.config(
-                    text=f"Firmware: {os.path.basename(uf2)}  (built {bundled_date_str})  —  click Check for Updates.",
-                    fg=TEXT_DIM)
                 # Store for use by the backup worker
                 self._pending_fw_uf2  = uf2
                 self._pending_fw_type = device_type
                 self._pending_fw_via  = "config"
                 self._pending_fw_port = value
+                fw_target = self._make_fw_target_key(uf2, device_type, "config", value)
                 check_btn = RoundedButton(
                     self._fw_btn_frame, text="Check for Updates",
                     command=self._check_for_updates,
@@ -544,9 +544,13 @@ class MainMenu:
                     command=self._backup_and_update_prompt,
                     bg_color="#555560", btn_width=160, btn_height=36)
                 bk_btn.pack(side="left")
-                bk_btn.set_state("disabled")
+                self._apply_fw_check_result_to_card(
+                    fw_target,
+                    bk_btn,
+                    default_text=f"Firmware: {os.path.basename(uf2)}  (built {bundled_date_str})  —  click Check for Updates.")
                 self._backup_update_btn = bk_btn
             else:
+                self._clear_fw_check_result()
                 self._fw_detail.config(
                     text="No matching UF2 firmware file found alongside this exe.",
                     fg=ACCENT_ORANGE)
@@ -561,13 +565,11 @@ class MainMenu:
                 fg=ACCENT_GREEN)
             if uf2:
                 bundled_date_str = get_bundled_fw_date_str(uf2)
-                self._fw_detail.config(
-                    text=f"Firmware: {os.path.basename(uf2)}  (built {bundled_date_str})  —  click Check for Updates.",
-                    fg=TEXT_DIM)
                 self._pending_fw_uf2  = uf2
                 self._pending_fw_type = device_type
                 self._pending_fw_via  = "xinput"
                 self._pending_fw_port = None
+                fw_target = self._make_fw_target_key(uf2, device_type, "xinput", None)
                 check_btn = RoundedButton(
                     self._fw_btn_frame, text="Check for Updates",
                     command=self._check_for_updates,
@@ -578,14 +580,19 @@ class MainMenu:
                     command=self._backup_and_update_prompt,
                     bg_color="#555560", btn_width=160, btn_height=36)
                 bk_btn.pack(side="left")
-                bk_btn.set_state("disabled")
+                self._apply_fw_check_result_to_card(
+                    fw_target,
+                    bk_btn,
+                    default_text=f"Firmware: {os.path.basename(uf2)}  (built {bundled_date_str})  —  click Check for Updates.")
                 self._backup_update_btn = bk_btn
             else:
+                self._clear_fw_check_result()
                 self._fw_detail.config(
                     text="No matching UF2 firmware file found alongside this exe.",
                     fg=ACCENT_ORANGE)
 
         elif state == "dongle_xinput":
+            self._clear_fw_check_result()
             # Dongle has no serial config mode — cannot use magic sequence or Backup & Update.
             # The user must manually enter BOOTSEL to flash new dongle firmware.
             count = value
@@ -598,11 +605,42 @@ class MainMenu:
                 fg=TEXT_DIM)
 
         else:  # none
+            self._clear_fw_check_result()
             self._fw_icon.config(text="○", fg=TEXT_DIM)
             self._fw_status.config(text="No controller detected", fg=TEXT_DIM)
             self._fw_detail.config(
                 text="Connect a controller or hold BOOTSEL while plugging in.",
                 fg=TEXT_DIM)
+
+    def _make_fw_target_key(self, uf2_path, device_type, via, cfg_port):
+        return (uf2_path, device_type, via, cfg_port if via == "config" else None)
+
+    def _store_fw_check_result(self, fw_target, status, detail_text, detail_color):
+        self._fw_check_result = {
+            "target": fw_target,
+            "status": status,
+            "detail_text": detail_text,
+            "detail_color": detail_color,
+        }
+
+    def _clear_fw_check_result(self):
+        self._fw_check_result = None
+
+    def _apply_fw_check_result_to_card(self, fw_target, backup_btn, default_text):
+        result = self._fw_check_result
+        if result and result.get("target") == fw_target:
+            self._fw_detail.config(
+                text=result.get("detail_text", default_text),
+                fg=result.get("detail_color", TEXT_DIM))
+            if result.get("status") == "update":
+                backup_btn.set_state("normal")
+                backup_btn.update_color(ACCENT_BLUE)
+            else:
+                backup_btn.set_state("disabled")
+            return
+
+        self._fw_detail.config(text=default_text, fg=TEXT_DIM)
+        backup_btn.set_state("disabled")
 
 
     def _refresh_reset_card(self):
@@ -1947,7 +1985,9 @@ class MainMenu:
 
         bundled_date = get_bundled_fw_date(uf2_path)
         bundled_date_str = get_bundled_fw_date_str(uf2_path)
+        fw_target = self._make_fw_target_key(uf2_path, self._pending_fw_type, via, cfg_port)
 
+        self._clear_fw_check_result()
         self._check_in_progress = True
 
         def worker():
@@ -1961,6 +2001,23 @@ class MainMenu:
                 """Clear the in-progress flag and allow polling to resume."""
                 self._check_in_progress = False
                 self._last_fw_state = None   # force card refresh on next poll
+
+            def settle_after_xinput_reboot():
+                if not switched_from_xinput:
+                    return
+                ui_detail("Waiting for controller to finish returning to play mode…")
+                deadline = time.time() + 8.0
+                while time.time() < deadline:
+                    port = PicoSerial.find_config_port()
+                    if port:
+                        return
+                    try:
+                        controllers = xinput_get_connected() if XINPUT_AVAILABLE else []
+                    except Exception:
+                        controllers = []
+                    if any(c[1] in OCC_SUBTYPES for c in controllers):
+                        return
+                    time.sleep(0.3)
 
             try:
                 # ── Get into config mode if needed ──
@@ -2040,6 +2097,11 @@ class MainMenu:
                 # ── Compare dates and update UI ──
                 if fw_date_str is None:
                     # Firmware too old to have GET_FW_DATE — treat as needing update
+                    self._store_fw_check_result(
+                        fw_target,
+                        "update",
+                        f"Update recommended  —  Bundled: {bundled_date_str}",
+                        ACCENT_ORANGE)
                     def _enable():
                         _centered_dialog(
                             self.root, "Check for Updates",
@@ -2055,6 +2117,7 @@ class MainMenu:
                             btn.set_state("normal")
                             btn.update_color(ACCENT_BLUE)
                     self.root.after(0, _enable)
+                    settle_after_xinput_reboot()
                     finish()
                     return
 
@@ -2065,6 +2128,11 @@ class MainMenu:
                     needs_update = True  # can't parse controller date — offer update
 
                 if needs_update:
+                    self._store_fw_check_result(
+                        fw_target,
+                        "update",
+                        f"Update available!  Controller: {fw_date_str}  →  Bundled: {bundled_date_str}",
+                        ACCENT_ORANGE)
                     def _enable():
                         _centered_dialog(
                             self.root, "Update Available",
@@ -2082,6 +2150,11 @@ class MainMenu:
                             btn.update_color(ACCENT_BLUE)
                     self.root.after(0, _enable)
                 else:
+                    self._store_fw_check_result(
+                        fw_target,
+                        "up_to_date",
+                        f"Firmware is up to date  —  {fw_date_str}",
+                        ACCENT_GREEN)
                     def _up_to_date():
                         _centered_dialog(
                             self.root, "Firmware Up to Date",
@@ -2094,6 +2167,7 @@ class MainMenu:
                             fg=ACCENT_GREEN)
                     self.root.after(0, _up_to_date)
 
+                settle_after_xinput_reboot()
                 finish()
 
             except Exception as exc:
@@ -2203,6 +2277,7 @@ class MainMenu:
             def fail(msg, detail=""):
                 def _f():
                     self._backup_in_progress = False
+                    self._clear_fw_check_result()
                     self._last_fw_state = None  # force firmware card refresh
                     set_status(msg, detail, ACCENT_RED)
                     close_btn.set_state("normal")
@@ -2212,12 +2287,14 @@ class MainMenu:
             def succeed(msg, detail=""):
                 def _f():
                     self._backup_in_progress = False
+                    self._clear_fw_check_result()
                     self._last_fw_state = None
                     set_status(msg, detail, ACCENT_GREEN)
                     close_btn.set_state("normal")
                     dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
                 self.root.after(0, _f)
 
+            self._clear_fw_check_result()
             self._backup_in_progress = True
 
             # ── Step 1: get into config mode ──────────────────

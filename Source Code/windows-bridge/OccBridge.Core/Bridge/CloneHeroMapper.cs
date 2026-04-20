@@ -28,9 +28,9 @@ public static class CloneHeroMapper
         controller.SetSliderValue(Xbox360Slider.LeftTrigger, 0);
         controller.SetSliderValue(Xbox360Slider.RightTrigger, 0);
 
-        controller.SetAxisValue(Xbox360Axis.LeftThumbX, state.WhammyAxis);
+        controller.SetAxisValue(Xbox360Axis.LeftThumbX, 0);
         controller.SetAxisValue(Xbox360Axis.LeftThumbY, 0);
-        controller.SetAxisValue(Xbox360Axis.RightThumbX, 0);
+        controller.SetAxisValue(Xbox360Axis.RightThumbX, state.WhammyAxis);
         controller.SetAxisValue(Xbox360Axis.RightThumbY, NormalizeTiltAxis(state.TiltAxis));
 
         controller.SubmitReport();

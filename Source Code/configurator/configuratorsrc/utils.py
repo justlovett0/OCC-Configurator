@@ -166,6 +166,9 @@ def _ask_wired_or_wireless(parent, has_wired=True, has_wireless=True):
     dw = dlg.winfo_reqwidth(); dh = dlg.winfo_reqheight()
     dlg.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
 
+    dlg.deiconify()
+    dlg.lift(parent)
+    dlg.focus_force()
     dlg.grab_set()
     parent.wait_window(dlg)
     return result[0]

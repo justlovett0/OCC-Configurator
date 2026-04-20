@@ -93,6 +93,7 @@ def apply_config_to_pico(pico, cfg, led_input_names=None):
     """Send a config dict to firmware, including exported raw LED fields."""
     skip = {
         "device_type",
+        "quick_tune_enabled",
         "led_colors",
         "led_maps",
         "led_active_br",

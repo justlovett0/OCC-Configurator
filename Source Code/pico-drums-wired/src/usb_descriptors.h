@@ -9,11 +9,17 @@
 #include <stdbool.h>
 
 //--------------------------------------------------------------------
-// Global mode flags — set before tusb_init(), select descriptor set
+// Global mode flags - set before tusb_init(), select descriptor set
 //--------------------------------------------------------------------
 
+typedef enum {
+    DRUM_PLAY_MODE_XINPUT = 0,
+    DRUM_PLAY_MODE_PS3,
+    DRUM_PLAY_MODE_FORTNITE,
+} drum_play_mode_t;
+
 extern bool g_config_mode;
-extern bool g_hid_mode;   // HID mode (PS3 / macOS / Linux without XInput driver)
+extern drum_play_mode_t g_play_mode;
 extern const char *g_device_name;
 
 //--------------------------------------------------------------------
@@ -27,7 +33,7 @@ extern const char *g_device_name;
 #define XINPUT_IF_SUBCLASS        0x5D
 #define XINPUT_IF_PROTOCOL        0x01
 
-// Drum kit subtype (0x08) — tells Windows/games this is a drum controller. NOT 0x02 bc thats WHEEL apparently
+// Drum kit subtype (0x08) - tells Windows/games this is a drum controller.
 #define XINPUT_SUBTYPE_DRUM_KIT   0x08
 
 #define XINPUT_EP_IN              0x81
@@ -53,7 +59,7 @@ extern const char *g_device_name;
 #define CDC_EP_DATA_SIZE          64
 
 //--------------------------------------------------------------------
-// Magic vibration sequence — same mechanism as guitar firmware
+// Magic vibration sequence - same mechanism as guitar firmware
 //--------------------------------------------------------------------
 
 #define MAGIC_STEP_COUNT         3
@@ -66,15 +72,24 @@ extern const char *g_device_name;
 #define MAGIC_STEP2_LEFT         0x4F
 #define MAGIC_STEP2_RIGHT        0x4B
 
-#define WATCHDOG_CONFIG_MAGIC    0xC0F16000
-#define WATCHDOG_HID_MAGIC       0x48494400   // "HID\0" — scratch[1] for HID mode
+#define WATCHDOG_CONFIG_MAGIC        0xC0F16000
+#define WATCHDOG_PLAY_MODE_NONE      0x00000000
+#define WATCHDOG_PLAY_MODE_PS3       0x50533300
+#define WATCHDOG_PLAY_MODE_FORTNITE  0x464E5400
 
 //--------------------------------------------------------------------
-// HID Mode (PS3 / macOS / Linux) — GH World Tour Drum Kit PS3
+// HID Mode (PS3 / macOS / Linux) - GH World Tour Drum Kit PS3
 //--------------------------------------------------------------------
 
 #define HID_MODE_VID             0x12BA   // RedOctane / Activision
 #define HID_MODE_PID             0x0120   // GH World Tour Drum Kit for PS3
+
+//--------------------------------------------------------------------
+// Fortnite Festival mode (Rock Band drum persona)
+//--------------------------------------------------------------------
+
+#define FORTNITE_MODE_VID        0x1BAD   // Harmonix / Rock Band
+#define FORTNITE_MODE_PID        0x0719   // Rock Band drums
 
 //--------------------------------------------------------------------
 // XInput Button bit masks
@@ -107,7 +122,7 @@ extern const char *g_device_name;
 //   Cymbal flag: right_trigger byte set to 0xFF when any cymbal is hit
 //                (distinguishes cymbal from pad on same colour)
 //   D-pad:  Up/Down/Left/Right = standard XInput D-pad bits
-//   Foot Pedal: Left Thumb (LS click) — bass pedal per Rock Band spec
+//   Foot Pedal: Left Thumb (LS click) - bass pedal per Rock Band spec
 //   Start = Start, Select = Back
 //--------------------------------------------------------------------
 
@@ -124,7 +139,7 @@ extern const char *g_device_name;
 #define DRUM_BTN_DPAD_DOWN    XINPUT_BTN_DPAD_DOWN
 #define DRUM_BTN_DPAD_LEFT    XINPUT_BTN_DPAD_LEFT
 #define DRUM_BTN_DPAD_RIGHT   XINPUT_BTN_DPAD_RIGHT
-#define DRUM_BTN_FOOT_PEDAL   XINPUT_BTN_LEFT_THUMB   // Bass pedal — LS click per Rock Band XInput drum kit
+#define DRUM_BTN_FOOT_PEDAL   XINPUT_BTN_LEFT_THUMB   // Bass pedal - LS click per Rock Band XInput drum kit
 
 // right_trigger value used to flag a cymbal hit (non-zero = cymbal)
 #define DRUM_CYMBAL_FLAG      0xFF

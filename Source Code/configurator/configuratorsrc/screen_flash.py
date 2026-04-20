@@ -1,9 +1,9 @@
-import sys, os, time, threading
+import sys, os, time, threading, json
 import tkinter as tk
 from tkinter import messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
                          TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
-                         NUKE_UF2_FILENAME, OCC_SUBTYPES)
+                         NUKE_UF2_FILENAME, OCC_SUBTYPES, DEVICE_TYPE_TO_GUITAR_PROFILE)
 from .fonts import FONT_UI, _resource_path
 from .widgets import RoundedButton, CustomDropdown, HelpDialog, HelpButton, _help_text
 from .firmware_utils import (find_uf2_files, _group_uf2_files, load_fw_presets,
@@ -11,8 +11,15 @@ from .firmware_utils import (find_uf2_files, _group_uf2_files, load_fw_presets,
                               find_rpi_rp2_drive, find_rpi_rp2_drive_info,
                               get_bundled_fw_date_str, find_resetFW_uf2)
 from .serial_comms import PicoSerial
+from .screen_quick_tune import QuickTuneDialog
 from .xinput_utils import xinput_get_connected, MAGIC_STEPS, xinput_send_vibration
 from .utils import _centered_dialog, _center_window, _ask_wired_or_wireless, _make_flash_popup, _find_preset_configs
+
+
+def _json_truthy(value):
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
 class FlashFirmwareScreen:
     """
     Shown automatically when a Pico in BOOTSEL (USB mass-storage) mode is
@@ -540,6 +547,22 @@ class FlashFirmwareScreen:
         if not uf2_path:
             return
 
+        try:
+            with open(preset_cfg_path, "r", encoding="utf-8") as f:
+                preset_cfg = json.load(f)
+        except Exception as exc:
+            messagebox.showerror("Preset Error", f"Could not read preset config:\n{exc}")
+            return
+
+        dtype = str(preset_cfg.get("device_type", "")).strip()
+        is_guitar_preset = (
+            dtype in DEVICE_TYPE_TO_GUITAR_PROFILE
+            or "guitar" in os.path.basename(uf2_path).lower()
+        )
+        quick_tune_requested = is_guitar_preset and _json_truthy(
+            preset_cfg.get("quick_tune_enabled", 0)
+        )
+
         # Progress popup
         dlg = tk.Toplevel(self.root)
         dlg.title("Installing Preset")
@@ -580,6 +603,9 @@ class FlashFirmwareScreen:
         pw = self.root.winfo_width()
         ph = self.root.winfo_height()
         dlg.geometry(f"{req_w}x{req_h}+{px + (pw - req_w) // 2}+{py + (ph - req_h) // 2}")
+        dlg.deiconify()
+        dlg.lift(self.root)
+        dlg.focus_force()
         dlg.grab_set()
 
         def set_status(msg, detail="", color=ACCENT_BLUE):
@@ -603,6 +629,37 @@ class FlashFirmwareScreen:
                 close_btn.set_state("normal")
                 dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
             self.root.after(0, _f)
+
+        def launch_quick_tune(pico):
+            def _launch():
+                try:
+                    try:
+                        dlg.grab_release()
+                    except Exception:
+                        pass
+                    dlg.destroy()
+                    qt = QuickTuneDialog(self.root, pico, preset_cfg,
+                                         preset_name=preset_name)
+                    saved = qt.show()
+                    self._busy = False
+                    if saved and self._on_back:
+                        self._on_back()
+                except Exception as exc:
+                    try:
+                        pico.save()
+                        pico.reboot()
+                        pico.disconnect()
+                    except Exception:
+                        pass
+                    self._busy = False
+                    messagebox.showwarning(
+                        "Quick Tune Unavailable",
+                        "Quick Tune could not open, so the preset was saved "
+                        f"without tuning.\n\n{exc}"
+                    )
+                    if self._on_back:
+                        self._on_back()
+            self.root.after(0, _launch)
 
         self._busy = True
 
@@ -704,6 +761,13 @@ class FlashFirmwareScreen:
                     return
 
                 _apply_preset_config(pico, preset_cfg_path)
+
+                if quick_tune_requested:
+                    self.root.after(0, lambda: set_status(
+                        "Quick Tune  -  Ready",
+                        "Opening Quick Tune before saving to play mode..."))
+                    launch_quick_tune(pico)
+                    return
 
                 # Step 5 / 5: Save
                 self.root.after(0, lambda: set_status(

@@ -623,9 +623,9 @@ int main(void) {
 
         if (aligned_leds.enabled) {
             apa102_init();
-            // Boot-mode color flash: purple = PS3 HID, orange = Fortnite Festival/keyboard mode
+            // Boot-mode color flash: deep purple = PS3 HID, orange = Fortnite Festival/keyboard mode
             if (g_hid_mode)
-                apa102_flash_all_color(&aligned_leds, 255, 80, 255);
+                apa102_flash_all_color(&aligned_leds, 176, 0, 255);
             else if (g_kb_mode)
                 apa102_flash_all_color(&aligned_leds, 255, 80, 0);
         }
