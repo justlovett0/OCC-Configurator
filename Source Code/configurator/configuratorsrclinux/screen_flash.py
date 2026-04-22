@@ -644,6 +644,14 @@ class FlashFirmwareScreen:
                     self._busy = False
                     if saved and self._on_back:
                         self._on_back()
+                        self.root.after(
+                            150,
+                            lambda: messagebox.showinfo(
+                                "Controller Configured",
+                                "Your controller is now configured!\n"
+                                "Feel free to close OCC and start gaming."
+                            )
+                        )
                 except Exception as exc:
                     try:
                         pico.save()

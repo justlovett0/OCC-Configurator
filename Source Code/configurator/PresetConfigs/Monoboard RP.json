@@ -105,5 +105,6 @@
   ],
   "sync_pin": 15,
   "wireless_default_mode": 0,
-  "device_type": "guitar_alternate"
+  "device_type": "guitar_alternate",
+  "quick_tune_enabled": 1
 }

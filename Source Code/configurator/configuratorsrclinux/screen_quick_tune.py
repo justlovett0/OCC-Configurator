@@ -106,6 +106,7 @@ class QuickTuneDialog:
         self.tilt_invert = tk.BooleanVar(value=_as_bool(self.cfg.get("tilt_invert", 0)))
         self._tilt_detecting = False
         self._tilt_detect_started = False
+        self._tilt_detect_complete = False
         self._tilt_detect_failed = False
         self._tilt_detect_widgets = {}
         if self.whammy_mode == "analog" and self.whammy_pin >= 0:
@@ -261,10 +262,16 @@ class QuickTuneDialog:
             self._set_page_header_visible(True)
             self._title.config(text=title)
             self._build_axis_page("whammy")
+            self.win.after(150, lambda: self._start_axis_monitor_for_page("whammy", page))
         elif title == "Tilt":
             self._set_page_header_visible(True)
             self._title.config(text=title)
             self._build_axis_page("tilt")
+            if self.tilt_mode == "i2c":
+                if self._tilt_detect_complete and not self._tilt_detecting:
+                    self.win.after(150, lambda: self._start_axis_monitor_for_page("tilt", page))
+            else:
+                self.win.after(150, lambda: self._start_axis_monitor_for_page("tilt", page))
         else:
             self._set_page_header_visible(False)
             self._build_led_page()
@@ -348,13 +355,8 @@ class QuickTuneDialog:
                                  min_var=data["min"], max_var=data["max"],
                                  invert_var=data["invert"], ema_alpha_var=self.ema_alpha)
         cal.pack(fill="x", padx=12, pady=(28, 10))
-        monitor_btn = RoundedButton(right_col, text=f"Check {label}",
-                                    command=lambda p=prefix: self._toggle_axis_monitor(p),
-                                    bg_color=ACCENT_BLUE, btn_width=130, btn_height=30,
-                                    btn_font=(FONT_UI, 8, "bold"))
-        monitor_btn.pack(side="left", padx=(52, 8), pady=(0, 8))
         invert_check = ttk.Checkbutton(right_col, text="Invert", variable=data["invert"])
-        invert_check.pack(side="left", pady=(0, 8))
+        invert_check.pack(anchor="center", pady=(0, 8))
 
         def update_labels(*_):
             try:
@@ -415,7 +417,6 @@ class QuickTuneDialog:
             "min_lbl": min_lbl,
             "max_lbl": max_lbl,
             "monitor_panel": right_col,
-            "monitor_btn": monitor_btn,
             "invert_check": invert_check,
         }
         if prefix == "whammy":
@@ -490,7 +491,6 @@ class QuickTuneDialog:
     def _set_axis_monitor_enabled(self, prefix, enabled):
         widgets = self._axis_widgets.get(prefix, {})
         panel = widgets.get("monitor_panel")
-        monitor_btn = widgets.get("monitor_btn")
         invert_check = widgets.get("invert_check")
         if panel:
             color = BG_CARD if enabled else "#2f2f35"
@@ -504,8 +504,6 @@ class QuickTuneDialog:
                             child.redraw()
                     except Exception:
                         pass
-        if monitor_btn:
-            monitor_btn.set_state("normal" if enabled else "disabled")
         if invert_check:
             invert_check.configure(state="normal" if enabled else "disabled")
 
@@ -530,10 +528,12 @@ class QuickTuneDialog:
             if status:
                 status.config(text="Controller is no longer connected.", fg=ACCENT_RED)
             self._tilt_detect_failed = True
+            self._tilt_detect_complete = True
             self._set_tilt_fallback_visible(True)
             return
         self._stop_monitoring()
         self._tilt_detecting = True
+        self._tilt_detect_complete = False
         self._tilt_detect_failed = False
         self._set_tilt_capture_enabled(False)
         self._set_tilt_fallback_visible(False)
@@ -562,6 +562,7 @@ class QuickTuneDialog:
 
     def _finish_tilt_i2c_detect(self, lines, error):
         self._tilt_detecting = False
+        self._tilt_detect_complete = True
         status = self._tilt_detect_widgets.get("status")
         detected = None
         if not error:
@@ -589,6 +590,8 @@ class QuickTuneDialog:
                 status.config(text=message, fg=ACCENT_ORANGE)
         self._set_tilt_capture_enabled(True)
         self._fit_window_to_content()
+        if self._page == 1:
+            self._start_axis_monitor("tilt")
 
     def _apply_axis_bound(self, prefix, which, raw):
         data = self._axis_values(prefix)
@@ -601,12 +604,11 @@ class QuickTuneDialog:
             data["max"].set(raw)
 
     def _capture_axis_bound(self, prefix, which):
-        label = "minimum" if which == "min" else "maximum"
-        self._capture_axis_value(
-            prefix,
-            lambda raw: self._finish_axis_bound(prefix, which, raw),
-            f"Capturing {label} value..."
-        )
+        raw = self._latest_raw.get(prefix)
+        if raw is None:
+            messagebox.showinfo("Quick Tune", "Waiting for a live input value. Try again in a moment.")
+            return
+        self._finish_axis_bound(prefix, which, raw)
 
     def _finish_axis_bound(self, prefix, which, raw):
         self._apply_axis_bound(prefix, which, raw)
@@ -627,12 +629,11 @@ class QuickTuneDialog:
                               fg=TEXT_DIM)
 
     def _capture_whammy_position(self, position):
-        label = "resting" if position == "rest" else "actuated"
-        self._capture_axis_value(
-            "whammy",
-            lambda raw: self._finish_whammy_position(position, raw),
-            f"Capturing whammy {label} position..."
-        )
+        raw = self._latest_raw.get("whammy")
+        if raw is None:
+            messagebox.showinfo("Quick Tune", "Waiting for a live whammy value. Try again in a moment.")
+            return
+        self._finish_whammy_position(position, raw)
 
     def _finish_whammy_position(self, position, raw):
         raw = max(0, min(4095, int(raw)))
@@ -753,16 +754,9 @@ class QuickTuneDialog:
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _toggle_axis_monitor(self, prefix):
-        if not self._axis_quick_tuned.get(prefix, False):
-            return
-        if self._monitoring and self._monitor_prefix == prefix:
-            self._stop_monitoring()
-            return
-        self._stop_monitoring()
-        self._start_axis_monitor(prefix)
-
     def _start_axis_monitor(self, prefix):
+        if self._monitoring and self._monitor_prefix == prefix:
+            return
         if not self.pico.connected:
             messagebox.showerror("Quick Tune", "Controller is no longer connected.")
             return
@@ -771,14 +765,9 @@ class QuickTuneDialog:
         pin = data["pin"]
         widgets = self._axis_widgets.get(prefix, {})
         status = widgets.get("status")
-        monitor_btn = widgets.get("monitor_btn")
         if status:
-            status.config(text=f"Monitoring calibrated {data['label'].lower()} output...",
+            status.config(text=f"Showing live {data['label'].lower()} input.",
                           fg=ACCENT_BLUE)
-        if monitor_btn:
-            monitor_btn._label = "Stop Check"
-            monitor_btn._bg = ACCENT_RED
-            monitor_btn._render(ACCENT_RED)
         widgets.get("cal") and widgets["cal"].reset_ema()
         self._monitoring = True
         self._monitor_prefix = prefix
@@ -803,6 +792,10 @@ class QuickTuneDialog:
 
         self._monitor_thread = threading.Thread(target=worker, daemon=True)
         self._monitor_thread.start()
+
+    def _start_axis_monitor_for_page(self, prefix, page):
+        if self._page == page and prefix in self._axis_widgets:
+            self._start_axis_monitor(prefix)
 
     def _finish_axis_capture(self, prefix, on_value, value, error):
         self._capture_in_progress = False
@@ -844,12 +837,6 @@ class QuickTuneDialog:
             pass
         widgets = self._axis_widgets.get(prefix, {})
         status = widgets.get("status")
-        monitor_btn = widgets.get("monitor_btn")
-        if monitor_btn:
-            label = "Check Whammy" if prefix == "whammy" else "Check Tilt"
-            monitor_btn._label = label
-            monitor_btn._bg = ACCENT_BLUE
-            monitor_btn._render(ACCENT_BLUE)
         if status:
             status.config(text="Monitoring stopped.", fg=TEXT_DIM)
         self._monitor_prefix = None
