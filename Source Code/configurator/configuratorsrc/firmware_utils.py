@@ -352,6 +352,50 @@ def flash_uf2(uf2_path, drive_path):
     shutil.copy2(uf2_path, dest)
 
 
+def flash_resetfw_and_wait(resetFW_path, drive_path, status_cb=None):
+    """
+    Flash resetFW.uf2, then wait for the Pico to finish wiping and return as a
+    fresh BOOTSEL drive. Returns the new drive path.
+    """
+    def _status(msg):
+        if status_cb:
+            status_cb(msg)
+
+    _status("Flashing resetFW.uf2...")
+    flash_uf2(resetFW_path, drive_path)
+
+    _status("Waiting for Pico to restart...")
+    disappeared = False
+    deadline = time.time() + 10.0
+    while time.time() < deadline:
+        if not find_rpi_rp2_drive():
+            disappeared = True
+            break
+        time.sleep(0.3)
+
+    if not disappeared:
+        raise RuntimeError(
+            "resetFW.uf2 was copied, but the Pico did not restart into a "
+            "fresh BOOTSEL cycle.")
+
+    _status("Waiting for fresh BOOTSEL drive...")
+    new_drive = None
+    deadline = time.time() + 15.0
+    while time.time() < deadline:
+        new_drive = find_rpi_rp2_drive()
+        if new_drive:
+            break
+        time.sleep(0.3)
+
+    if not new_drive:
+        raise RuntimeError(
+            "resetFW.uf2 was copied, but the Pico did not reappear as a "
+            "BOOTSEL drive after reset.")
+
+    time.sleep(0.5)
+    return new_drive
+
+
 def _build_rp2040_reboot_uf2():
     """
     Build a minimal single-block UF2 payload that tells the RP2040 bootloader

@@ -26,10 +26,80 @@
 
 #include "pico/stdlib.h"
 #include "hardware/flash.h"
+#include "hardware/gpio.h"
 #include "pico/bootrom.h"
 
 #include "hardware/sync.h"
 #include "pico/unique_id.h"
+
+#define OCC_MAX_APA102_LEDS 16u
+#define OCC_APA102_DEFAULT_DATA_PIN 3u
+#define OCC_APA102_PEDAL_DATA_PIN 7u
+#define OCC_APA102_CLOCK_PIN 6u
+
+static void apa102_clock_bit(uint data_pin, uint clock_pin, bool bit) {
+    gpio_put(data_pin, bit ? 1 : 0);
+    sleep_us(1);
+    gpio_put(clock_pin, 1);
+    sleep_us(1);
+    gpio_put(clock_pin, 0);
+    sleep_us(1);
+}
+
+static void apa102_send_byte(uint data_pin, uint clock_pin, uint8_t value) {
+    for (int bit = 7; bit >= 0; bit--) {
+        apa102_clock_bit(data_pin, clock_pin, (value & (1u << bit)) != 0);
+    }
+}
+
+static void apa102_all_off_on_pins(uint data_pin, uint clock_pin) {
+    if (data_pin == clock_pin) return;
+
+    gpio_init(data_pin);
+    gpio_init(clock_pin);
+    gpio_set_dir(data_pin, GPIO_OUT);
+    gpio_set_dir(clock_pin, GPIO_OUT);
+    gpio_put(data_pin, 0);
+    gpio_put(clock_pin, 0);
+    sleep_us(10);
+
+    // Send twice so already-latched APA102/SK9822 chains reliably receive the
+    // blank frame even if the previous firmware left the clock line mid-frame.
+    for (int pass = 0; pass < 2; pass++) {
+        for (int i = 0; i < 4; i++) {
+            apa102_send_byte(data_pin, clock_pin, 0x00);
+        }
+        for (uint led = 0; led < OCC_MAX_APA102_LEDS; led++) {
+            apa102_send_byte(data_pin, clock_pin, 0xE0);
+            apa102_send_byte(data_pin, clock_pin, 0x00);
+            apa102_send_byte(data_pin, clock_pin, 0x00);
+            apa102_send_byte(data_pin, clock_pin, 0x00);
+        }
+        for (int i = 0; i < 8; i++) {
+            apa102_send_byte(data_pin, clock_pin, 0xFF);
+        }
+        sleep_ms(2);
+    }
+}
+
+static void release_normal_gpio(void) {
+    for (uint pin = 0; pin <= 29; pin++) {
+        gpio_init(pin);
+        gpio_set_dir(pin, GPIO_IN);
+        gpio_disable_pulls(pin);
+    }
+}
+
+static void quiesce_occ_outputs(void) {
+    apa102_all_off_on_pins(OCC_APA102_DEFAULT_DATA_PIN, OCC_APA102_CLOCK_PIN);
+    apa102_all_off_on_pins(OCC_APA102_PEDAL_DATA_PIN, OCC_APA102_CLOCK_PIN);
+#ifdef PICO_DEFAULT_LED_PIN
+    gpio_init(PICO_DEFAULT_LED_PIN);
+    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+    gpio_put(PICO_DEFAULT_LED_PIN, 0);
+#endif
+    release_normal_gpio();
+}
 
 // OCC stores controller configuration in the last flash sector. Explicitly
 // wipe it so factory reset clears persisted settings/device names even if the
@@ -139,6 +209,8 @@ int main() {
 
     flash_size_bytes = 1u << rxbuf[3];
 
+    quiesce_occ_outputs();
+
     flash_range_erase(0, flash_size_bytes);
     wipe_occ_config_sector(flash_size_bytes);
 
@@ -150,17 +222,7 @@ int main() {
     ble_identity_generate(new_identity);
     write_ble_identity_record(flash_size_bytes, new_identity);
 
-#ifdef PICO_DEFAULT_LED_PIN
-    // Flash LED for success
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-    for (int i = 0; i < 3; ++i) {
-        gpio_put(PICO_DEFAULT_LED_PIN, 1);
-        sleep_ms(100);
-        gpio_put(PICO_DEFAULT_LED_PIN, 0);
-        sleep_ms(100);
-    }
-#endif
+    quiesce_occ_outputs();
 
     reset_usb_boot(0, 0);
 }

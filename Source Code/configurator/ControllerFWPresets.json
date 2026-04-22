@@ -7,7 +7,7 @@
   "RIFFSTICK Controllers": {
     "RIFFSTICK Lite": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json" },
     "RIFFSTICK 1.1":  { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json" },
-    "RIFFSTICK Pro":  { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json" }
+    "RIFFSTICK Pro":  { "firmware": "Guitar Controller", "preset_config": null }
   },
   "Phunky Customs": {
     "Monoboard RP": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Monoboard RP.json" }

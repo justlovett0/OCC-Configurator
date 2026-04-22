@@ -15,7 +15,7 @@ from .serial_comms import PicoSerial
 from .firmware_utils import (find_rpi_rp2_drive, find_rpi_rp2_drive_info,
                               get_bundled_fw_date, get_bundled_fw_date_str, parse_fw_date,
                               flash_uf2, flash_uf2_with_reboot, enter_bootsel_for,
-                              find_uf2_files, find_resetFW_uf2,
+                              flash_resetfw_and_wait, find_uf2_files, find_resetFW_uf2,
                               find_uf2_for_device_type)
 from .xinput_utils import XINPUT_AVAILABLE, xinput_get_connected, MAGIC_STEPS, xinput_send_vibration, ERROR_SUCCESS
 from .utils import _centered_dialog, _center_window, _find_preset_configs
@@ -1601,17 +1601,22 @@ class MainMenu:
                         if drive:
                             resetFW_flashed = True   # set flag BEFORE writing so we only try once
                             try:
-                                flash_uf2(resetFW_path, drive)
-                                self.root.after(0, lambda: _centered_dialog(
-                                    self.root,
-                                    "Firmware Switcher",
-                                    "resetFW.uf2 is flashing\n\n"
-                                    "The 'Flash Firmware' screen will appear soon.\n\n"   
-									"This process will take about 10 seconds.\n\n"
-									"Once the flash firmware screen appears, please"
-                                    " unplug and plug in your controller to reset config & LEDs.",
-                                    kind="info"
-                                ))
+                                new_drive = flash_resetfw_and_wait(resetFW_path, drive)
+                                def _open_flash_screen(d=new_drive):
+                                    if self._poll_job:
+                                        self.root.after_cancel(self._poll_job)
+                                        self._poll_job = None
+                                    if self._on_flash_screen:
+                                        self._on_flash_screen(d)
+                                    else:
+                                        _centered_dialog(
+                                            self.root,
+                                            "Firmware Switcher",
+                                            "resetFW.uf2 completed successfully.\n\n"
+                                            "The Pico is ready for OCC firmware.",
+                                            kind="info"
+                                        )
+                                self.root.after(0, _open_flash_screen)
                             except Exception as exc:
                                 self.root.after(0, lambda e=exc: _centered_dialog(
                                     self.root,
@@ -1837,18 +1842,22 @@ class MainMenu:
                         if drive:
                             resetFW_flashed = True
                             try:
-                                flash_uf2(resetFW_path, drive)
-                                self.root.after(0, lambda: _centered_dialog(
-                                    self.root,
-                                    "Firmware Switcher",
-                                    "resetFW.uf2 flashed successfully!\n\n"
-                                    "The Pico will reboot clean.\n\n"
-                                    "!!WAIT 10 seconds!! for software \n"
-                                    "to catch up. ALPHA BUGGINESS.\n\n"
-                                    "PLEASE power off and power on your controller!\n"
-                                    "Unplug and plug in, then flash your OCC firmware normally.",
-                                    kind="info"
-                                ))
+                                new_drive = flash_resetfw_and_wait(resetFW_path, drive)
+                                def _open_flash_screen(d=new_drive):
+                                    if self._poll_job:
+                                        self.root.after_cancel(self._poll_job)
+                                        self._poll_job = None
+                                    if self._on_flash_screen:
+                                        self._on_flash_screen(d)
+                                    else:
+                                        _centered_dialog(
+                                            self.root,
+                                            "Firmware Switcher",
+                                            "resetFW.uf2 completed successfully.\n\n"
+                                            "The Pico is ready for OCC firmware.",
+                                            kind="info"
+                                        )
+                                self.root.after(0, _open_flash_screen)
                             except Exception as exc:
                                 self.root.after(0, lambda e=exc: _centered_dialog(
                                     self.root,
@@ -2665,11 +2674,16 @@ class MainMenu:
             if not confirmed:
                 return
             try:
-                flash_uf2(resetFW_path, drive)
-                messagebox.showinfo("Factory Reset Complete",
-                    "Pico flash has been wiped.\n\n"
-                    "To use the controller again, plug the Pico back in\n"
-                    "(hold BOOTSEL) and flash the guitar firmware.")
+                new_drive = flash_resetfw_and_wait(resetFW_path, drive)
+                if self._poll_job:
+                    self.root.after_cancel(self._poll_job)
+                    self._poll_job = None
+                if self._on_flash_screen:
+                    self._on_flash_screen(new_drive)
+                else:
+                    messagebox.showinfo("Factory Reset Complete",
+                        "Pico flash has been wiped.\n\n"
+                        "The Pico is ready for OCC firmware.")
             except Exception as exc:
                 messagebox.showerror("Factory Reset Error", str(exc))
             return
@@ -2934,30 +2948,10 @@ class MainMenu:
                 f"{step_n}  —  Flashing resetFW.uf2…",
                 f"Writing to {drive}"))
             try:
-                flash_uf2(resetFW_path, drive)
+                flash_resetfw_and_wait(resetFW_path, drive)
             except Exception as exc:
                 self.root.after(0, lambda e=exc: finish_err("Flash failed.", str(e)))
                 return
-
-            # resetFW.uf2 keeps running after file copy — wait for drive to vanish
-            self.root.after(0, lambda: set_status(
-                f"{step_n}  —  Waiting for Pico to restart…",
-                "ResetFW in progress — do not unplug"))
-            deadline = time.time() + 10.0
-            while time.time() < deadline:
-                if not find_rpi_rp2_drive():
-                    break
-                time.sleep(0.5)
-
-            # now wait for the fresh BOOTSEL drive to appear
-            self.root.after(0, lambda: set_status(
-                f"{step_n}  —  Waiting for Pico to restart…",
-                "Waiting for fresh boot"))
-            deadline = time.time() + 15.0
-            while time.time() < deadline:
-                if find_rpi_rp2_drive():
-                    break
-                time.sleep(0.5)
 
             self.root.after(0, finish_ok)
 

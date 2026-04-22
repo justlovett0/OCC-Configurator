@@ -207,3 +207,14 @@
 830	977	7974594525267343	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.hex	921fa5b1d2f6bd9b
 830	977	7974594525267343	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.bin	921fa5b1d2f6bd9b
 830	977	7974594525267343	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.uf2	921fa5b1d2f6bd9b
+94	462	7985317316683437	CMakeFiles/flash_nuke.dir/flash.c.obj	c02441fddce91f01
+90	586	7985317316643441	CMakeFiles/flash_nuke.dir/nuke.c.obj	380520acc794f4c
+586	991	7985317325628560	flash_nuke.elf	921fa5b1d2f6bd9b
+586	991	7985317325628560	flash_nuke.dis	921fa5b1d2f6bd9b
+586	991	7985317325628560	flash_nuke.hex	921fa5b1d2f6bd9b
+586	991	7985317325628560	flash_nuke.bin	921fa5b1d2f6bd9b
+586	991	7985317325628560	flash_nuke.uf2	921fa5b1d2f6bd9b
+586	991	7985317325628560	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.dis	921fa5b1d2f6bd9b
+586	991	7985317325628560	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.hex	921fa5b1d2f6bd9b
+586	991	7985317325628560	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.bin	921fa5b1d2f6bd9b
+586	991	7985317325628560	C:/Users/James/Desktop/OCC/Source Code/flash-reset/build-ninja/flash_nuke.uf2	921fa5b1d2f6bd9b

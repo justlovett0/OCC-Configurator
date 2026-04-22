@@ -152,8 +152,6 @@ Discarded input sections
                 0x00000000       0x34 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
  .text.gpio_get_function
                 0x00000000       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
- .text.gpio_set_pulls
-                0x00000000       0x34 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
  .text.gpio_set_irqover
                 0x00000000       0x24 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
  .text.gpio_set_inover
@@ -437,8 +435,6 @@ Discarded input sections
                 0x00000000        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
  .text.alarm_pool_core_num
                 0x00000000        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
- .text.sleep_us
-                0x00000000       0x24 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
  .text.alarm_pool_add_repeating_timer_us
                 0x00000000      0x120 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
  .text.cancel_repeating_timer
@@ -2306,7 +2302,7 @@ SCRATCH_Y        0x20041000         0x00001000         xrw
 Linker script and memory map
 
 
-.text           0x20000000     0x1d0c
+.text           0x20000000     0x1f28
                 0x20000000                __logical_binary_start = .
                 0x20000000                __reset_start = .
  *(.reset)
@@ -2399,198 +2395,208 @@ Linker script and memory map
  *(.text*)
  .text.write_ble_identity_record
                 0x20000528      0x174 CMakeFiles/flash_nuke.dir/nuke.c.obj
+ .text.apa102_all_off_on_pins.part.0.constprop.0
+                0x2000069c      0x1a0 CMakeFiles/flash_nuke.dir/nuke.c.obj
+ .text.quiesce_occ_outputs
+                0x2000083c       0x44 CMakeFiles/flash_nuke.dir/nuke.c.obj
  .text.startup.main
-                0x2000069c      0x26c CMakeFiles/flash_nuke.dir/nuke.c.obj
-                0x2000069c                main
+                0x20000880      0x24c CMakeFiles/flash_nuke.dir/nuke.c.obj
+                0x20000880                main
+ .text.gpio_set_pulls
+                0x20000acc       0x34 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
+                0x20000acc                gpio_set_pulls
  .text.gpio_init
-                0x20000908       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
-                0x20000908                gpio_init
- .text.panic    0x20000948       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
-                0x20000948                panic
+                0x20000b00       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
+                0x20000b00                gpio_init
+ .text.panic    0x20000b40       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
+                0x20000b40                panic
  .text.hw_claim_or_assert
-                0x20000978       0x44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
-                0x20000978                hw_claim_or_assert
+                0x20000b70       0x44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
+                0x20000b70                hw_claim_or_assert
  .text.next_striped_spin_lock_num
-                0x200009bc       0x18 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
-                0x200009bc                next_striped_spin_lock_num
+                0x20000bb4       0x18 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
+                0x20000bb4                next_striped_spin_lock_num
  .text.spin_locks_reset
-                0x200009d4       0x1c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
-                0x200009d4                spin_locks_reset
+                0x20000bcc       0x1c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
+                0x20000bcc                spin_locks_reset
  .text.runtime_init_per_core_irq_priorities
-                0x200009f0       0x24 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
-                0x200009f0                runtime_init_per_core_irq_priorities
+                0x20000be8       0x24 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+                0x20000be8                runtime_init_per_core_irq_priorities
  .text.irq_set_enabled
-                0x20000a14       0x24 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
-                0x20000a14                irq_set_enabled
+                0x20000c0c       0x24 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+                0x20000c0c                irq_set_enabled
  .text.irq_set_exclusive_handler
-                0x20000a38       0x54 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
-                0x20000a38                irq_set_exclusive_handler
+                0x20000c30       0x54 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+                0x20000c30                irq_set_exclusive_handler
  .text.lock_init
-                0x20000a8c       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
-                0x20000a8c                lock_init
+                0x20000c84       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
+                0x20000c84                lock_init
  .text.runtime_init_mutex
-                0x20000a9c       0x58 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
-                0x20000a9c                runtime_init_mutex
+                0x20000c94       0x58 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
+                0x20000c94                runtime_init_mutex
  .text.sleep_until_callback
-                0x20000af4       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x20000cec       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
  .text.alarm_pool_irq_handler
-                0x20000b24      0x308 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x20000d1c      0x308 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
  .text.runtime_init_default_alarm_pool
-                0x20000e2c       0xdc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
-                0x20000e2c                runtime_init_default_alarm_pool
+                0x20001024       0xdc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x20001024                runtime_init_default_alarm_pool
  .text.alarm_pool_add_alarm_at_force_in_context
-                0x20000f08       0xb0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
-                0x20000f08                alarm_pool_add_alarm_at_force_in_context
+                0x20001100       0xb0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x20001100                alarm_pool_add_alarm_at_force_in_context
  .text.alarm_pool_cancel_alarm
-                0x20000fb8       0x7c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
-                0x20000fb8                alarm_pool_cancel_alarm
+                0x200011b0       0x7c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x200011b0                alarm_pool_cancel_alarm
  .text.sleep_until
-                0x20001034       0xd0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
-                0x20001034                sleep_until
+                0x2000122c       0xd0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x2000122c                sleep_until
+ .text.sleep_us
+                0x200012fc       0x24 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x200012fc                sleep_us
  .text.sleep_ms
-                0x20001104       0x34 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
-                0x20001104                sleep_ms
+                0x20001320       0x34 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x20001320                sleep_ms
  .text.best_effort_wfe_or_timeout
-                0x20001138       0xfc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
-                0x20001138                best_effort_wfe_or_timeout
+                0x20001354       0xfc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x20001354                best_effort_wfe_or_timeout
  .text.timer_hardware_alarm_claim
-                0x20001234       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
-                0x20001234                timer_hardware_alarm_claim
+                0x20001450       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+                0x20001450                timer_hardware_alarm_claim
  .text.timer_time_us_64
-                0x20001248       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
-                0x20001248                timer_time_us_64
+                0x20001464       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+                0x20001464                timer_time_us_64
  .text.time_us_64
-                0x20001258       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
-                0x20001258                time_us_64
+                0x20001474       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+                0x20001474                time_us_64
  .text.busy_wait_until
-                0x2000126c       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
-                0x2000126c                busy_wait_until
+                0x20001488       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+                0x20001488                busy_wait_until
  .text.clock_configure_int_divider
-                0x2000128c       0xf4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
-                0x2000128c                clock_configure_int_divider
+                0x200014a8       0xf4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+                0x200014a8                clock_configure_int_divider
  .text.clock_configure_undivided
-                0x20001380       0xe8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
-                0x20001380                clock_configure_undivided
+                0x2000159c       0xe8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+                0x2000159c                clock_configure_undivided
  .text.clock_get_hz
-                0x20001468        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
-                0x20001468                clock_get_hz
+                0x20001684        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+                0x20001684                clock_get_hz
  .text.pll_init
-                0x20001474       0xa0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
-                0x20001474                pll_init
+                0x20001690       0xa0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
+                0x20001690                pll_init
  .text.tick_start
-                0x20001514       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
-                0x20001514                tick_start
+                0x20001730       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
+                0x20001730                tick_start
  .text.rom_func_lookup
-                0x20001524       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
-                0x20001524                rom_func_lookup
+                0x20001740       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+                0x20001740                rom_func_lookup
  .text.rom_data_lookup
-                0x20001534       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
-                0x20001534                rom_data_lookup
+                0x20001750       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+                0x20001750                rom_data_lookup
  .text.rom_funcs_lookup
-                0x20001544       0x44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
-                0x20001544                rom_funcs_lookup
+                0x20001760       0x44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+                0x20001760                rom_funcs_lookup
  .text.rom_reset_usb_boot
-                0x20001588       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
-                0x20001588                rom_reset_usb_boot
+                0x200017a4       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+                0x200017a4                rom_reset_usb_boot
  .text.xosc_init
-                0x200015a8       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
-                0x200015a8                xosc_init
+                0x200017c4       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
+                0x200017c4                xosc_init
  .text.first_per_core_initializer
-                0x200015d0        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+                0x200017ec        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
  .text.hard_assertion_failure
-                0x200015d4        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
-                0x200015d4                hard_assertion_failure
+                0x200017f0        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+                0x200017f0                hard_assertion_failure
  .text.runtime_run_initializers
-                0x200015e0       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
-                0x200015e0                runtime_run_initializers
+                0x200017fc       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+                0x200017fc                runtime_run_initializers
  .text.runtime_init_early_resets
-                0x20001608       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001608                runtime_init_early_resets
+                0x20001824       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x20001824                runtime_init_early_resets
  .text.runtime_init_usb_power_down
-                0x20001634       0x1c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001634                runtime_init_usb_power_down
+                0x20001850       0x1c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x20001850                runtime_init_usb_power_down
  .text.runtime_init_post_clock_resets
-                0x20001650       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001650                runtime_init_post_clock_resets
+                0x2000186c       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x2000186c                runtime_init_post_clock_resets
  .text.runtime_init_rp2040_gpio_ie_disable
-                0x20001670       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001670                runtime_init_rp2040_gpio_ie_disable
+                0x2000188c       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x2000188c                runtime_init_rp2040_gpio_ie_disable
  .text.runtime_init_spin_locks_reset
-                0x20001684        0x8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001684                runtime_init_spin_locks_reset
+                0x200018a0        0x8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x200018a0                runtime_init_spin_locks_reset
  .text.runtime_init_clocks
-                0x2000168c       0xd8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
-                0x2000168c                runtime_init_clocks
- .text          0x20001764       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
+                0x200018a8       0xd8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
+                0x200018a8                runtime_init_clocks
+ .text          0x20001980       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
  .text.__wrap___aeabi_uidiv
-                0x20001774       0x4c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
-                0x20001774                __wrap___aeabi_uidiv
-                0x20001774                __wrap___aeabi_uidivmod
-                0x20001774                div_u32u32
-                0x20001774                divmod_u32u32
-                0x2000177c                divmod_u32u32_unsafe
-                0x200017a4                divmod_u32u32_savestate
+                0x20001990       0x4c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
+                0x20001990                __wrap___aeabi_uidiv
+                0x20001990                __wrap___aeabi_uidivmod
+                0x20001990                div_u32u32
+                0x20001990                divmod_u32u32
+                0x20001998                divmod_u32u32_unsafe
+                0x200019c0                divmod_u32u32_savestate
  .text.__aeabi_double_init
-                0x200017c0       0xa0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
-                0x200017c0                __aeabi_double_init
+                0x200019dc       0xa0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+                0x200019dc                __aeabi_double_init
  .text.double_table_shim_on_use_helper
-                0x20001860       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
-                0x20001860                double_table_shim_on_use_helper
+                0x20001a7c       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
+                0x20001a7c                double_table_shim_on_use_helper
  .text.__aeabi_lmul
-                0x2000188c       0x32 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
-                0x2000188c                __wrap___aeabi_lmul
- *fill*         0x200018be        0x2 
+                0x20001aa8       0x32 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
+                0x20001aa8                __wrap___aeabi_lmul
+ *fill*         0x20001ada        0x2 
  .text.__aeabi_float_init
-                0x200018c0       0x64 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
-                0x200018c0                __aeabi_float_init
+                0x20001adc       0x64 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
+                0x20001adc                __aeabi_float_init
  .text.float_table_shim_on_use_helper
-                0x20001924       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
-                0x20001924                float_table_shim_on_use_helper
- .text          0x20001950       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
-                0x20001950                __aeabi_mem_init
- .text.memset   0x20001960        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
-                0x20001960                __wrap_memset
- .text.memcpy   0x2000196c        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
-                0x2000196c                __wrap_memcpy
-                0x2000196c                __wrap___aeabi_memcpy
+                0x20001b40       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
+                0x20001b40                float_table_shim_on_use_helper
+ .text          0x20001b6c       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+                0x20001b6c                __aeabi_mem_init
+ .text.memset   0x20001b7c        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+                0x20001b7c                __wrap_memset
+ .text.memcpy   0x20001b88        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+                0x20001b88                __wrap_memcpy
+                0x20001b88                __wrap___aeabi_memcpy
  .text._out_char
-                0x20001978       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+                0x20001b94       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
  .text.weak_raw_vprintf
-                0x20001988       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
-                0x20001988                weak_raw_vprintf
- .text._exit    0x200019b8        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
-                0x200019b8                _exit
- .text.exit     0x200019bc        0x8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
-                0x200019bc                exit
+                0x20001ba4       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+                0x20001ba4                weak_raw_vprintf
+ .text._exit    0x20001bd4        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+                0x20001bd4                _exit
+ .text.exit     0x20001bd8        0x8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+                0x20001bd8                exit
  .text.runtime_init
-                0x200019c4       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
-                0x200019c4                runtime_init
+                0x20001be0       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+                0x20001be0                runtime_init
  .text.stdio_out_chars_no_crlf
-                0x200019f0       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+                0x20001c0c       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
  .text.stdio_out_chars_crlf
-                0x20001a00       0xb4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+                0x20001c1c       0xb4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
  .text.stdio_put_string
-                0x20001ab4      0x100 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
-                0x20001ab4                stdio_put_string
+                0x20001cd0      0x100 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+                0x20001cd0                stdio_put_string
  .text.__wrap_putchar
-                0x20001bb4       0x98 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
-                0x20001bb4                __wrap_putchar
-                0x20001bb4                stdio_putchar
+                0x20001dd0       0x98 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+                0x20001dd0                __wrap_putchar
+                0x20001dd0                stdio_putchar
  .text.__wrap_puts
-                0x20001c4c       0x3c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
-                0x20001c4c                stdio_puts
-                0x20001c4c                __wrap_puts
+                0x20001e68       0x3c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+                0x20001e68                stdio_puts
+                0x20001e68                __wrap_puts
  .text.startup._retrieve_unique_id_on_boot
-                0x20001c88       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+                0x20001ea4       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
  .text.pico_get_unique_board_id
-                0x20001c9c       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
-                0x20001c9c                pico_get_unique_board_id
- .text          0x20001cac        0x4 c:/progra~2/gnuarm~1/102021~1.10/bin/../lib/gcc/arm-none-eabi/10.3.1/thumb/v6-m/nofp\libgcc.a(_dvmd_tls.o)
-                0x20001cac                __aeabi_idiv0
-                0x20001cac                __aeabi_ldiv0
- .text.strlen   0x20001cb0       0x5c c:/progra~2/gnuarm~1/102021~1.10/bin/../lib/gcc/arm-none-eabi/10.3.1/../../../../arm-none-eabi/lib/thumb/v6-m/nofp\libg.a(lib_a-strlen-stub.o)
-                0x20001cb0                strlen
-                0x20001d0c                . = ALIGN (0x4)
+                0x20001eb8       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+                0x20001eb8                pico_get_unique_board_id
+ .text          0x20001ec8        0x4 c:/progra~2/gnuarm~1/102021~1.10/bin/../lib/gcc/arm-none-eabi/10.3.1/thumb/v6-m/nofp\libgcc.a(_dvmd_tls.o)
+                0x20001ec8                __aeabi_idiv0
+                0x20001ec8                __aeabi_ldiv0
+ .text.strlen   0x20001ecc       0x5c c:/progra~2/gnuarm~1/102021~1.10/bin/../lib/gcc/arm-none-eabi/10.3.1/../../../../arm-none-eabi/lib/thumb/v6-m/nofp\libg.a(lib_a-strlen-stub.o)
+                0x20001ecc                strlen
+                0x20001f28                . = ALIGN (0x4)
  *(.init)
  *(.fini)
  *crtbegin.o(.ctors)
@@ -2605,215 +2611,215 @@ Linker script and memory map
  *(.dtors)
  *(.eh_frame*)
 
-.glue_7         0x20001d0c        0x0
- .glue_7        0x20001d0c        0x0 linker stubs
+.glue_7         0x20001f28        0x0
+ .glue_7        0x20001f28        0x0 linker stubs
 
-.glue_7t        0x20001d0c        0x0
- .glue_7t       0x20001d0c        0x0 linker stubs
+.glue_7t        0x20001f28        0x0
+ .glue_7t       0x20001f28        0x0 linker stubs
 
-.vfp11_veneer   0x20001d0c        0x0
- .vfp11_veneer  0x20001d0c        0x0 linker stubs
+.vfp11_veneer   0x20001f28        0x0
+ .vfp11_veneer  0x20001f28        0x0 linker stubs
 
-.v4_bx          0x20001d0c        0x0
- .v4_bx         0x20001d0c        0x0 linker stubs
+.v4_bx          0x20001f28        0x0
+ .v4_bx         0x20001f28        0x0 linker stubs
 
-.iplt           0x20001d0c        0x0
- .iplt          0x20001d0c        0x0 CMakeFiles/flash_nuke.dir/nuke.c.obj
+.iplt           0x20001f28        0x0
+ .iplt          0x20001f28        0x0 CMakeFiles/flash_nuke.dir/nuke.c.obj
 
-.rodata         0x20001d0c      0x190
-                0x20001d0c                . = ALIGN (0x4)
+.rodata         0x20001f28      0x190
+                0x20001f28                . = ALIGN (0x4)
  *(.rodata*)
  .rodata.eyecatcher.0
-                0x20001d0c      0x100 CMakeFiles/flash_nuke.dir/nuke.c.obj
+                0x20001f28      0x100 CMakeFiles/flash_nuke.dir/nuke.c.obj
  .rodata.panic.str1.4
-                0x20001e0c       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
- *fill*         0x20001e1e        0x2 
+                0x20002028       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
+ *fill*         0x2000203a        0x2 
  .rodata.timer_hardware_alarm_claim.str1.4
-                0x20001e20       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
- *fill*         0x20001e42        0x2 
+                0x2000203c       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+ *fill*         0x2000205e        0x2 
  .rodata.hard_assertion_failure.str1.4
-                0x20001e44        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+                0x20002060        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
  .rodata.str1.4
-                0x20001e50       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+                0x2000206c       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
  .rodata.__bi_48
-                0x20001e80        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+                0x2000209c        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
  .rodata.__bi_84
-                0x20001e8c        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+                0x200020a8        0xc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
  .rodata.crlf_str.0
-                0x20001e98        0x2 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
-                0x20001e9c                . = ALIGN (0x4)
- *fill*         0x20001e9a        0x2 
+                0x200020b4        0x2 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+                0x200020b8                . = ALIGN (0x4)
+ *fill*         0x200020b6        0x2 
  *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
-                0x20001e9c                . = ALIGN (0x4)
+                0x200020b8                . = ALIGN (0x4)
 
 .ARM.extab
  *(.ARM.extab* .gnu.linkonce.armextab.*)
-                0x20001e9c                __exidx_start = .
+                0x200020b8                __exidx_start = .
 
 .ARM.exidx
  *(.ARM.exidx* .gnu.linkonce.armexidx.*)
-                0x20001e9c                __exidx_end = .
-                0x20001e9c                . = ALIGN (0x4)
-                0x20001e9c                __binary_info_start = .
+                0x200020b8                __exidx_end = .
+                0x200020b8                . = ALIGN (0x4)
+                0x200020b8                __binary_info_start = .
 
-.binary_info    0x20001e9c       0x14
+.binary_info    0x200020b8       0x14
  *(.binary_info.keep.*)
  .binary_info.keep.__bi_ptr34
-                0x20001e9c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+                0x200020b8        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
  .binary_info.keep.__bi_ptr42
-                0x20001ea0        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+                0x200020bc        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
  .binary_info.keep.__bi_ptr48
-                0x20001ea4        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+                0x200020c0        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
  .binary_info.keep.__bi_ptr54
-                0x20001ea8        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+                0x200020c4        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
  .binary_info.keep.__bi_ptr84
-                0x20001eac        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+                0x200020c8        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
  *(.binary_info.*)
-                0x20001eb0                __binary_info_end = .
-                0x20001eb0                . = ALIGN (0x4)
+                0x200020cc                __binary_info_end = .
+                0x200020cc                . = ALIGN (0x4)
 
-.data           0x20001eb0       0x84
-                0x20001eb0                __data_start__ = .
+.data           0x200020d0       0x84
+                0x200020d0                __data_start__ = .
  *(vtable)
  *(.data*)
  .data.striped_spin_lock_num
-                0x20001eb0        0x1 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
- *fill*         0x20001eb1        0x3 
+                0x200020d0        0x1 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
+ *fill*         0x200020d1        0x3 
  .data.default_alarm_pool
-                0x20001eb4       0x18 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
- *fill*         0x20001ecc        0x4 
+                0x200020d4       0x18 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+ *fill*         0x200020ec        0x4 
  .data.aeabi_bits_funcs
-                0x20001ed0       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
-                0x20001ed0                aeabi_bits_funcs
-                0x20001ee0                aeabi_bits_funcs_end
+                0x200020f0       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
+                0x200020f0                aeabi_bits_funcs
+                0x20002100                aeabi_bits_funcs_end
  .data.aeabi_mem_funcs
-                0x20001ee0       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
-                0x20001ee0                aeabi_mem_funcs
-                0x20001ef0                aeabi_mem_funcs_end
-                0x20001ef0                . = ALIGN (0x4)
+                0x20002100       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+                0x20002100                aeabi_mem_funcs
+                0x20002110                aeabi_mem_funcs_end
+                0x20002110                . = ALIGN (0x4)
  *(.after_data.*)
-                0x20001ef0                . = ALIGN (0x4)
-                0x20001ef0                PROVIDE (__mutex_array_start = .)
+                0x20002110                . = ALIGN (0x4)
+                0x20002110                PROVIDE (__mutex_array_start = .)
  *(SORT_BY_NAME(.mutex_array.*))
  *(.mutex_array)
- .mutex_array   0x20001ef0        0x8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
-                0x20001ef8                PROVIDE (__mutex_array_end = .)
-                0x20001ef8                . = ALIGN (0x4)
-                0x20001ef8                PROVIDE (__preinit_array_start = .)
+ .mutex_array   0x20002110        0x8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+                0x20002118                PROVIDE (__mutex_array_end = .)
+                0x20002118                . = ALIGN (0x4)
+                0x20002118                PROVIDE (__preinit_array_start = .)
  *(SORT_BY_NAME(.preinit_array.*))
  .preinit_array.00100
-                0x20001ef8        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001ef8                __pre_init_runtime_init_early_resets
+                0x20002118        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x20002118                __pre_init_runtime_init_early_resets
  .preinit_array.00101
-                0x20001efc        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001efc                __pre_init_runtime_init_usb_power_down
+                0x2000211c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x2000211c                __pre_init_runtime_init_usb_power_down
  .preinit_array.00275
-                0x20001f00        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
+                0x20002120        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
  .preinit_array.00300
-                0x20001f04        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+                0x20002124        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
  .preinit_array.00350
-                0x20001f08        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
+                0x20002128        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
  .preinit_array.00350
-                0x20001f0c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
+                0x2000212c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
  .preinit_array.00500
-                0x20001f10        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001f10                __pre_init_runtime_init_clocks
+                0x20002130        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x20002130                __pre_init_runtime_init_clocks
  .preinit_array.00600
-                0x20001f14        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001f14                __pre_init_runtime_init_post_clock_resets
+                0x20002134        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x20002134                __pre_init_runtime_init_post_clock_resets
  .preinit_array.00700
-                0x20001f18        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001f18                __pre_init_runtime_init_rp2040_gpio_ie_disable
+                0x20002138        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x20002138                __pre_init_runtime_init_rp2040_gpio_ie_disable
  .preinit_array.01000
-                0x20001f1c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
-                0x20001f1c                __pre_init_runtime_init_spin_locks_reset
+                0x2000213c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x2000213c                __pre_init_runtime_init_spin_locks_reset
  .preinit_array.01100
-                0x20001f20        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
-                0x20001f20                __pre_init_runtime_init_mutex
+                0x20002140        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
+                0x20002140                __pre_init_runtime_init_mutex
  .preinit_array.11000
-                0x20001f24        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
-                0x20001f24                __pre_init_runtime_init_default_alarm_pool
+                0x20002144        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x20002144                __pre_init_runtime_init_default_alarm_pool
  .preinit_array.YYYYY
-                0x20001f28        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
-                0x20001f28                __pre_init_first_per_core_initializer
+                0x20002148        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+                0x20002148                __pre_init_first_per_core_initializer
  .preinit_array.ZZZZZ.01200
-                0x20001f2c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
-                0x20001f2c                __pre_init_runtime_init_per_core_irq_priorities
+                0x2000214c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+                0x2000214c                __pre_init_runtime_init_per_core_irq_priorities
  *(.preinit_array)
-                0x20001f30                PROVIDE (__preinit_array_end = .)
-                0x20001f30                . = ALIGN (0x4)
-                0x20001f30                PROVIDE (__init_array_start = .)
+                0x20002150                PROVIDE (__preinit_array_end = .)
+                0x20002150                . = ALIGN (0x4)
+                0x20002150                PROVIDE (__init_array_start = .)
  *(SORT_BY_NAME(.init_array.*))
  .init_array.01000
-                0x20001f30        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+                0x20002150        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
  *(.init_array)
-                0x20001f34                PROVIDE (__init_array_end = .)
-                0x20001f34                . = ALIGN (0x4)
+                0x20002154                PROVIDE (__init_array_end = .)
+                0x20002154                . = ALIGN (0x4)
                 [!provide]                PROVIDE (__fini_array_start = .)
  *(SORT_BY_NAME(.fini_array.*))
  *(.fini_array)
                 [!provide]                PROVIDE (__fini_array_end = .)
  *(.jcr)
-                0x20001f34                . = ALIGN (0x4)
+                0x20002154                . = ALIGN (0x4)
 
-.igot.plt       0x20001f34        0x0
- .igot.plt      0x20001f34        0x0 CMakeFiles/flash_nuke.dir/nuke.c.obj
+.igot.plt       0x20002154        0x0
+ .igot.plt      0x20002154        0x0 CMakeFiles/flash_nuke.dir/nuke.c.obj
 
-.tdata          0x20001f34        0x0
-                0x20001f34                . = ALIGN (0x4)
+.tdata          0x20002154        0x0
+                0x20002154                . = ALIGN (0x4)
  *(.tdata .tdata.* .gnu.linkonce.td.*)
-                0x20001f34                __tdata_end = .
-                0x20001f34                PROVIDE (__data_end__ = .)
+                0x20002154                __tdata_end = .
+                0x20002154                PROVIDE (__data_end__ = .)
 
 .uninitialized_data
-                0x20001f34        0x0
-                0x20001f34                . = ALIGN (0x4)
+                0x20002154        0x0
+                0x20002154                . = ALIGN (0x4)
  *(.uninitialized_data*)
-                0x20001eb0                __etext = LOADADDR (.data)
+                0x200020d0                __etext = LOADADDR (.data)
 
-.tbss           0x20001f34        0x0
-                0x20001f34                . = ALIGN (0x4)
-                0x20001f34                __bss_start__ = .
-                0x20001f34                __tls_base = .
+.tbss           0x20002154        0x0
+                0x20002154                . = ALIGN (0x4)
+                0x20002154                __bss_start__ = .
+                0x20002154                __tls_base = .
  *(.tbss .tbss.* .gnu.linkonce.tb.*)
  *(.tcommon)
-                0x20001f34                __tls_end = .
+                0x20002154                __tls_end = .
 
-.bss            0x20001f38      0x3d8
-                0x20001f38                . = ALIGN (0x4)
-                0x20001f38                __tbss_end = .
+.bss            0x20002158      0x3d8
+                0x20002158                . = ALIGN (0x4)
+                0x20002158                __tbss_end = .
  *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.bss*)))
  .bss.default_alarm_pool_entries
-                0x20001f38      0x180 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
- .bss.sd_table  0x200020b8      0x100 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
-                0x200020b8                sd_table
- .bss.sf_table  0x200021b8      0x100 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
-                0x200021b8                sf_table
- .bss.claimed   0x200022b8        0x1 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
- *fill*         0x200022b9        0x3 
+                0x20002158      0x180 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+ .bss.sd_table  0x200022d8      0x100 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+                0x200022d8                sd_table
+ .bss.sf_table  0x200023d8      0x100 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
+                0x200023d8                sf_table
+ .bss.claimed   0x200024d8        0x1 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+ *fill*         0x200024d9        0x3 
  .bss.configured_freq
-                0x200022bc       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
- .bss.drivers   0x200022e4        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
- .bss.filter    0x200022e8        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+                0x200024dc       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+ .bss.drivers   0x20002504        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+ .bss.filter    0x20002508        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
  .bss.lazy_vsnprintf
-                0x200022ec        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
- .bss.pools     0x200022f0       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x2000250c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+ .bss.pools     0x20002510       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
  .bss.retrieved_id
-                0x20002300        0x8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+                0x20002520        0x8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
  .bss.sf_clz_func
-                0x20002308        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
-                0x20002308                sf_clz_func
+                0x20002528        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+                0x20002528                sf_clz_func
  .bss.sleep_notifier
-                0x2000230c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x2000252c        0x4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
  *(COMMON)
-                0x20002310                . = ALIGN (0x4)
-                0x20002310                __bss_end__ = .
+                0x20002530                . = ALIGN (0x4)
+                0x20002530                __bss_end__ = .
 
-.heap           0x20002310      0x800
-                0x20002310                __end__ = .
-                0x20002310                end = __end__
+.heap           0x20002530      0x800
+                0x20002530                __end__ = .
+                0x20002530                end = __end__
  *(.heap*)
- .heap          0x20002310      0x800 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
+ .heap          0x20002530      0x800 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
                 0x20040000                __HeapLimit = (ORIGIN (RAM) + LENGTH (RAM))
 
 .scratch_x      0x20040000        0x0
@@ -2931,338 +2937,338 @@ LOAD linker stubs
 .rel.dyn        0x20041800        0x0
  .rel.iplt      0x20041800        0x0 CMakeFiles/flash_nuke.dir/nuke.c.obj
 
-.debug_info     0x00000000    0x1bb00
- .debug_info    0x00000000      0xe4a CMakeFiles/flash_nuke.dir/nuke.c.obj
- .debug_info    0x00000e4a      0x8d0 CMakeFiles/flash_nuke.dir/flash.c.obj
- .debug_info    0x0000171a     0x24fa CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
- .debug_info    0x00003c14      0x19c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
- .debug_info    0x00003db0      0xa53 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
- .debug_info    0x00004803      0x3f5 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
- .debug_info    0x00004bf8      0x24e CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
- .debug_info    0x00004e46     0x22d3 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
- .debug_info    0x00007119      0x160 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
- .debug_info    0x00007279     0x2b05 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
- .debug_info    0x00009d7e     0x4a13 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
- .debug_info    0x0000e791     0x2b24 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
- .debug_info    0x000112b5     0x29cd CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
- .debug_info    0x00013c82      0x511 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
- .debug_info    0x00014193      0x25a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
- .debug_info    0x000143ed      0x516 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
- .debug_info    0x00014903      0x1e1 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
- .debug_info    0x00014ae4      0x214 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
- .debug_info    0x00014cf8      0x719 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
- .debug_info    0x00015411      0x719 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
- .debug_info    0x00015b2a       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
- .debug_info    0x00015b4c       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
- .debug_info    0x00015b6e       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
- .debug_info    0x00015b90      0x23c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
- .debug_info    0x00015dcc       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
- .debug_info    0x00015dee       0x26 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
- .debug_info    0x00015e14       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
- .debug_info    0x00015e36      0x246 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
- .debug_info    0x0001607c       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
- .debug_info    0x0001609e       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
- .debug_info    0x000160c0      0x224 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
- .debug_info    0x000162e4     0x21c9 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
- .debug_info    0x000184ad       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
- .debug_info    0x000184cf      0xbbb CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
- .debug_info    0x0001908a     0x1cef CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
- .debug_info    0x0001ad79      0xb6e CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
- .debug_info    0x0001b8e7      0x219 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+.debug_info     0x00000000    0x1ca26
+ .debug_info    0x00000000     0x1d70 CMakeFiles/flash_nuke.dir/nuke.c.obj
+ .debug_info    0x00001d70      0x8d0 CMakeFiles/flash_nuke.dir/flash.c.obj
+ .debug_info    0x00002640     0x24fa CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
+ .debug_info    0x00004b3a      0x19c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
+ .debug_info    0x00004cd6      0xa53 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
+ .debug_info    0x00005729      0x3f5 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
+ .debug_info    0x00005b1e      0x24e CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
+ .debug_info    0x00005d6c     0x22d3 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+ .debug_info    0x0000803f      0x160 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
+ .debug_info    0x0000819f     0x2b05 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
+ .debug_info    0x0000aca4     0x4a13 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+ .debug_info    0x0000f6b7     0x2b24 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+ .debug_info    0x000121db     0x29cd CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+ .debug_info    0x00014ba8      0x511 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
+ .debug_info    0x000150b9      0x25a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
+ .debug_info    0x00015313      0x516 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+ .debug_info    0x00015829      0x1e1 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
+ .debug_info    0x00015a0a      0x214 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+ .debug_info    0x00015c1e      0x719 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+ .debug_info    0x00016337      0x719 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
+ .debug_info    0x00016a50       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
+ .debug_info    0x00016a72       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
+ .debug_info    0x00016a94       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
+ .debug_info    0x00016ab6      0x23c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+ .debug_info    0x00016cf2       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
+ .debug_info    0x00016d14       0x26 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
+ .debug_info    0x00016d3a       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
+ .debug_info    0x00016d5c      0x246 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
+ .debug_info    0x00016fa2       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
+ .debug_info    0x00016fc4       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+ .debug_info    0x00016fe6      0x224 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+ .debug_info    0x0001720a     0x21c9 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+ .debug_info    0x000193d3       0x22 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
+ .debug_info    0x000193f5      0xbbb CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+ .debug_info    0x00019fb0     0x1cef CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+ .debug_info    0x0001bc9f      0xb6e CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
+ .debug_info    0x0001c80d      0x219 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
 
-.debug_abbrev   0x00000000     0x4ce8
- .debug_abbrev  0x00000000      0x31b CMakeFiles/flash_nuke.dir/nuke.c.obj
- .debug_abbrev  0x0000031b      0x29e CMakeFiles/flash_nuke.dir/flash.c.obj
- .debug_abbrev  0x000005b9      0x4a1 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
- .debug_abbrev  0x00000a5a       0xf4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
- .debug_abbrev  0x00000b4e      0x2d3 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
- .debug_abbrev  0x00000e21      0x1de CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
- .debug_abbrev  0x00000fff      0x1b2 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
- .debug_abbrev  0x000011b1      0x588 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
- .debug_abbrev  0x00001739       0xee CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
- .debug_abbrev  0x00001827      0x413 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
- .debug_abbrev  0x00001c3a      0x606 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
- .debug_abbrev  0x00002240      0x49d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
- .debug_abbrev  0x000026dd      0x4c3 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
- .debug_abbrev  0x00002ba0      0x1c6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
- .debug_abbrev  0x00002d66      0x141 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
- .debug_abbrev  0x00002ea7      0x1ba CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
- .debug_abbrev  0x00003061      0x11a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
- .debug_abbrev  0x0000317b      0x16c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
- .debug_abbrev  0x000032e7      0x1e4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
- .debug_abbrev  0x000034cb      0x246 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
- .debug_abbrev  0x00003711       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
- .debug_abbrev  0x00003723       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
- .debug_abbrev  0x00003735       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
- .debug_abbrev  0x00003747      0x15c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
- .debug_abbrev  0x000038a3       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
- .debug_abbrev  0x000038b5       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
- .debug_abbrev  0x000038c9       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
- .debug_abbrev  0x000038db      0x15c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
- .debug_abbrev  0x00003a37       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
- .debug_abbrev  0x00003a49       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
- .debug_abbrev  0x00003a5b       0x9a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
- .debug_abbrev  0x00003af5      0x517 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
- .debug_abbrev  0x0000400c       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
- .debug_abbrev  0x0000401e      0x315 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
- .debug_abbrev  0x00004333      0x58d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
- .debug_abbrev  0x000048c0      0x2ee CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
- .debug_abbrev  0x00004bae      0x13a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+.debug_abbrev   0x00000000     0x4d7e
+ .debug_abbrev  0x00000000      0x3b1 CMakeFiles/flash_nuke.dir/nuke.c.obj
+ .debug_abbrev  0x000003b1      0x29e CMakeFiles/flash_nuke.dir/flash.c.obj
+ .debug_abbrev  0x0000064f      0x4a1 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
+ .debug_abbrev  0x00000af0       0xf4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
+ .debug_abbrev  0x00000be4      0x2d3 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
+ .debug_abbrev  0x00000eb7      0x1de CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
+ .debug_abbrev  0x00001095      0x1b2 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
+ .debug_abbrev  0x00001247      0x588 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+ .debug_abbrev  0x000017cf       0xee CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
+ .debug_abbrev  0x000018bd      0x413 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
+ .debug_abbrev  0x00001cd0      0x606 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+ .debug_abbrev  0x000022d6      0x49d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+ .debug_abbrev  0x00002773      0x4c3 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+ .debug_abbrev  0x00002c36      0x1c6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
+ .debug_abbrev  0x00002dfc      0x141 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
+ .debug_abbrev  0x00002f3d      0x1ba CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+ .debug_abbrev  0x000030f7      0x11a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
+ .debug_abbrev  0x00003211      0x16c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+ .debug_abbrev  0x0000337d      0x1e4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+ .debug_abbrev  0x00003561      0x246 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
+ .debug_abbrev  0x000037a7       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
+ .debug_abbrev  0x000037b9       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
+ .debug_abbrev  0x000037cb       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
+ .debug_abbrev  0x000037dd      0x15c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+ .debug_abbrev  0x00003939       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
+ .debug_abbrev  0x0000394b       0x14 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
+ .debug_abbrev  0x0000395f       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
+ .debug_abbrev  0x00003971      0x15c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
+ .debug_abbrev  0x00003acd       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
+ .debug_abbrev  0x00003adf       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+ .debug_abbrev  0x00003af1       0x9a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+ .debug_abbrev  0x00003b8b      0x517 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+ .debug_abbrev  0x000040a2       0x12 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
+ .debug_abbrev  0x000040b4      0x315 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+ .debug_abbrev  0x000043c9      0x58d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+ .debug_abbrev  0x00004956      0x2ee CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
+ .debug_abbrev  0x00004c44      0x13a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
 
-.debug_loc      0x00000000    0x1888b
- .debug_loc     0x00000000      0xec9 CMakeFiles/flash_nuke.dir/nuke.c.obj
- .debug_loc     0x00000ec9      0x4e3 CMakeFiles/flash_nuke.dir/flash.c.obj
- .debug_loc     0x000013ac     0x291b CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
- .debug_loc     0x00003cc7      0x6c7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
- .debug_loc     0x0000438e      0x154 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
- .debug_loc     0x000044e2       0xb5 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
- .debug_loc     0x00004597     0x1ba4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
- .debug_loc     0x0000613b       0x4d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
- .debug_loc     0x00006188     0x1b8e CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
- .debug_loc     0x00007d16     0x3f7a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
- .debug_loc     0x0000bc90     0x2542 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
- .debug_loc     0x0000e1d2     0x348b CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
- .debug_loc     0x0001165d      0x28f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
- .debug_loc     0x000118ec       0x57 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
- .debug_loc     0x00011943      0x4bb CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
- .debug_loc     0x00011dfe       0x71 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
- .debug_loc     0x00011e6f       0xbc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
- .debug_loc     0x00011f2b      0x11c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
- .debug_loc     0x00012047       0xa7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
- .debug_loc     0x000120ee       0x44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
- .debug_loc     0x00012132       0x82 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
- .debug_loc     0x000121b4     0x3c08 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
- .debug_loc     0x00015dbc      0x5d6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
- .debug_loc     0x00016392     0x1565 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
- .debug_loc     0x000178f7      0xad4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
- .debug_loc     0x000183cb      0x4c0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+.debug_loc      0x00000000    0x19447
+ .debug_loc     0x00000000     0x1a85 CMakeFiles/flash_nuke.dir/nuke.c.obj
+ .debug_loc     0x00001a85      0x4e3 CMakeFiles/flash_nuke.dir/flash.c.obj
+ .debug_loc     0x00001f68     0x291b CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
+ .debug_loc     0x00004883      0x6c7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
+ .debug_loc     0x00004f4a      0x154 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
+ .debug_loc     0x0000509e       0xb5 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
+ .debug_loc     0x00005153     0x1ba4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+ .debug_loc     0x00006cf7       0x4d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
+ .debug_loc     0x00006d44     0x1b8e CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
+ .debug_loc     0x000088d2     0x3f7a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+ .debug_loc     0x0000c84c     0x2542 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+ .debug_loc     0x0000ed8e     0x348b CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+ .debug_loc     0x00012219      0x28f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
+ .debug_loc     0x000124a8       0x57 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
+ .debug_loc     0x000124ff      0x4bb CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+ .debug_loc     0x000129ba       0x71 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
+ .debug_loc     0x00012a2b       0xbc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+ .debug_loc     0x00012ae7      0x11c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+ .debug_loc     0x00012c03       0xa7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
+ .debug_loc     0x00012caa       0x44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+ .debug_loc     0x00012cee       0x82 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
+ .debug_loc     0x00012d70     0x3c08 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+ .debug_loc     0x00016978      0x5d6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+ .debug_loc     0x00016f4e     0x1565 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+ .debug_loc     0x000184b3      0xad4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
+ .debug_loc     0x00018f87      0x4c0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
 
-.debug_aranges  0x00000000      0xf28
+.debug_aranges  0x00000000      0xf38
  .debug_aranges
-                0x00000000       0x28 CMakeFiles/flash_nuke.dir/nuke.c.obj
+                0x00000000       0x38 CMakeFiles/flash_nuke.dir/nuke.c.obj
  .debug_aranges
-                0x00000028       0x38 CMakeFiles/flash_nuke.dir/flash.c.obj
+                0x00000038       0x38 CMakeFiles/flash_nuke.dir/flash.c.obj
  .debug_aranges
-                0x00000060      0x118 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
+                0x00000070      0x118 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
  .debug_aranges
-                0x00000178       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
+                0x00000188       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
  .debug_aranges
-                0x000001a0       0x48 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
+                0x000001b0       0x48 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
  .debug_aranges
-                0x000001e8       0x48 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
+                0x000001f8       0x48 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
  .debug_aranges
-                0x00000230       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
+                0x00000240       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
  .debug_aranges
-                0x00000258       0xb8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+                0x00000268       0xb8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
  .debug_aranges
-                0x00000310       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
+                0x00000320       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
  .debug_aranges
-                0x00000330       0x98 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
+                0x00000340       0x98 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
  .debug_aranges
-                0x000003c8       0xe0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+                0x000003d8       0xe0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
  .debug_aranges
-                0x000004a8       0xf0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+                0x000004b8       0xf0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
  .debug_aranges
-                0x00000598       0x90 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+                0x000005a8       0x90 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
  .debug_aranges
-                0x00000628       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
+                0x00000638       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
  .debug_aranges
-                0x00000650       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
+                0x00000660       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
  .debug_aranges
-                0x00000680       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+                0x00000690       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
  .debug_aranges
-                0x000006c0       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
+                0x000006d0       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
  .debug_aranges
-                0x000006f0       0x38 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+                0x00000700       0x38 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
  .debug_aranges
-                0x00000728       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+                0x00000738       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
  .debug_aranges
-                0x00000768       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
+                0x00000778       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
  .debug_aranges
-                0x00000788       0x60 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
+                0x00000798       0x60 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
  .debug_aranges
-                0x000007e8       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
+                0x000007f8       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
  .debug_aranges
-                0x00000828      0x150 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
+                0x00000838      0x150 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
  .debug_aranges
-                0x00000978       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+                0x00000988       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
  .debug_aranges
-                0x00000998       0xc8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
+                0x000009a8       0xc8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
  .debug_aranges
-                0x00000a60       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
+                0x00000a70       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
  .debug_aranges
-                0x00000a80      0x138 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
+                0x00000a90      0x138 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
  .debug_aranges
-                0x00000bb8       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
+                0x00000bc8       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
  .debug_aranges
-                0x00000bd8       0x50 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
+                0x00000be8       0x50 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
  .debug_aranges
-                0x00000c28       0x38 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+                0x00000c38       0x38 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
  .debug_aranges
-                0x00000c60       0x18 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+                0x00000c70       0x18 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
  .debug_aranges
-                0x00000c78       0x90 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+                0x00000c88       0x90 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
  .debug_aranges
-                0x00000d08       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
+                0x00000d18       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
  .debug_aranges
-                0x00000d30       0xa8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+                0x00000d40       0xa8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
  .debug_aranges
-                0x00000dd8       0xc8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+                0x00000de8       0xc8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
  .debug_aranges
-                0x00000ea0       0x58 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
+                0x00000eb0       0x58 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
  .debug_aranges
-                0x00000ef8       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+                0x00000f08       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
 
-.debug_ranges   0x00000000     0x8a18
- .debug_ranges  0x00000000      0x220 CMakeFiles/flash_nuke.dir/nuke.c.obj
- .debug_ranges  0x00000220      0x118 CMakeFiles/flash_nuke.dir/flash.c.obj
- .debug_ranges  0x00000338      0xd20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
- .debug_ranges  0x00001058       0x18 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
- .debug_ranges  0x00001070      0x440 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
- .debug_ranges  0x000014b0       0xd8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
- .debug_ranges  0x00001588       0xa8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
- .debug_ranges  0x00001630      0xa80 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
- .debug_ranges  0x000020b0       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
- .debug_ranges  0x000020d8     0x16b0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
- .debug_ranges  0x00003788     0x1e10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
- .debug_ranges  0x00005598      0xe68 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
- .debug_ranges  0x00006400      0xbd0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
- .debug_ranges  0x00006fd0       0xd8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
- .debug_ranges  0x000070a8       0x38 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
- .debug_ranges  0x000070e0      0x138 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
- .debug_ranges  0x00007218       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
- .debug_ranges  0x00007238       0x58 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
- .debug_ranges  0x00007290       0xa8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
- .debug_ranges  0x00007338       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
- .debug_ranges  0x00007360       0x58 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
- .debug_ranges  0x000073b8       0x38 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
- .debug_ranges  0x000073f0      0x148 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
- .debug_ranges  0x00007538       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
- .debug_ranges  0x00007568       0xc0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
- .debug_ranges  0x00007628      0x130 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
- .debug_ranges  0x00007758       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
- .debug_ranges  0x00007768       0x48 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
- .debug_ranges  0x000077b0       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
- .debug_ranges  0x000077e0      0x500 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
- .debug_ranges  0x00007ce0       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
- .debug_ranges  0x00007d00      0x128 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
- .debug_ranges  0x00007e28      0x8d0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
- .debug_ranges  0x000086f8      0x250 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
- .debug_ranges  0x00008948       0xd0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+.debug_ranges   0x00000000     0x8e30
+ .debug_ranges  0x00000000      0x638 CMakeFiles/flash_nuke.dir/nuke.c.obj
+ .debug_ranges  0x00000638      0x118 CMakeFiles/flash_nuke.dir/flash.c.obj
+ .debug_ranges  0x00000750      0xd20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
+ .debug_ranges  0x00001470       0x18 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
+ .debug_ranges  0x00001488      0x440 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
+ .debug_ranges  0x000018c8       0xd8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
+ .debug_ranges  0x000019a0       0xa8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
+ .debug_ranges  0x00001a48      0xa80 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+ .debug_ranges  0x000024c8       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
+ .debug_ranges  0x000024f0     0x16b0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
+ .debug_ranges  0x00003ba0     0x1e10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+ .debug_ranges  0x000059b0      0xe68 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+ .debug_ranges  0x00006818      0xbd0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+ .debug_ranges  0x000073e8       0xd8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
+ .debug_ranges  0x000074c0       0x38 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
+ .debug_ranges  0x000074f8      0x138 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+ .debug_ranges  0x00007630       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
+ .debug_ranges  0x00007650       0x58 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+ .debug_ranges  0x000076a8       0xa8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+ .debug_ranges  0x00007750       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
+ .debug_ranges  0x00007778       0x58 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
+ .debug_ranges  0x000077d0       0x38 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
+ .debug_ranges  0x00007808      0x148 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
+ .debug_ranges  0x00007950       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+ .debug_ranges  0x00007980       0xc0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
+ .debug_ranges  0x00007a40      0x130 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
+ .debug_ranges  0x00007b70       0x10 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
+ .debug_ranges  0x00007b80       0x48 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
+ .debug_ranges  0x00007bc8       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+ .debug_ranges  0x00007bf8      0x500 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+ .debug_ranges  0x000080f8       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
+ .debug_ranges  0x00008118      0x128 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+ .debug_ranges  0x00008240      0x8d0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+ .debug_ranges  0x00008b10      0x250 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
+ .debug_ranges  0x00008d60       0xd0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
 
-.debug_line     0x00000000    0x15c58
- .debug_line    0x00000000      0xd52 CMakeFiles/flash_nuke.dir/nuke.c.obj
- .debug_line    0x00000d52      0x59d CMakeFiles/flash_nuke.dir/flash.c.obj
- .debug_line    0x000012ef     0x1c31 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
- .debug_line    0x00002f20      0x245 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
- .debug_line    0x00003165      0x8db CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
- .debug_line    0x00003a40      0x47f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
- .debug_line    0x00003ebf      0x356 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
- .debug_line    0x00004215     0x1701 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
- .debug_line    0x00005916      0x28a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
- .debug_line    0x00005ba0     0x1a70 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
- .debug_line    0x00007610     0x2f44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
- .debug_line    0x0000a554     0x1d53 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
- .debug_line    0x0000c2a7     0x1d2b CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
- .debug_line    0x0000dfd2      0x4e6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
- .debug_line    0x0000e4b8      0x2e0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
- .debug_line    0x0000e798      0x38f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
- .debug_line    0x0000eb27      0x30d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
- .debug_line    0x0000ee34      0x2b3 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
- .debug_line    0x0000f0e7      0x499 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
- .debug_line    0x0000f580      0x4db CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
- .debug_line    0x0000fa5b      0x132 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
- .debug_line    0x0000fb8d      0x2d6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
- .debug_line    0x0000fe63      0x481 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
- .debug_line    0x000102e4      0x38a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
- .debug_line    0x0001066e      0x6a2 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
- .debug_line    0x00010d10       0x94 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
- .debug_line    0x00010da4      0x3ff CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
- .debug_line    0x000111a3      0x2e5 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
- .debug_line    0x00011488      0x1c8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
- .debug_line    0x00011650       0xbe CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
- .debug_line    0x0001170e      0x1bc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
- .debug_line    0x000118ca     0x1879 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
- .debug_line    0x00013143       0xbc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
- .debug_line    0x000131ff      0x84b CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
- .debug_line    0x00013a4a     0x14a0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
- .debug_line    0x00014eea      0x8d2 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
- .debug_line    0x000157bc      0x49c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+.debug_line     0x00000000    0x16282
+ .debug_line    0x00000000     0x137c CMakeFiles/flash_nuke.dir/nuke.c.obj
+ .debug_line    0x0000137c      0x59d CMakeFiles/flash_nuke.dir/flash.c.obj
+ .debug_line    0x00001919     0x1c31 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
+ .debug_line    0x0000354a      0x245 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
+ .debug_line    0x0000378f      0x8db CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
+ .debug_line    0x0000406a      0x47f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
+ .debug_line    0x000044e9      0x356 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
+ .debug_line    0x0000483f     0x1701 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+ .debug_line    0x00005f40      0x28a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
+ .debug_line    0x000061ca     0x1a70 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
+ .debug_line    0x00007c3a     0x2f44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+ .debug_line    0x0000ab7e     0x1d53 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+ .debug_line    0x0000c8d1     0x1d2b CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+ .debug_line    0x0000e5fc      0x4e6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
+ .debug_line    0x0000eae2      0x2e0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
+ .debug_line    0x0000edc2      0x38f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+ .debug_line    0x0000f151      0x30d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
+ .debug_line    0x0000f45e      0x2b3 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+ .debug_line    0x0000f711      0x499 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+ .debug_line    0x0000fbaa      0x4db CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
+ .debug_line    0x00010085      0x132 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
+ .debug_line    0x000101b7      0x2d6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
+ .debug_line    0x0001048d      0x481 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
+ .debug_line    0x0001090e      0x38a CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+ .debug_line    0x00010c98      0x6a2 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
+ .debug_line    0x0001133a       0x94 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
+ .debug_line    0x000113ce      0x3ff CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
+ .debug_line    0x000117cd      0x2e5 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
+ .debug_line    0x00011ab2      0x1c8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
+ .debug_line    0x00011c7a       0xbe CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+ .debug_line    0x00011d38      0x1bc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+ .debug_line    0x00011ef4     0x1879 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+ .debug_line    0x0001376d       0xbc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
+ .debug_line    0x00013829      0x84b CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+ .debug_line    0x00014074     0x14a0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+ .debug_line    0x00015514      0x8d2 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
+ .debug_line    0x00015de6      0x49c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
 
-.debug_str      0x00000000     0x4744
- .debug_str     0x00000000      0x5ef CMakeFiles/flash_nuke.dir/nuke.c.obj
-                                0x6ce (size before relaxing)
- .debug_str     0x000005ef      0x339 CMakeFiles/flash_nuke.dir/flash.c.obj
+.debug_str      0x00000000     0x47cb
+ .debug_str     0x00000000      0x68e CMakeFiles/flash_nuke.dir/nuke.c.obj
+                                0x772 (size before relaxing)
+ .debug_str     0x0000068e      0x339 CMakeFiles/flash_nuke.dir/flash.c.obj
                                 0x55f (size before relaxing)
- .debug_str     0x00000928      0x7f6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
+ .debug_str     0x000009c7      0x7e7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
                                 0xcd9 (size before relaxing)
- .debug_str     0x0000111e       0x8f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
+ .debug_str     0x000011ae       0x8f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
                                 0x20b (size before relaxing)
- .debug_str     0x000011ad      0x1b5 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
+ .debug_str     0x0000123d      0x1b5 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
                                 0x394 (size before relaxing)
- .debug_str     0x00001362       0xc9 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
+ .debug_str     0x000013f2       0xc9 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
                                 0x338 (size before relaxing)
- .debug_str     0x0000142b       0x5f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
+ .debug_str     0x000014bb       0x5f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
                                 0x250 (size before relaxing)
- .debug_str     0x0000148a      0x491 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+ .debug_str     0x0000151a      0x491 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
                                 0xa77 (size before relaxing)
- .debug_str     0x0000191b       0x59 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
+ .debug_str     0x000019ab       0x59 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
                                 0x21c (size before relaxing)
- .debug_str     0x00001974      0x273 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
+ .debug_str     0x00001a04      0x273 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
                                 0x7f7 (size before relaxing)
- .debug_str     0x00001be7      0x9e9 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+ .debug_str     0x00001c77      0x9e0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
                                0x11f3 (size before relaxing)
- .debug_str     0x000025d0      0x1c2 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+ .debug_str     0x00002657      0x1c2 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
                                 0xa2c (size before relaxing)
- .debug_str     0x00002792      0x4ca CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+ .debug_str     0x00002819      0x4ca CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
                                 0xa04 (size before relaxing)
- .debug_str     0x00002c5c      0x226 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
+ .debug_str     0x00002ce3      0x226 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
                                 0x46f (size before relaxing)
- .debug_str     0x00002e82       0xc6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
+ .debug_str     0x00002f09       0xc6 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
                                 0x29e (size before relaxing)
- .debug_str     0x00002f48       0xf7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+ .debug_str     0x00002fcf       0xf7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
                                 0x346 (size before relaxing)
- .debug_str     0x0000303f       0x72 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
+ .debug_str     0x000030c6       0x72 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
                                 0x253 (size before relaxing)
- .debug_str     0x000030b1       0xe7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+ .debug_str     0x00003138       0xe7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
                                 0x29e (size before relaxing)
- .debug_str     0x00003198      0x266 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+ .debug_str     0x0000321f      0x266 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
                                 0x6dd (size before relaxing)
- .debug_str     0x000033fe       0x5f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
+ .debug_str     0x00003485       0x5f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
                                 0x47a (size before relaxing)
- .debug_str     0x0000345d       0x52 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
+ .debug_str     0x000034e4       0x52 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bit_ops/bit_ops_aeabi.S.obj
                                  0x91 (size before relaxing)
- .debug_str     0x000034af       0x47 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
+ .debug_str     0x00003536       0x47 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_divider/divider_hardware.S.obj
                                  0x94 (size before relaxing)
- .debug_str     0x000034f6       0x49 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
+ .debug_str     0x0000357d       0x49 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S.obj
                                  0x96 (size before relaxing)
- .debug_str     0x0000353f       0xb8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+ .debug_str     0x000035c6       0xb8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
                                 0x2ac (size before relaxing)
- .debug_str     0x000035f7       0x4f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
+ .debug_str     0x0000367e       0x4f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_v1_rom_shim_rp2040.S.obj
                                  0x9c (size before relaxing)
- .debug_str     0x00003646       0x4d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
+ .debug_str     0x000036cd       0x4d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_int64_ops/pico_int64_ops_aeabi.S.obj
                                  0x9a (size before relaxing)
- .debug_str     0x00003693       0x47 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
+ .debug_str     0x0000371a       0x47 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_aeabi_rp2040.S.obj
                                  0x94 (size before relaxing)
- .debug_str     0x000036da       0x8f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
+ .debug_str     0x00003761       0x8f CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
                                 0x2b1 (size before relaxing)
- .debug_str     0x00003769       0x4d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
+ .debug_str     0x000037f0       0x4d CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_v1_rom_shim_rp2040.S.obj
                                  0x9a (size before relaxing)
- .debug_str     0x000037b6       0x44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
+ .debug_str     0x0000383d       0x44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_mem_ops/mem_ops_aeabi.S.obj
                                  0x91 (size before relaxing)
- .debug_str     0x000037fa      0x1a7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
+ .debug_str     0x00003881      0x1a7 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_standard_binary_info/standard_binary_info.c.obj
                                 0x34d (size before relaxing)
- .debug_str     0x000039a1      0x286 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+ .debug_str     0x00003a28      0x286 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
                                 0x4f5 (size before relaxing)
- .debug_str     0x00003c27       0x38 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
+ .debug_str     0x00003cae       0x38 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_crt0/crt0.S.obj
                                  0x85 (size before relaxing)
- .debug_str     0x00003c5f      0x310 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+ .debug_str     0x00003ce6      0x310 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
                                 0x78c (size before relaxing)
- .debug_str     0x00003f6f      0x58e CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+ .debug_str     0x00003ff6      0x58e CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
                                 0xdc3 (size before relaxing)
- .debug_str     0x000044fd      0x1a4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
+ .debug_str     0x00004584      0x1a4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
                                 0x541 (size before relaxing)
- .debug_str     0x000046a1       0xa3 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+ .debug_str     0x00004728       0xa3 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
                                 0x286 (size before relaxing)
 
 .comment        0x00000000       0x49
@@ -3377,32 +3383,32 @@ LOAD linker stubs
  .ARM.attributes
                 0x00000620       0x2c c:/progra~2/gnuarm~1/102021~1.10/bin/../lib/gcc/arm-none-eabi/10.3.1/../../../../arm-none-eabi/lib/thumb/v6-m/nofp\libg.a(lib_a-strlen-stub.o)
 
-.debug_frame    0x00000000     0x1b44
- .debug_frame   0x00000000       0x68 CMakeFiles/flash_nuke.dir/nuke.c.obj
- .debug_frame   0x00000068       0x70 CMakeFiles/flash_nuke.dir/flash.c.obj
- .debug_frame   0x000000d8      0x320 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
- .debug_frame   0x000003f8       0x44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
- .debug_frame   0x0000043c       0xa0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
- .debug_frame   0x000004dc       0xa4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
- .debug_frame   0x00000580       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
- .debug_frame   0x000005b0      0x1c8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
- .debug_frame   0x00000778       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
- .debug_frame   0x00000798      0x1e4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
- .debug_frame   0x0000097c      0x2d4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
- .debug_frame   0x00000c50      0x2bc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
- .debug_frame   0x00000f0c      0x1f4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
- .debug_frame   0x00001100       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
- .debug_frame   0x00001140       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
- .debug_frame   0x00001180       0xa0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
- .debug_frame   0x00001220       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
- .debug_frame   0x00001260       0x70 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
- .debug_frame   0x000012d0       0x68 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
- .debug_frame   0x00001338       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
- .debug_frame   0x00001364       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
- .debug_frame   0x00001390       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
- .debug_frame   0x000013b8      0x1e8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
- .debug_frame   0x000015a0      0x188 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
- .debug_frame   0x00001728      0x2a4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
- .debug_frame   0x000019cc       0xf4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
- .debug_frame   0x00001ac0       0x5c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
- .debug_frame   0x00001b1c       0x28 c:/progra~2/gnuarm~1/102021~1.10/bin/../lib/gcc/arm-none-eabi/10.3.1/../../../../arm-none-eabi/lib/thumb/v6-m/nofp\libg.a(lib_a-strlen-stub.o)
+.debug_frame    0x00000000     0x1b8c
+ .debug_frame   0x00000000       0xb0 CMakeFiles/flash_nuke.dir/nuke.c.obj
+ .debug_frame   0x000000b0       0x70 CMakeFiles/flash_nuke.dir/flash.c.obj
+ .debug_frame   0x00000120      0x320 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_gpio/gpio.c.obj
+ .debug_frame   0x00000440       0x44 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_platform_panic/panic.c.obj
+ .debug_frame   0x00000484       0xa0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/hardware_claim/claim.c.obj
+ .debug_frame   0x00000524       0xa4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync/sync.c.obj
+ .debug_frame   0x000005c8       0x30 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_sync_spin_lock/sync_spin_lock.c.obj
+ .debug_frame   0x000005f8      0x1c8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_irq/irq.c.obj
+ .debug_frame   0x000007c0       0x20 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/lock_core.c.obj
+ .debug_frame   0x000007e0      0x1e4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_sync/mutex.c.obj
+ .debug_frame   0x000009c4      0x2d4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/common/pico_time/time.c.obj
+ .debug_frame   0x00000c98      0x2bc CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_timer/timer.c.obj
+ .debug_frame   0x00000f54      0x1f4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_clocks/clocks.c.obj
+ .debug_frame   0x00001148       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_pll/pll.c.obj
+ .debug_frame   0x00001188       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_ticks/ticks.c.obj
+ .debug_frame   0x000011c8       0xa0 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_bootrom/bootrom.c.obj
+ .debug_frame   0x00001268       0x40 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_xosc/xosc.c.obj
+ .debug_frame   0x000012a8       0x70 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime/runtime.c.obj
+ .debug_frame   0x00001318       0x68 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init.c.obj
+ .debug_frame   0x00001380       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_runtime_init/runtime_init_clocks.c.obj
+ .debug_frame   0x000013ac       0x2c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_double/double_init_rom_rp2040.c.obj
+ .debug_frame   0x000013d8       0x28 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_float/float_init_rom_rp2040.c.obj
+ .debug_frame   0x00001400      0x1e8 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_printf/printf.c.obj
+ .debug_frame   0x000015e8      0x188 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_clib_interface/newlib_interface.c.obj
+ .debug_frame   0x00001770      0x2a4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_stdio/stdio.c.obj
+ .debug_frame   0x00001a14       0xf4 CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/hardware_flash/flash.c.obj
+ .debug_frame   0x00001b08       0x5c CMakeFiles/flash_nuke.dir/C_/Users/James/pico-sdk/src/rp2_common/pico_unique_id/unique_id.c.obj
+ .debug_frame   0x00001b64       0x28 c:/progra~2/gnuarm~1/102021~1.10/bin/../lib/gcc/arm-none-eabi/10.3.1/../../../../arm-none-eabi/lib/thumb/v6-m/nofp\libg.a(lib_a-strlen-stub.o)

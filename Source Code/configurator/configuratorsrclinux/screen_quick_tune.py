@@ -84,6 +84,9 @@ class QuickTuneDialog:
         self._whammy_act_raw = None
         self._axis_quick_tuned = {"whammy": False, "tilt": False}
         self._axis_bound_captures = {"tilt": set()}
+        self._axis_skipped = {"whammy": False, "tilt": False}
+        self.skip_whammy = tk.BooleanVar(value=False)
+        self.skip_tilt = tk.BooleanVar(value=False)
 
         self.device_type = str(self.cfg.get("device_type", "guitar_alternate")).strip()
         try:
@@ -93,12 +96,14 @@ class QuickTuneDialog:
 
         self.whammy_mode = str(self.cfg.get("whammy_mode", "digital")).strip()
         self.whammy_pin = _as_int(self.cfg.get("whammy_pin", -1), -1)
+        self._whammy_original = {"mode": self.whammy_mode, "pin": self.whammy_pin}
         self.whammy_min = tk.IntVar(value=_as_int(self.cfg.get("whammy_min", 0), 0, 0, 4095))
         self.whammy_max = tk.IntVar(value=_as_int(self.cfg.get("whammy_max", 4095), 4095, 0, 4095))
         self.whammy_invert = tk.BooleanVar(value=_as_bool(self.cfg.get("whammy_invert", 0)))
 
         self.tilt_mode = str(self.cfg.get("tilt_mode", "digital")).strip()
         self.tilt_pin = _as_int(self.cfg.get("tilt_pin", -1), -1)
+        self._tilt_original = {"mode": self.tilt_mode, "pin": self.tilt_pin}
         self.tilt_axis = _as_int(self.cfg.get("adxl345_axis", self.cfg.get("tilt_axis", 0)), 0, 0, 2)
         self.i2c_model = tk.IntVar(value=_as_int(self.cfg.get("i2c_model", 0), 0, 0, 1))
         self.tilt_min = tk.IntVar(value=_as_int(self.cfg.get("tilt_min", 0), 0, 0, 4095))
@@ -204,6 +209,9 @@ class QuickTuneDialog:
         self._next_btn = RoundedButton(nav, text="Next", command=self._next_page,
                                        bg_color=ACCENT_BLUE, btn_width=210, btn_height=30)
         self._next_btn.pack(side="right")
+        self._skip_check = ttk.Checkbutton(nav, text="", command=self._on_skip_toggle)
+        self._skip_check.pack(side="right", padx=(0, 12))
+        self._skip_check.pack_forget()
 
     def show(self):
         self._show_page(0)
@@ -257,6 +265,7 @@ class QuickTuneDialog:
         self._prev_btn.set_state("disabled" if page == 0 else "normal")
         self._next_btn._label = "Save and Enter Play Mode" if page == len(self.PAGES) - 1 else "Next"
         self._next_btn._render(self._next_btn._bg)
+        self._update_skip_check_for_page(title)
 
         if title == "Whammy":
             self._set_page_header_visible(True)
@@ -286,6 +295,72 @@ class QuickTuneDialog:
             self._show_page(self._page + 1)
         else:
             self._save_and_reboot()
+
+    def _update_skip_check_for_page(self, title):
+        if title == "Whammy":
+            self._skip_check.configure(text="I don't have Whammy", variable=self.skip_whammy)
+        elif title == "Tilt":
+            self._skip_check.configure(text="I don't have Tilt", variable=self.skip_tilt)
+        else:
+            self._skip_check.pack_forget()
+            return
+        if not self._skip_check.winfo_manager():
+            self._skip_check.pack(side="right", padx=(0, 12))
+
+    def _on_skip_toggle(self):
+        if self._page >= len(self.PAGES):
+            return
+        title = self.PAGES[self._page]
+        if title == "Whammy":
+            self._set_axis_skipped("whammy", self.skip_whammy.get())
+        elif title == "Tilt":
+            self._set_axis_skipped("tilt", self.skip_tilt.get())
+
+    def _set_axis_skipped(self, prefix, skipped):
+        self._axis_skipped[prefix] = bool(skipped)
+        self._stop_monitoring()
+        if prefix == "whammy":
+            if skipped:
+                self.whammy_pin = -1
+            else:
+                self.whammy_mode = self._whammy_original["mode"]
+                self.whammy_pin = self._whammy_original["pin"]
+        elif prefix == "tilt":
+            if skipped:
+                self.tilt_mode = "digital"
+                self.tilt_pin = -1
+                self._tilt_detecting = False
+                self._tilt_detect_complete = False
+                self._tilt_detect_failed = False
+            else:
+                self.tilt_mode = self._tilt_original["mode"]
+                self.tilt_pin = self._tilt_original["pin"]
+                self._tilt_detect_started = False
+        self._show_page(self._page)
+
+    def _apply_axis_skip_ui(self, prefix):
+        if not self._axis_skipped.get(prefix):
+            return
+        widgets = self._axis_widgets.get(prefix, {})
+        self._set_axis_monitor_enabled(prefix, False)
+        if prefix == "whammy":
+            for key in ("rest_btn", "act_btn"):
+                btn = widgets.get(key)
+                if btn:
+                    btn.set_state("disabled")
+        elif prefix == "tilt":
+            self._set_tilt_capture_enabled(False)
+        invert_check = widgets.get("invert_check")
+        if invert_check:
+            invert_check.configure(state="disabled")
+        status = widgets.get("status")
+        if status:
+            status.config(text=f"{prefix.title()} will be disabled when Quick Tune is saved.",
+                          fg=ACCENT_ORANGE)
+        for key, text in (("min_lbl", "Min: skipped"), ("max_lbl", "Max: skipped")):
+            lbl = widgets.get(key)
+            if lbl:
+                lbl.config(text=text, fg=TEXT_DIM)
 
     def _axis_values(self, prefix):
         if prefix == "whammy":
@@ -324,6 +399,12 @@ class QuickTuneDialog:
                  font=(FONT_UI, 10, "bold")).pack(anchor="w")
         if prefix == "tilt" and mode == "i2c":
             self._build_tilt_i2c_detect_row()
+
+        if self._axis_skipped.get(prefix):
+            text = f"{label} will be disabled when you save and enter play mode."
+            tk.Label(self._body, text=text, bg=BG_CARD, fg=ACCENT_ORANGE,
+                     font=(FONT_UI, 11), wraplength=760, justify="left").pack(anchor="w", pady=24)
+            return
 
         if not monitorable:
             text = f"This preset uses {mode or 'digital'} {label.lower()} input, so there is no analog axis range to tune."
@@ -384,15 +465,17 @@ class QuickTuneDialog:
                                    fg=TEXT_DIM, font=(FONT_UI, 8))
             act_status = tk.Label(btns, text="Actuated: not recorded", bg=BG_CARD,
                                   fg=TEXT_DIM, font=(FONT_UI, 8))
-            RoundedButton(btns, text="Whammy at Rest",
-                          command=lambda: self._capture_whammy_position("rest"),
-                          bg_color=ACCENT_BLUE, btn_width=145, btn_height=30,
-                          btn_font=(FONT_UI, 8, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 4))
+            rest_btn = RoundedButton(btns, text="Whammy at Rest",
+                                     command=lambda: self._capture_whammy_position("rest"),
+                                     bg_color=ACCENT_BLUE, btn_width=145, btn_height=30,
+                                     btn_font=(FONT_UI, 8, "bold"))
+            rest_btn.grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 4))
             rest_status.grid(row=0, column=1, sticky="w", padx=(0, 18), pady=(0, 4))
-            RoundedButton(btns, text="Whammy Actuated",
-                          command=lambda: self._capture_whammy_position("actuated"),
-                          bg_color=ACCENT_BLUE, btn_width=160, btn_height=30,
-                          btn_font=(FONT_UI, 8, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 8))
+            act_btn = RoundedButton(btns, text="Whammy Actuated",
+                                    command=lambda: self._capture_whammy_position("actuated"),
+                                    bg_color=ACCENT_BLUE, btn_width=160, btn_height=30,
+                                    btn_font=(FONT_UI, 8, "bold"))
+            act_btn.grid(row=1, column=0, sticky="w", padx=(0, 8))
             act_status.grid(row=1, column=1, sticky="w", padx=(0, 18))
         else:
             min_btn = RoundedButton(btns, text="Set Min",
@@ -420,6 +503,8 @@ class QuickTuneDialog:
             "invert_check": invert_check,
         }
         if prefix == "whammy":
+            self._axis_widgets[prefix]["rest_btn"] = rest_btn
+            self._axis_widgets[prefix]["act_btn"] = act_btn
             self._axis_widgets[prefix]["rest_status"] = rest_status
             self._axis_widgets[prefix]["act_status"] = act_status
         elif prefix == "tilt":
@@ -430,6 +515,7 @@ class QuickTuneDialog:
                 self._tilt_detect_started = True
                 self.win.after(150, self._start_tilt_i2c_detect)
         self._set_axis_monitor_enabled(prefix, self._axis_quick_tuned.get(prefix, False))
+        self._apply_axis_skip_ui(prefix)
 
     def _build_tilt_i2c_detect_row(self):
         row = tk.Frame(self._body, bg=BG_CARD)
@@ -486,7 +572,10 @@ class QuickTuneDialog:
                 btn.set_state(state)
         retry = self._tilt_detect_widgets.get("retry")
         if retry:
-            retry.set_state(state)
+            try:
+                retry.set_state(state)
+            except tk.TclError:
+                pass
 
     def _set_axis_monitor_enabled(self, prefix, enabled):
         widgets = self._axis_widgets.get(prefix, {})
@@ -511,17 +600,20 @@ class QuickTuneDialog:
         fallback = self._tilt_detect_widgets.get("fallback")
         if not fallback:
             return
-        if visible:
-            if not fallback.winfo_manager():
-                fallback.pack(side="left")
-            combo = self._tilt_detect_widgets.get("combo")
-            if combo and self.i2c_model.get() in I2C_MODEL_VALUES:
-                combo.current(I2C_MODEL_VALUES.index(self.i2c_model.get()))
-        else:
-            fallback.pack_forget()
+        try:
+            if visible:
+                if not fallback.winfo_manager():
+                    fallback.pack(side="left")
+                combo = self._tilt_detect_widgets.get("combo")
+                if combo and self.i2c_model.get() in I2C_MODEL_VALUES:
+                    combo.current(I2C_MODEL_VALUES.index(self.i2c_model.get()))
+            else:
+                fallback.pack_forget()
+        except tk.TclError:
+            pass
 
     def _start_tilt_i2c_detect(self):
-        if self.tilt_mode != "i2c" or self._tilt_detecting:
+        if self._axis_skipped.get("tilt") or self.tilt_mode != "i2c" or self._tilt_detecting:
             return
         status = self._tilt_detect_widgets.get("status")
         if not self.pico.connected:
@@ -562,6 +654,8 @@ class QuickTuneDialog:
 
     def _finish_tilt_i2c_detect(self, lines, error):
         self._tilt_detecting = False
+        if self._axis_skipped.get("tilt") or self.tilt_mode != "i2c":
+            return
         self._tilt_detect_complete = True
         status = self._tilt_detect_widgets.get("status")
         detected = None
@@ -590,7 +684,7 @@ class QuickTuneDialog:
                 status.config(text=message, fg=ACCENT_ORANGE)
         self._set_tilt_capture_enabled(True)
         self._fit_window_to_content()
-        if self._page == 1:
+        if self._page == 1 and not self._axis_skipped.get("tilt") and "tilt" in self._axis_widgets:
             self._start_axis_monitor("tilt")
 
     def _apply_axis_bound(self, prefix, which, raw):
@@ -794,6 +888,8 @@ class QuickTuneDialog:
         self._monitor_thread.start()
 
     def _start_axis_monitor_for_page(self, prefix, page):
+        if self._axis_skipped.get(prefix):
+            return
         if self._page == page and prefix in self._axis_widgets:
             self._start_axis_monitor(prefix)
 
@@ -952,9 +1048,12 @@ class QuickTuneDialog:
         self._next_btn.set_state("disabled")
         try:
             required = []
-            if self.whammy_mode == "analog" and self.whammy_pin >= 0 and not self._axis_quick_tuned.get("whammy"):
+            if (not self._axis_skipped.get("whammy") and self.whammy_mode == "analog" and
+                    self.whammy_pin >= 0 and not self._axis_quick_tuned.get("whammy")):
                 required.append("Whammy")
-            if ((self.tilt_mode == "analog" and self.tilt_pin >= 0) or self.tilt_mode == "i2c") and not self._axis_quick_tuned.get("tilt"):
+            if (not self._axis_skipped.get("tilt") and
+                    ((self.tilt_mode == "analog" and self.tilt_pin >= 0) or self.tilt_mode == "i2c") and
+                    not self._axis_quick_tuned.get("tilt")):
                 required.append("Tilt")
             if required:
                 self._next_btn.set_state("normal")
@@ -964,14 +1063,22 @@ class QuickTuneDialog:
                 )
                 return
             self.pico.flush_input()
-            self.pico.set_value("whammy_min", str(self.whammy_min.get()))
-            self.pico.set_value("whammy_max", str(self.whammy_max.get()))
-            self.pico.set_value("whammy_invert", "1" if self.whammy_invert.get() else "0")
-            self.pico.set_value("tilt_min", str(self.tilt_min.get()))
-            self.pico.set_value("tilt_max", str(self.tilt_max.get()))
-            self.pico.set_value("tilt_invert", "1" if self.tilt_invert.get() else "0")
-            if self.tilt_mode == "i2c":
-                self.pico.set_value("i2c_model", str(self.i2c_model.get()))
+            if self._axis_skipped.get("whammy"):
+                self.pico.set_value("whammy_pin", "-1")
+            else:
+                self.pico.set_value("whammy_min", str(self.whammy_min.get()))
+                self.pico.set_value("whammy_max", str(self.whammy_max.get()))
+                self.pico.set_value("whammy_invert", "1" if self.whammy_invert.get() else "0")
+
+            if self._axis_skipped.get("tilt"):
+                self.pico.set_value("tilt_mode", "digital")
+                self.pico.set_value("tilt_pin", "-1")
+            else:
+                self.pico.set_value("tilt_min", str(self.tilt_min.get()))
+                self.pico.set_value("tilt_max", str(self.tilt_max.get()))
+                self.pico.set_value("tilt_invert", "1" if self.tilt_invert.get() else "0")
+                if self.tilt_mode == "i2c":
+                    self.pico.set_value("i2c_model", str(self.i2c_model.get()))
 
             for idx in range(min(self.led_count, MAX_LEDS)):
                 self.pico.set_value(f"led_color_{idx}", _clean_color(self.led_colors[idx]))
