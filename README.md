@@ -27,6 +27,10 @@
   OCC Configurator is compatible with Windows, (Linux/MacOS in progress), and most controllers are designed for XInput / Bluetooth HID first. A few of the firmwares also work as generic HID controllers for PS3, MacOS, and other cross-platform compatability. For Rythm controllers, Clone Hero, Rock Band, and any game that supports Xbox 360-style guitar or drum controllers should work natively.
 </p>
 
+<p>
+  OCC Bridge is a windows application which uses ViGEmBus and HidHide to convert the Guitar BLE identity to work on windows as a native guitar for rythm games.
+</p>
+
 ## Links
 
 [Download OCC EXE](https://github.com/justlovett0/OCC-Configurator/releases) | [Source Code](https://github.com/justlovett0/OCC-Configurator/commits/master/)
