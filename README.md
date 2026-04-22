@@ -20,11 +20,11 @@
 </p>
 
 <p>
-  OCC (Open Controller Configurator) is a collection of firmware variants for the Raspberry Pi Pico (RP2040) and Pico W (RP2040 + CYW43), paired with a Windows configurator application. Originally created for guitar and drum kit peripherals for use with games like Clone Hero and Rock Band, I am also working to expand scope to other controller and input devices — including a USB HID keyboard macro pad — supporting wired XInput, wireless Bluetooth HID, and wireless dongle operation.
+  OCC (Open Controller Configurator) is a collection of firmware variants for the Raspberry Pi Pico (RP2040) and Pico W (RP2040 + CYW43), paired with a Windows configurator application. Originally created for guitar and drum kit peripherals for use with games like Clone Hero and Rock Band, this project has expanded to include firmwares for devices like Macropads, Fightsticks, Game controllers, and a few others.
 </p>
 
 <p>
-  OCC is compatible with PC (XInput / Bluetooth HID), Clone Hero, Rock Band, and any game that supports Xbox 360-style guitar or drum controllers. Support for MacOS and Linux is planned for the future.
+  OCC Configurator is compatible with Windows, (Linux/MacOS in progress), and most controllers are designed for XInput / Bluetooth HID first. A few of the firmwares also work as generic HID controllers for PS3, MacOS, and other cross-platform compatability. For Rythm controllers, Clone Hero, Rock Band, and any game that supports Xbox 360-style guitar or drum controllers should work natively.
 </p>
 
 ## Links
@@ -33,20 +33,18 @@
 
 ## Features
 
-- Multiple firmware variants: wired guitar, wired drums, wireless guitar (BLE HID + dongle), single-channel dongle, 4-channel dongle, and USB HID keyboard macro pad
+- Multiple firmware variants for many controller types and applications
 - Windows configurator EXE — Detects your controller firmware, connects over comm, configure, and flash your button mappings
 - Fully configurable GPIO pin assignments for all digital button inputs
-- Analog and digital tilt sensor and whammy bar inputs, with per-channel min/max sensitivity range and EMA smoothing
-- Optional I2C accelerometer support (ADXL345 or LIS3DH) for tilt input
-- Optional 5-pin analog joystick input
+- Analog and digital input availability with analog inputs supporting EMA smoothing
+- I2C accelerometer support (ADXL345 or LIS3DH)
+- 5-pin analog joystick input support
 - APA102/SK9822 LED strip support: up to 16 LEDs, per-button mapping, active brightness on keypresses, and LED effects
 - Wireless guitar firmware supports both BLE HID peripheral and BLE dongle modes
-- BLE dongle architecture: passive advertisement scanning, no pairing required
-- 4-channel dongle variant supports up to four simultaneous wireless controllers
-- Step-by-step Easy Config wizard for first-time setup with live button detection and calibration
-- Easy controller firmware updater: backs up config to JSON, flashes new UF2, and restores config automatically
+- Step-by-step Easy Config wizard for some firmware types with simple setup with live button detection and calibration
+- Automatic firmware updates through the configurator tool
 - Custom device naming for BLE advertisements
-- Config stored in flash with CRC checksum and versioned struct
+- Config stored in Pico flash with CRC checksum and versioned struct
 - Configurable per-input debounce (0–50 ms)
 
 ## Firmware Variants
