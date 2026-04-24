@@ -11,7 +11,9 @@ from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               find_uf2_files, find_uf2_for_device_type,
                               get_bundled_fw_date_str, find_rpi_rp2_drive)
 from .xinput_utils import XINPUT_AVAILABLE
-from .utils import _centered_dialog, _center_window, _make_flash_popup, _find_preset_configs
+from .utils import (_bind_global_mousewheel, _center_window, _centered_dialog,
+                     _find_preset_configs, _make_flash_popup,
+                     _mousewheel_units, _unbind_global_mousewheel)
 class KeyMacroApp:
     """Keyboard Macro Pad configurator screen.
 
@@ -223,7 +225,9 @@ class KeyMacroApp:
     def _on_mousewheel(self, event):
         if not self._scroll_enabled:
             return
-        delta = int(-1 * (event.delta / 120))
+        delta = _mousewheel_units(event)
+        if delta is None:
+            return
         content_h = max(1, self.content.winfo_reqheight())
         cur_frac  = self._scroll_canvas.yview()[0]
         new_frac  = cur_frac + delta * 60 / content_h
@@ -679,11 +683,11 @@ class KeyMacroApp:
         self.root.title("OCC - Keyboard Macro Pad Configurator")
         self.root.config(menu=self._menu_bar)
         self.frame.pack(fill="both", expand=True)
-        self._scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        _bind_global_mousewheel(self._scroll_canvas, self._on_mousewheel)
 
     def hide(self):
         """Hide screen without rebooting — device stays active as a keyboard."""
-        self._scroll_canvas.unbind_all("<MouseWheel>")
+        _unbind_global_mousewheel(self._scroll_canvas)
         if self.pico.connected:
             self.pico.disconnect()
         self.frame.pack_forget()

@@ -18,7 +18,13 @@ from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               apply_config_to_pico)
 from .xinput_utils import (XINPUT_AVAILABLE, ERROR_SUCCESS, xinput_get_connected,
                            MAGIC_STEPS, xinput_send_vibration)
-from .utils import (_centered_dialog, _center_window, _make_flash_popup, _find_preset_configs)
+from .utils import (_bind_global_mousewheel, _center_window, _centered_dialog,
+                     _find_preset_configs, _make_flash_popup,
+                     _mousewheel_units, _unbind_global_mousewheel,
+                     HOST_SYSTEM_LABEL, PLAY_MODE_LABEL)
+LED_DATA_PINS = [3, 7, 19, 23]
+LED_CLOCK_PINS = [2, 6, 18, 22]
+LED_PIN_COMBO_STYLE = "LedPin.TCombobox"
 class DrumApp:
     """
     Drum Kit configurator screen.
@@ -192,6 +198,17 @@ class DrumApp:
                     ("\n\n", None),
                     ("This is the complicated looking one.. but I promise it is not bad.", None),
                     ("On the left, rows are depicted by button inputs. Each column is an LED in your controller. Match up in the grid which button goes with which LED number. On button press, the LED corresponding to that button will get brighter.", None),
+                )),
+                ("Boot Modes", _help_text(
+                    ("Boot Modes", "bold"),
+                    ("\n\n", None),
+                    ("PS3/HID:", "bold"),
+                    (" Hold Start while powering on to enter PS3/HID mode", None),
+                    ("\n\n", None),
+                    ("FFestival/Rockband:", "bold"),
+                    (" Hold Start + Select while powering on to enter FF/RB mode", None),
+                    ("\n\n", None),
+                    ("PS3/FF boot modes are only for USB wired connections", None),
                 )),
             ])
         self._help_dialog.open()
@@ -476,7 +493,9 @@ class DrumApp:
         so scrolling feels smooth rather than jumping by whole units."""
         if not self._scroll_enabled:
             return
-        delta = int(-1 * (event.delta / 120))
+        delta = _mousewheel_units(event)
+        if delta is None:
+            return
         content_h = max(1, self.content.winfo_reqheight())
         cur_frac  = self._scroll_canvas.yview()[0]
         new_frac  = cur_frac + delta * 60 / content_h
@@ -823,6 +842,13 @@ class DrumApp:
     # ── Section: LED Strip (mirrors guitar App) ───────────────────────
 
     def _make_drum_led_section(self):
+        style = ttk.Style()
+        style.configure(LED_PIN_COMBO_STYLE, foreground="#000000", fieldbackground="#ffffff")
+        style.map(LED_PIN_COMBO_STYLE,
+                  foreground=[("readonly", "#000000")],
+                  fieldbackground=[("readonly", "#ffffff")],
+                  selectforeground=[("readonly", "#000000")],
+                  selectbackground=[("readonly", "#ffffff")])
         card = self._make_card()
         inner = tk.Frame(card, bg=BG_CARD)
         inner.pack(fill="x", padx=12, pady=10)
@@ -831,9 +857,9 @@ class DrumApp:
                  font=(FONT_UI, 9, "bold")).pack(anchor="w", pady=(0, 4))
 
         tk.Label(inner,
-                 text="Wire SCK (CI) → GP6, MOSI (DI) → GP3. Chain LEDs in series. "
-                      "VCC → VBUS (5V), GND → GND. "
-                      "WARNING: GP3 and GP6 are reserved for LEDs when enabled — "
+                 text="Select SPI0-compatible CI and DI pins below. Defaults are DI -> GP3 and CI -> GP6. "
+                      "Chain LEDs in series. VCC → VBUS (5V), GND → GND. "
+                      "WARNING: The selected LED pins are reserved for LEDs when enabled — "
                       "do not assign pads to these pins.",
                  bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8), wraplength=820,
@@ -881,6 +907,35 @@ class DrumApp:
         self._led_widgets.append(br_sp)
         tk.Label(top, text="(0=off, 9=max)", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 7)).pack(side="left", padx=(4, 0))
+
+        if not hasattr(self, "led_data_pin"):
+            self.led_data_pin = tk.IntVar(value=3)
+            self.led_clock_pin = tk.IntVar(value=6)
+            self._led_data_combo = None
+            self._led_clock_combo = None
+        pin_row = tk.Frame(inner, bg=BG_CARD)
+        pin_row.pack(fill="x", pady=(6, 0))
+        tk.Label(pin_row, text="Data (DI):", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        data_combo = ttk.Combobox(pin_row, state="readonly", width=8, style=LED_PIN_COMBO_STYLE,
+                                  values=[f"GPIO {p}" for p in LED_DATA_PINS])
+        data_combo.current(LED_DATA_PINS.index(3))
+        data_combo.pack(side="left", padx=(0, 16))
+        data_combo.bind("<<ComboboxSelected>>",
+                        lambda _e, c=data_combo: self.led_data_pin.set(LED_DATA_PINS[c.current()]))
+        self._led_data_combo = data_combo
+        self._drum_all_widgets.append(data_combo)
+
+        tk.Label(pin_row, text="Clock (CI):", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        clock_combo = ttk.Combobox(pin_row, state="readonly", width=8, style=LED_PIN_COMBO_STYLE,
+                                   values=[f"GPIO {p}" for p in LED_CLOCK_PINS])
+        clock_combo.current(LED_CLOCK_PINS.index(6))
+        clock_combo.pack(side="left")
+        clock_combo.bind("<<ComboboxSelected>>",
+                         lambda _e, c=clock_combo: self.led_clock_pin.set(LED_CLOCK_PINS[c.current()]))
+        self._led_clock_combo = clock_combo
+        self._drum_all_widgets.append(clock_combo)
 
         self._led_colors_frame = tk.Frame(inner, bg=BG_CARD)
         self._led_colors_frame.pack(fill="x", pady=(6, 0))
@@ -1509,6 +1564,14 @@ class DrumApp:
         if "led_brightness" in cfg:
             self.led_base_brightness.set(
                 self._brightness_from_hw(int(cfg["led_brightness"])))
+        if "led_data_pin" in cfg:
+            self.led_data_pin.set(int(cfg["led_data_pin"]))
+        if "led_clock_pin" in cfg:
+            self.led_clock_pin.set(int(cfg["led_clock_pin"]))
+        if getattr(self, "_led_data_combo", None) is not None and self.led_data_pin.get() in LED_DATA_PINS:
+            self._led_data_combo.current(LED_DATA_PINS.index(self.led_data_pin.get()))
+        if getattr(self, "_led_clock_combo", None) is not None and self.led_clock_pin.get() in LED_CLOCK_PINS:
+            self._led_clock_combo.current(LED_CLOCK_PINS.index(self.led_clock_pin.get()))
 
         if "led_loop_enabled" in cfg:
             self.led_loop_enabled.set(int(cfg["led_loop_enabled"]) != 0)
@@ -1588,6 +1651,8 @@ class DrumApp:
         self.pico.set_value("led_count", str(self.led_count.get()))
         self.pico.set_value("led_brightness",
                             str(self._brightness_to_hw(self.led_base_brightness.get())))
+        self.pico.set_value("led_data_pin", str(self.led_data_pin.get()))
+        self.pico.set_value("led_clock_pin", str(self.led_clock_pin.get()))
 
         count = self.led_count.get()
         for i in range(min(count, MAX_LEDS)):
@@ -1729,11 +1794,11 @@ class DrumApp:
         self.root.title("OCC - Drum Kit Configurator")
         self.root.config(menu=self._menu_bar)
         self.frame.pack(fill="both", expand=True)
-        self._scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        _bind_global_mousewheel(self._scroll_canvas, self._on_mousewheel)
 
     def hide(self):
         """Hide this screen; reboot device to play mode if connected."""
-        self._scroll_canvas.unbind_all("<MouseWheel>")
+        _unbind_global_mousewheel(self._scroll_canvas)
         if self.pico.connected:
             try:
                 self.pico.reboot()
@@ -1768,13 +1833,13 @@ class DrumApp:
 
     def _connect_xinput(self):
         """Called when device is in XInput play mode — send magic, wait for port."""
-        self._set_status("   Scanning for XInput controllers...", ACCENT_BLUE)
+        self._set_status(f"   Scanning for {PLAY_MODE_LABEL} controllers...", ACCENT_BLUE)
         controllers = xinput_get_connected() if XINPUT_AVAILABLE else []
         if not controllers:
             self._set_status("   No controllers found", ACCENT_RED)
             messagebox.showwarning("No Controllers",
-                "No XInput controllers detected.\n"
-                "Make sure the drum kit is plugged in and recognised by Windows.")
+                "No supported play-mode controllers detected.\n"
+                f"Make sure the drum kit is plugged in and recognised by {HOST_SYSTEM_LABEL}.")
             return
 
         slot = controllers[0][0]

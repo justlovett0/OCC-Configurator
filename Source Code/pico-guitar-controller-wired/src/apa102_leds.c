@@ -27,6 +27,8 @@
 static bool     spi_initialized = false;
 static int      dma_chan = -1;
 static bool     dma_initialized = false;
+static int      current_data_pin = -1;
+static int      current_clock_pin = -1;
 
 // Double buffers — DMA reads from one while CPU writes the other
 static uint8_t  led_buf[2][LED_BUF_SIZE];
@@ -62,6 +64,20 @@ static void wait_for_dma(void) {
     if (!dma_busy || dma_chan < 0) return;
     dma_channel_wait_for_finish_blocking(dma_chan);
     dma_busy = false;
+}
+
+bool apa102_spi_data_pin_is_valid(int pin) {
+    return pin == 3 || pin == 7 || pin == 19 || pin == 23;
+}
+
+bool apa102_spi_clock_pin_is_valid(int pin) {
+    return pin == 2 || pin == 6 || pin == 18 || pin == 22;
+}
+
+bool apa102_spi_pin_is_valid(int data_pin, int clock_pin) {
+    return data_pin != clock_pin &&
+           apa102_spi_data_pin_is_valid(data_pin) &&
+           apa102_spi_clock_pin_is_valid(clock_pin);
 }
 
 // Build an APA102 frame into the given buffer.
@@ -113,17 +129,37 @@ static void start_dma_transfer(const uint8_t *buf, uint16_t len) {
 
 // ── Public API ──────────────────────────────────────────
 
-void apa102_init(void) {
-    if (spi_initialized) return;
+void apa102_init(const led_config_t *cfg) {
+    int data_pin = LED_SPI_DEFAULT_DATA_PIN;
+    int clock_pin = LED_SPI_DEFAULT_CLOCK_PIN;
+    if (cfg && apa102_spi_pin_is_valid(cfg->data_pin, cfg->clock_pin)) {
+        data_pin = cfg->data_pin;
+        clock_pin = cfg->clock_pin;
+    }
 
-    // Init SPI peripheral
-    spi_init(LED_SPI_INST, LED_SPI_BAUD);
-    spi_set_format(LED_SPI_INST, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+    if (!spi_initialized) {
+        spi_init(LED_SPI_INST, LED_SPI_BAUD);
+        spi_set_format(LED_SPI_INST, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+        spi_initialized = true;
+    }
 
-    gpio_set_function(LED_SPI_DI_PIN, GPIO_FUNC_SPI);   // GP3 = SPI0 TX
-    gpio_set_function(LED_SPI_SCK_PIN, GPIO_FUNC_SPI);   // GP6 = SPI0 SCK
-
-    spi_initialized = true;
+    if (current_data_pin != data_pin || current_clock_pin != clock_pin) {
+        wait_for_dma();
+        if (current_data_pin >= 0) {
+            gpio_set_function(current_data_pin, GPIO_FUNC_SIO);
+            gpio_set_dir(current_data_pin, GPIO_IN);
+            gpio_disable_pulls(current_data_pin);
+        }
+        if (current_clock_pin >= 0) {
+            gpio_set_function(current_clock_pin, GPIO_FUNC_SIO);
+            gpio_set_dir(current_clock_pin, GPIO_IN);
+            gpio_disable_pulls(current_clock_pin);
+        }
+        gpio_set_function(data_pin, GPIO_FUNC_SPI);
+        gpio_set_function(clock_pin, GPIO_FUNC_SPI);
+        current_data_pin = data_pin;
+        current_clock_pin = clock_pin;
+    }
 
     // Init DMA channel
     if (!dma_initialized) {
@@ -457,7 +493,7 @@ void apa102_flash_led(const led_config_t *cfg, uint8_t led_idx, uint8_t blink_co
     if (count > MAX_LEDS) count = MAX_LEDS;
     if (led_idx >= count) return;
 
-    apa102_init();
+    apa102_init(cfg);
 
     // Flash is inherently blocking (sleep_ms between blinks)
     // so we wait for any DMA and use blocking SPI directly

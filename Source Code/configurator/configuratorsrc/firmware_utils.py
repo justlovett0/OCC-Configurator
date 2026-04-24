@@ -6,6 +6,7 @@ from .constants import (NUKE_UF2_FILENAME, DEVICE_TYPE_UF2_HINTS,
                          ACCENT_BLUE, ACCENT_RED, ACCENT_ORANGE)
 from .xinput_utils import (XINPUT_AVAILABLE, xinput_get_connected,
                              xinput_send_vibration, MAGIC_STEPS)
+from .utils import CONTROLLER_SIGNAL_LABEL
 #  UF2 FLASHING
 
 
@@ -495,7 +496,7 @@ def enter_bootsel_for(screen):
 
     Two paths:
       • Already in config mode (pico.connected) → send BOOTSEL directly.
-      • Not connected → send XInput magic sequence, wait for CDC port, then BOOTSEL.
+      • Not connected → send the play-mode magic sequence, wait for CDC port, then BOOTSEL.
     """
     if screen.pico.connected:
         if messagebox.askyesno("BOOTSEL Mode",
@@ -512,9 +513,12 @@ def enter_bootsel_for(screen):
             "or hold BOOTSEL while plugging in.")
         return
 
-    if not messagebox.askyesno("BOOTSEL via XInput",
-            "The controller isn't in Config Mode.\n\n"
-            "Switch via XInput then enter BOOTSEL?"):
+    if sys.platform == "win32":
+        bootsel_prompt = "The controller isn't in Config Mode.\n\nSwitch via XInput then enter BOOTSEL?"
+    else:
+        bootsel_prompt = "The controller isn't in Config Mode.\n\nSwitch from play mode, then enter BOOTSEL?"
+
+    if not messagebox.askyesno(f"BOOTSEL via {CONTROLLER_SIGNAL_LABEL}", bootsel_prompt):
         return
 
     screen._set_status("   Switching to config mode...", ACCENT_BLUE)

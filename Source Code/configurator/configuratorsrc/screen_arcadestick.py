@@ -20,7 +20,7 @@ from .constants import (
 from .firmware_utils import enter_bootsel_for
 from .fonts import FONT_UI
 from .serial_comms import PicoSerial
-from .utils import _find_preset_configs
+from .utils import CONTROLLER_SIGNAL_LABEL, _find_preset_configs
 from .widgets import CustomDropdown, HelpButton, HelpDialog, RoundedButton, _help_text
 from .xinput_utils import ERROR_SUCCESS, MAGIC_STEPS, XINPUT_AVAILABLE, xinput_get_connected, xinput_send_vibration
 
@@ -338,14 +338,23 @@ class ArcadeStickApp:
 
     def _connect_xinput(self):
         if not XINPUT_AVAILABLE:
-            messagebox.showwarning("XInput Unavailable", "No XInput support is available. Put the controller in config mode with the boot shortcut and connect again.")
+            messagebox.showwarning(
+                f"{CONTROLLER_SIGNAL_LABEL} Unavailable",
+                "Play-mode controller signaling is not available. "
+                "Put the controller in config mode with the boot shortcut and connect again.",
+            )
             return
         controllers = xinput_get_connected()
         if not controllers:
-            messagebox.showwarning("No Controllers", "No XInput controllers were detected. If the arcade stick is in HID mode, hold Start + Select + Guide while plugging it in to enter config mode.")
+            messagebox.showwarning(
+                "No Controllers",
+                "No supported play-mode controllers were detected. "
+                "If the arcade stick is in HID mode, hold Start + Select + Guide "
+                "while plugging it in to enter config mode.",
+            )
             return
 
-        self._set_status("Sending config signal over XInput...")
+        self._set_status("Sending config signal over the play-mode interface...")
         self._connect_btn.set_state("disabled")
         slot = controllers[0][0]
 
@@ -357,7 +366,7 @@ class ArcadeStickApp:
                 xinput_send_vibration(slot, 0, 0)
             except Exception as exc:
                 self.root.after(0, lambda e=str(exc): [
-                    self._set_status(f"XInput signal failed: {e}"),
+                    self._set_status(f"Controller signal failed: {e}"),
                     self._connect_btn.set_state("normal"),
                 ])
                 return

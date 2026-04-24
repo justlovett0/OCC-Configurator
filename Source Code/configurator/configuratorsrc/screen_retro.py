@@ -13,7 +13,10 @@ from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               get_bundled_fw_date_str, find_rpi_rp2_drive)
 from .xinput_utils import (XINPUT_AVAILABLE, ERROR_SUCCESS, xinput_get_connected,
                            MAGIC_STEPS, xinput_send_vibration)
-from .utils import _centered_dialog, _center_window, _make_flash_popup, _find_preset_configs
+from .utils import (_bind_global_mousewheel, _center_window, _centered_dialog,
+                     _find_preset_configs, _make_flash_popup,
+                     _mousewheel_units, _unbind_global_mousewheel,
+                     HOST_SYSTEM_LABEL, PLAY_MODE_LABEL)
 class RetroApp:
     """Retro Controller configurator screen."""
 
@@ -300,7 +303,9 @@ class RetroApp:
     def _on_mousewheel(self, event):
         if not self._scroll_enabled:
             return
-        delta = int(-1 * (event.delta / 120))
+        delta = _mousewheel_units(event)
+        if delta is None:
+            return
         content_h = max(1, self.content.winfo_reqheight())
         cur_frac  = self._scroll_canvas.yview()[0]
         new_frac  = cur_frac + delta * 60 / content_h
@@ -855,10 +860,10 @@ class RetroApp:
         self.root.title("OCC Configurator - Retro Controller")
         self.root.config(menu=self._menubar)
         self.frame.pack(fill="both", expand=True)
-        self._scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        _bind_global_mousewheel(self._scroll_canvas, self._on_mousewheel)
 
     def hide(self):
-        self._scroll_canvas.unbind_all("<MouseWheel>")
+        _unbind_global_mousewheel(self._scroll_canvas)
         self._stop_trigger_monitoring()
         if self.pico.connected:
             try:
@@ -908,13 +913,13 @@ class RetroApp:
 
     def _connect_xinput(self):
         """Called when device is in XInput play mode — send magic, wait for port."""
-        self._set_status("   Scanning for XInput controllers...", ACCENT_BLUE)
+        self._set_status(f"   Scanning for {PLAY_MODE_LABEL} controllers...", ACCENT_BLUE)
         controllers = xinput_get_connected() if XINPUT_AVAILABLE else []
         if not controllers:
             self._set_status("   No controllers found", ACCENT_RED)
             messagebox.showwarning("No Controllers",
-                "No XInput controllers detected.\n"
-                "Make sure the retro controller is plugged in and recognised by Windows.")
+                "No supported play-mode controllers detected.\n"
+                f"Make sure the retro controller is plugged in and recognised by {HOST_SYSTEM_LABEL}.")
             return
 
         slot = controllers[0][0]

@@ -126,7 +126,7 @@ def _help_placeholder(text="Help content coming soon."):
     """Returns a tab content builder that shows a placeholder label."""
     def _build(frame):
         tk.Label(frame, text=text, bg=BG_CARD, fg=TEXT,
-                 font=(FONT_UI, 10), wraplength=530, justify="left",
+                 font=(FONT_UI, 10), wraplength=700, justify="left",
                  anchor="nw", padx=20, pady=20).pack(anchor="nw")
     return _build
 
@@ -158,7 +158,7 @@ def _help_text(*segments):
                     font_spec = (FONT_UI, 9)
                 fg = TEXT_DIM if style == "dim" else TEXT
                 tk.Label(inner, text=text, bg=BG_CARD, fg=fg,
-                         font=font_spec, wraplength=530,
+                         font=font_spec, wraplength=700,
                          justify="left", anchor="w").pack(anchor="w")
             prev_style = style
     return _build
@@ -166,11 +166,11 @@ def _help_text(*segments):
 
 class HelpDialog:
     """
-    Non-modal help popup. 590x410, centered over root.
+    Non-modal help popup. 760x600, centered over root.
     Tabs: same pack/pack_forget pattern as App._switch_tab.
     Re-opening lifts existing window instead of opening a second one.
     """
-    W, H = 590, 600
+    W, H = 760, 600
 
     def __init__(self, root, tabs):
         # tabs: list of (name: str, builder: callable(frame) -> None)

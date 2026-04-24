@@ -1,7 +1,7 @@
 /*
  * apa102_leds.h - APA102 / SK9822 / Dotstar / APA107 LED driver
  *
- * Bit-banged SPI on configurable pins (default GP3=DI, GP6=SCK).
+ * Hardware SPI0 on configurable pins (default GP3=DI, GP6=SCK).
  * Supports up to MAX_LEDS LEDs in a daisy chain.
  *
  * APA102 frame format per LED: [111 + 5-bit global brightness] [B] [G] [R]
@@ -13,9 +13,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define MAX_LEDS          16
-#define LED_SPI_DI_PIN     3    // MOSI / Data In
-#define LED_SPI_SCK_PIN    6    // SCK  / Clock In
+#define MAX_LEDS                  16
+#define LED_SPI_DEFAULT_DATA_PIN   3
+#define LED_SPI_DEFAULT_CLOCK_PIN  6
 
 // Input index for LED mapping (16 buttons + tilt + whammy)
 #define LED_INPUT_COUNT    18
@@ -30,6 +30,8 @@ typedef struct __attribute__((packed)) {
     uint8_t  enabled;             // 0=off, 1=on
     uint8_t  count;               // Number of LEDs in chain (0-16)
     uint8_t  base_brightness;     // Idle brightness (0-31, APA102 global)
+    int8_t   data_pin;            // SPI0 TX pin used for LED data
+    int8_t   clock_pin;           // SPI0 SCK pin used for LED clock
     led_color_t colors[MAX_LEDS]; // Per-LED color (R, G, B)
 
     // Per-input LED mapping
@@ -68,7 +70,10 @@ typedef struct __attribute__((packed)) {
 } led_config_t;
 
 // Initialize SPI pins for LED output
-void apa102_init(void);
+bool apa102_spi_data_pin_is_valid(int pin);
+bool apa102_spi_clock_pin_is_valid(int pin);
+bool apa102_spi_pin_is_valid(int data_pin, int clock_pin);
+void apa102_init(const led_config_t *cfg);
 
 // Push current LED state to the strip
 // brightness[i] = 0-31 per LED, colors from config

@@ -5,6 +5,52 @@ from .constants import (BG_CARD, BG_INPUT, TEXT, TEXT_DIM, ACCENT_BLUE,
 from .fonts import FONT_UI, APP_VERSION
 from .widgets import RoundedButton
 
+IS_WINDOWS = sys.platform == "win32"
+CONTROLLER_SIGNAL_LABEL = "XInput" if IS_WINDOWS else "Controller Signal"
+PLAY_MODE_LABEL = "XInput" if IS_WINDOWS else "play mode"
+PLAY_MODE_DETECTED_TEXT = "via XInput" if IS_WINDOWS else "in play mode"
+HOST_SYSTEM_LABEL = "Windows" if IS_WINDOWS else "the system"
+
+
+def _format_detected_status(label, count):
+    return f"{label} detected {PLAY_MODE_DETECTED_TEXT}  ({count} device{'s' if count > 1 else ''})"
+
+
+def _signal_unavailable_message():
+    if IS_WINDOWS:
+        return "XInput is not available on this system."
+    return "Play-mode controller signaling is not available on this system."
+
+
+def _mousewheel_units(event):
+    delta = getattr(event, "delta", 0)
+    if delta:
+        return int(-1 * (delta / 120))
+    event_num = getattr(event, "num", None)
+    if event_num == 4:
+        return -1
+    if event_num == 5:
+        return 1
+    return None
+
+
+def _bind_global_mousewheel(widget, callback):
+    widget.bind_all("<MouseWheel>", callback)
+    widget.bind_all("<Button-4>", callback)
+    widget.bind_all("<Button-5>", callback)
+
+
+def _unbind_global_mousewheel(widget):
+    widget.unbind_all("<MouseWheel>")
+    widget.unbind_all("<Button-4>")
+    widget.unbind_all("<Button-5>")
+
+
+def _bind_mousewheel(widget, callback):
+    widget.bind("<MouseWheel>", callback)
+    widget.bind("<Button-4>", callback)
+    widget.bind("<Button-5>", callback)
+
 # Scans PresetConfigs/ for <json> files; missing device_type can optionally show on all screens
 def _find_preset_configs(device_types=None, allow_unspecified=True):
     search_dirs = []

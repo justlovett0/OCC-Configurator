@@ -11,6 +11,7 @@
  * v11: Added ema_alpha field for user-configurable analog smoothing strength.
  * v12: Added per-effect LED speed fields (loop_speed_ms, breathe_speed_ms, wave_speed_ms).
  * v13: Added start_hold_enabled / start_hold_ms — optional hold-to-activate for START button.
+ * v14: Added configurable LED SPI data/clock pins.
  */
 
 #ifndef _GUITAR_CONFIG_H_
@@ -21,7 +22,7 @@
 #include "apa102_leds.h"
 
 #define CONFIG_MAGIC              0x47554954  // "GUIT"
-#define CONFIG_VERSION            13
+#define CONFIG_VERSION            14
 #define DEVICE_NAME_MAX           31          // + null terminator = 32 bytes
 
 // ── Device type identifier (sent as DEVTYPE: in GET_CONFIG response) ──

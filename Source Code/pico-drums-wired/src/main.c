@@ -148,7 +148,11 @@ static void request_ps3_mode_reboot(void) {
 
 static inline bool is_led_spi_pin(int8_t pin) {
     if (!g_config.leds.enabled) return false;
-    return (pin == LED_SPI_DI_PIN || pin == LED_SPI_SCK_PIN);
+    int8_t data_pin = apa102_spi_data_pin_is_valid(g_config.leds.data_pin)
+        ? g_config.leds.data_pin : LED_SPI_DEFAULT_DATA_PIN;
+    int8_t clock_pin = apa102_spi_clock_pin_is_valid(g_config.leds.clock_pin)
+        ? g_config.leds.clock_pin : LED_SPI_DEFAULT_CLOCK_PIN;
+    return pin == data_pin || pin == clock_pin;
 }
 
 static bool pin_is_usable_button(int8_t pin) {
@@ -435,7 +439,7 @@ int main(void) {
     static led_config_t aligned_leds;
     memcpy(&aligned_leds, &g_config.leds, sizeof(aligned_leds));
     if (aligned_leds.enabled) {
-        apa102_init();
+        apa102_init(&aligned_leds);
         if (g_play_mode == DRUM_PLAY_MODE_PS3) {
             flash_boot_color(&aligned_leds, 176, 0, 255);
         } else if (g_play_mode == DRUM_PLAY_MODE_FORTNITE) {

@@ -73,7 +73,11 @@ static debounce_state_t g_debounce[PEDAL_BUTTON_COUNT];
 
 static inline bool is_led_spi_pin(int8_t pin) {
     if (!g_config.leds.enabled) return false;
-    return (pin == LED_SPI_DI_PIN || pin == LED_SPI_SCK_PIN);
+    int8_t data_pin = apa102_spi_data_pin_is_valid(g_config.leds.data_pin)
+        ? g_config.leds.data_pin : LED_SPI_DEFAULT_DATA_PIN;
+    int8_t clock_pin = apa102_spi_clock_pin_is_valid(g_config.leds.clock_pin)
+        ? g_config.leds.clock_pin : LED_SPI_DEFAULT_CLOCK_PIN;
+    return pin == data_pin || pin == clock_pin;
 }
 
 //--------------------------------------------------------------------
@@ -362,7 +366,7 @@ int main(void) {
         memset(g_debounce, 0, sizeof(g_debounce));
 
         if (g_config.leds.enabled && g_config.leds.count > 0) {
-            apa102_init();
+            apa102_init(&g_config.leds);
         }
 
         // Reset Core 1 to a clean state, then launch it.
@@ -380,7 +384,7 @@ int main(void) {
 #if PEDAL_LED_DEBUG
         // Minimal LED config for debug — 4 LEDs, no effects
         static led_config_t _dbg_leds = { .enabled = 1, .count = 4 };
-        apa102_init();
+        apa102_init(&g_config.leds);
 #endif
 
         xinput_report_t report; (void)report;

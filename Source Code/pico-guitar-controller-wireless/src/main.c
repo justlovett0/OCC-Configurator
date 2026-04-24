@@ -254,7 +254,11 @@ static void request_dongle_mode_reboot(void) {
 
 static inline bool is_led_spi_pin(int8_t pin) {
     if (!g_config.leds.enabled) return false;
-    return (pin == LED_SPI_DI_PIN || pin == LED_SPI_SCK_PIN);
+    int8_t data_pin = apa102_spi_data_pin_is_valid(g_config.leds.data_pin)
+        ? g_config.leds.data_pin : LED_SPI_DEFAULT_DATA_PIN;
+    int8_t clock_pin = apa102_spi_clock_pin_is_valid(g_config.leds.clock_pin)
+        ? g_config.leds.clock_pin : LED_SPI_DEFAULT_CLOCK_PIN;
+    return pin == data_pin || pin == clock_pin;
 }
 
 static inline bool is_picow_reserved(int8_t pin) {
@@ -779,7 +783,7 @@ static void init_play_mode_hardware(void) {
     memcpy(&g_aligned_leds, &g_config.leds, sizeof(led_config_t));
 
     if (g_aligned_leds.enabled) {
-        apa102_init();
+        apa102_init(&g_aligned_leds);
     }
 
     init_i2c_tilt();

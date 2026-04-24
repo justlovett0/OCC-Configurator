@@ -13,7 +13,9 @@ from .firmware_utils import (find_uf2_files, _group_uf2_files, load_fw_presets,
 from .serial_comms import PicoSerial
 from .screen_quick_tune import QuickTuneDialog
 from .xinput_utils import xinput_get_connected, MAGIC_STEPS, xinput_send_vibration
-from .utils import _centered_dialog, _center_window, _ask_wired_or_wireless, _make_flash_popup, _find_preset_configs
+from .utils import (_ask_wired_or_wireless, _bind_mousewheel, _center_window,
+                     _centered_dialog, _find_preset_configs,
+                     _make_flash_popup, _mousewheel_units)
 
 
 def _json_truthy(value):
@@ -360,8 +362,8 @@ class FlashFirmwareScreen:
 
         self._tile_frame.bind("<Configure>", self._on_tile_frame_configure)
         self._canvas.bind("<Configure>",     self._on_canvas_configure)
-        self._canvas.bind("<MouseWheel>",    self._on_mousewheel)
-        self._tile_frame.bind("<MouseWheel>", self._on_mousewheel)
+        _bind_mousewheel(self._canvas, self._on_mousewheel)
+        _bind_mousewheel(self._tile_frame, self._on_mousewheel)
 
         self._build_tiles()
         self.frame.after(50, self._reflow_tiles)
@@ -750,7 +752,7 @@ class FlashFirmwareScreen:
                     except PermissionError:
                         self.root.after(0, lambda: set_status(
                             "Step 4 / 5  -  Applying preset configuration...",
-                            "Waiting for Windows to release the COM port..."))
+                            "Waiting for the system to release the serial port..."))
                         time.sleep(1.5)
                     except Exception as exc:
                         fail("Could not open config port.", str(exc))
@@ -1050,7 +1052,10 @@ class FlashFirmwareScreen:
                     children[ci].place_configure(x=cx, y=cy)
 
     def _on_mousewheel(self, event):
-        self._canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        delta = _mousewheel_units(event)
+        if delta is None:
+            return
+        self._canvas.yview_scroll(delta, "units")
 
     # Flashing
 

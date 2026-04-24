@@ -18,12 +18,19 @@ from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               get_bundled_fw_date_str, find_rpi_rp2_drive)
 from .xinput_utils import (XINPUT_AVAILABLE, ERROR_SUCCESS, xinput_get_connected,
                            MAGIC_STEPS, xinput_send_vibration)
-from .utils import (_centered_dialog, _center_window, _make_flash_popup,
-                     _find_preset_configs, _ask_wired_or_wireless)
+from .utils import (_ask_wired_or_wireless, _bind_global_mousewheel,
+                     _center_window, _centered_dialog, _find_preset_configs,
+                     _make_flash_popup, _mousewheel_units,
+                     _signal_unavailable_message,
+                     _unbind_global_mousewheel, CONTROLLER_SIGNAL_LABEL,
+                     HOST_SYSTEM_LABEL, PLAY_MODE_LABEL)
 
 MAX_GUITAR_LED_INPUT_COUNT = max(
     len(profile["led_input_names"]) + 2 for profile in GUITAR_PROFILE_DEFS.values()
 )
+LED_DATA_PINS = [3, 7, 19, 23]
+LED_CLOCK_PINS = [2, 6, 18, 22]
+LED_PIN_COMBO_STYLE = "LedPin.TCombobox"
 class App:
     def __init__(self, root, on_back=None, guitar_profile="standard"):
         self.root = root
@@ -89,11 +96,15 @@ class App:
         self.led_enabled = tk.BooleanVar(value=False)
         self.led_count = tk.IntVar(value=0)
         self.led_base_brightness = tk.IntVar(value=5)
+        self.led_data_pin = tk.IntVar(value=3)
+        self.led_clock_pin = tk.IntVar(value=6)
         self.led_colors = [tk.StringVar(value="FFFFFF") for _ in range(MAX_LEDS)]
         self.led_maps = [tk.IntVar(value=0) for _ in range(MAX_GUITAR_LED_INPUT_COUNT)]
         self.led_active_br = [tk.IntVar(value=7) for _ in range(MAX_GUITAR_LED_INPUT_COUNT)]
         self.led_reactive = tk.BooleanVar(value=True)
         self._led_maps_backup = [0] * MAX_GUITAR_LED_INPUT_COUNT
+        self._led_data_combo = None
+        self._led_clock_combo = None
 
         # LED loop state
         self.led_loop_enabled    = tk.BooleanVar(value=False)
@@ -192,12 +203,12 @@ class App:
         self.root.title(f"OCC - {self._profile_title}")
         self.root.config(menu=self._menu_bar)
         self._outer_frame.pack(fill="both", expand=True)
-        self._scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        _bind_global_mousewheel(self._scroll_canvas, self._on_mousewheel)
         self.root.update_idletasks()
 
     def hide(self):
         """Hide the configurator UI (return to main menu)."""
-        self._scroll_canvas.unbind_all("<MouseWheel>")
+        _unbind_global_mousewheel(self._scroll_canvas)
         self._stop_monitoring()
         if self.pico.connected:
             try:
@@ -426,6 +437,17 @@ class App:
                     ("This is the complicated looking one.. but I promise it is not bad.", None),
                     ("On the left, rows are depicted by button inputs. Each column is an LED in your controller. Match up in the grid which button goes with which LED number. On button press, the LED corresponding to that button will get brighter.", None),
                 )),
+                ("Boot Modes", _help_text(
+                    ("Boot Modes", "bold"),
+                    ("\n\n", None),
+                    ("PS3/HID:", "bold"),
+                    (" Hold Yellow while powering on to enter PS3/HID mode", None),
+                    ("\n\n", None),
+                    ("FFestival/Keyboard:", "bold"),
+                    (" Hold Orange while powering on to enter Fortnite Festival keyboard mode", None),
+                    ("\n\n", None),
+                    ("PS3/FF boot modes are only for USB wired connections", None),
+                )),
             ])
         self._help_dialog.open()
 
@@ -633,7 +655,9 @@ class App:
     def _on_mousewheel(self, event):
         """Eased mousewheel scroll — animates toward the target fraction
         so scrolling feels smooth rather than jumping by whole units."""
-        delta = int(-1 * (event.delta / 120))
+        delta = _mousewheel_units(event)
+        if delta is None:
+            return
         content_h = max(1, self.content.winfo_reqheight())
         cur_frac  = self._scroll_canvas.yview()[0]
         # 60 px per notch
@@ -1483,6 +1507,13 @@ class App:
                  bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left", padx=(8, 0))
 
     def _make_led_section(self):
+        style = ttk.Style()
+        style.configure(LED_PIN_COMBO_STYLE, foreground="#000000", fieldbackground="#ffffff")
+        style.map(LED_PIN_COMBO_STYLE,
+                  foreground=[("readonly", "#000000")],
+                  fieldbackground=[("readonly", "#ffffff")],
+                  selectforeground=[("readonly", "#000000")],
+                  selectbackground=[("readonly", "#ffffff")])
         card = self._make_card()
         inner = tk.Frame(card, bg=BG_CARD)
         inner.pack(fill="x", padx=12, pady=10)
@@ -1490,8 +1521,8 @@ class App:
                  bg=BG_CARD, fg=ACCENT_BLUE,
                  font=(FONT_UI, 9, "bold")).pack(anchor="w", pady=(0, 4))
         tk.Label(inner, text="Wire SCK (CI) → GP6, MOSI (DI) → GP3. Chain LEDs in series. "
-                 "VCC → VBUS (5V), GND → GND. "
-                 "WARNING: GP3 and GP6 are reserved for LEDs when enabled — "
+                 "VCC → VBUS (5V), GND → GND. Defaults are DI -> GP3 and CI -> GP6. "
+                 "WARNING: The selected LED pins are reserved for LEDs when enabled — "
                  "do not assign buttons to these pins.",
                  bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8), wraplength=820,
                  justify="left", anchor="w").pack(fill="x", pady=(0, 6))
@@ -1539,6 +1570,30 @@ class App:
         self._led_widgets.append(br_sp)
         tk.Label(top, text="(0=off, 9=max)", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 7)).pack(side="left", padx=(4, 0))
+
+        pin_row = tk.Frame(inner, bg=BG_CARD)
+        pin_row.pack(fill="x", pady=(6, 0))
+        tk.Label(pin_row, text="Data (DI):", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        data_combo = ttk.Combobox(pin_row, state="readonly", width=8, style=LED_PIN_COMBO_STYLE,
+                                  values=[f"GPIO {p}" for p in LED_DATA_PINS])
+        data_combo.current(LED_DATA_PINS.index(3))
+        data_combo.pack(side="left", padx=(0, 16))
+        data_combo.bind("<<ComboboxSelected>>",
+                        lambda _e, c=data_combo: self.led_data_pin.set(LED_DATA_PINS[c.current()]))
+        self._led_data_combo = data_combo
+        self._all_widgets.append(data_combo)
+
+        tk.Label(pin_row, text="Clock (CI):", bg=BG_CARD, fg=TEXT_DIM,
+                 font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        clock_combo = ttk.Combobox(pin_row, state="readonly", width=8, style=LED_PIN_COMBO_STYLE,
+                                   values=[f"GPIO {p}" for p in LED_CLOCK_PINS])
+        clock_combo.current(LED_CLOCK_PINS.index(6))
+        clock_combo.pack(side="left")
+        clock_combo.bind("<<ComboboxSelected>>",
+                         lambda _e, c=clock_combo: self.led_clock_pin.set(LED_CLOCK_PINS[c.current()]))
+        self._led_clock_combo = clock_combo
+        self._all_widgets.append(clock_combo)
 
         self._led_colors_frame = tk.Frame(inner, bg=BG_CARD)
         self._led_colors_frame.pack(fill="x", pady=(6, 0))
@@ -2575,18 +2630,18 @@ class App:
         if XINPUT_AVAILABLE:
             self._connect_xinput()
         else:
-            messagebox.showinfo("XInput",
-                "XInput not available on this system.\n"
+            messagebox.showinfo(CONTROLLER_SIGNAL_LABEL,
+                _signal_unavailable_message() + "\n"
                 "Use 'Manual COM Port' if the controller is already in config mode.")
 
     def _connect_xinput(self):
-        self._set_status("   Scanning for XInput controllers...", ACCENT_BLUE)
+        self._set_status(f"   Scanning for {PLAY_MODE_LABEL} controllers...", ACCENT_BLUE)
         controllers = xinput_get_connected()
         if not controllers:
             self._set_status("   No controllers found", ACCENT_RED)
             messagebox.showwarning("No Controllers",
-                "No XInput controllers detected.\n"
-                "Make sure the guitar is plugged in and recognized by Windows.")
+                "No supported play-mode controllers detected.\n"
+                f"Make sure the guitar is plugged in and recognized by {HOST_SYSTEM_LABEL}.")
             return
 
         if len(controllers) == 1:
@@ -2915,6 +2970,16 @@ class App:
             self.led_count.set(int(cfg["led_count"]))
         if "led_brightness" in cfg:
             self.led_base_brightness.set(self._brightness_from_hw(int(cfg["led_brightness"])))
+        if "led_data_pin" in cfg:
+            self.led_data_pin.set(int(cfg["led_data_pin"]))
+        if "led_clock_pin" in cfg:
+            self.led_clock_pin.set(int(cfg["led_clock_pin"]))
+        if self._loaded_device_type == "guitar_combined" and self.led_data_pin.get() == 23:
+            self.led_data_pin.set(3)
+        if self._led_data_combo is not None and self.led_data_pin.get() in LED_DATA_PINS:
+            self._led_data_combo.current(LED_DATA_PINS.index(self.led_data_pin.get()))
+        if self._led_clock_combo is not None and self.led_clock_pin.get() in LED_CLOCK_PINS:
+            self._led_clock_combo.current(LED_CLOCK_PINS.index(self.led_clock_pin.get()))
 
         # LED loop / breathe / wave
         if "led_loop_enabled" in cfg:
@@ -3033,6 +3098,8 @@ class App:
             self.pico.set_value("device_name", name[:20])
         except ValueError:
             pass
+        self.pico.set_value("led_data_pin", str(self.led_data_pin.get()))
+        self.pico.set_value("led_clock_pin", str(self.led_clock_pin.get()))
 
         # LED settings
         self.pico.set_value("led_enabled", "1" if self.led_enabled.get() else "0")

@@ -133,7 +133,7 @@ static void send_config(const drum_config_t *config) {
     // Line 2: LED global settings
     pos = 0;
     pos += snprintf(buf + pos, sizeof(buf) - pos,
-                    "LED:enabled=%d,count=%d,brightness=%d,"
+                    "LED:enabled=%d,count=%d,brightness=%d,data_pin=%d,clock_pin=%d,"
                     "loop_enabled=%d,loop_start=%d,loop_end=%d,"
                     "breathe_enabled=%d,breathe_start=%d,breathe_end=%d,"
                     "breathe_min=%d,breathe_max=%d,"
@@ -142,6 +142,8 @@ static void send_config(const drum_config_t *config) {
                     (int)config->leds.enabled,
                     (int)config->leds.count,
                     (int)config->leds.base_brightness,
+                    (int)config->leds.data_pin,
+                    (int)config->leds.clock_pin,
                     (int)config->leds.loop_enabled,
                     (int)config->leds.loop_start,
                     (int)config->leds.loop_end,
@@ -201,6 +203,22 @@ static bool handle_led_set(drum_config_t *config, const char *key, const char *v
         int v = atoi(val);
         if (v < 0 || v > 31) { serial_writeln("ERR:range 0-31"); return true; }
         config->leds.base_brightness = (uint8_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_data_pin") == 0) {
+        int v = atoi(val);
+        if (!apa102_spi_pin_is_valid(v, config->leds.clock_pin)) {
+            serial_writeln("ERR:invalid SPI0 pair"); return true;
+        }
+        config->leds.data_pin = (int8_t)v;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_clock_pin") == 0) {
+        int v = atoi(val);
+        if (!apa102_spi_pin_is_valid(config->leds.data_pin, v)) {
+            serial_writeln("ERR:invalid SPI0 pair"); return true;
+        }
+        config->leds.clock_pin = (int8_t)v;
         serial_writeln("OK"); return true;
     }
     if (strncmp(key, "led_color_", 10) == 0) {
@@ -357,25 +375,26 @@ static void handle_set(drum_config_t *config, const char *kv) {
 // Pin scan
 //--------------------------------------------------------------------
 
-static bool gpio_is_scannable(int pin) {
+static bool gpio_is_scannable(const drum_config_t *config, int pin) {
     if (pin < GPIO_MIN || pin > GPIO_MAX) return false;
     if (pin == 23 || pin == 24 || pin == 25) return false;
     // Skip SPI LED pins if LEDs are enabled
-    if (pin == LED_SPI_DI_PIN || pin == LED_SPI_SCK_PIN) return false;
+    if (config->leds.enabled &&
+        (pin == config->leds.data_pin || pin == config->leds.clock_pin)) return false;
     return true;
 }
 
-static void run_scan(void) {
+static void run_scan(const drum_config_t *config) {
     bool last_state[29] = {false};
     for (int i = GPIO_MIN; i <= GPIO_MAX; i++) {
-        if (!gpio_is_scannable(i)) continue;
+        if (!gpio_is_scannable(config, i)) continue;
         gpio_init(i);
         gpio_set_dir(i, GPIO_IN);
         gpio_pull_up(i);
     }
     sleep_ms(10);
     for (int i = GPIO_MIN; i <= GPIO_MAX; i++) {
-        if (gpio_is_scannable(i))
+        if (gpio_is_scannable(config, i))
             last_state[i] = !gpio_get(i);
     }
 
@@ -409,7 +428,7 @@ static void run_scan(void) {
             last_scan_ms = now_ms;
             char buf[32];
             for (int i = GPIO_MIN; i <= GPIO_MAX; i++) {
-                if (!gpio_is_scannable(i)) continue;
+                if (!gpio_is_scannable(config, i)) continue;
                 bool cur = !gpio_get(i);
                 if (cur && !last_state[i]) {
                     snprintf(buf, sizeof(buf), "PIN:%d", i);
@@ -480,7 +499,7 @@ void drum_config_mode_main(drum_config_t *config) {
                     serial_writeln("OK");
                 }
                 else if (strcmp(cmd_buf, "SCAN") == 0)
-                    run_scan();
+                    run_scan(config);
                 else if (strncmp(cmd_buf, "LED_FLASH:", 10) == 0) {
                     int idx = atoi(cmd_buf + 10);
                     if (idx >= 0 && idx < MAX_LEDS && idx < config->leds.count) {
@@ -496,9 +515,9 @@ void drum_config_mode_main(drum_config_t *config) {
                     int idx = atoi(cmd_buf + 10);
                     if (idx >= 0 && idx < MAX_LEDS && idx < config->leds.count) {
                         serial_writeln("OK");
-                        apa102_init();
                         led_config_t tmp;
                         memcpy(&tmp, &config->leds, sizeof(led_config_t));
+                        apa102_init(&tmp);
                         uint8_t br[MAX_LEDS];
                         memset(br, 0, sizeof(br));
                         br[idx] = 31;
@@ -508,9 +527,9 @@ void drum_config_mode_main(drum_config_t *config) {
                     }
                 }
                 else if (strcmp(cmd_buf, "LED_OFF") == 0) {
-                    apa102_init();
                     led_config_t tmp;
                     memcpy(&tmp, &config->leds, sizeof(led_config_t));
+                    apa102_init(&tmp);
                     apa102_all_off(&tmp);
                     serial_writeln("OK");
                 }

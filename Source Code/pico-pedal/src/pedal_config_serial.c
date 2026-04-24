@@ -97,13 +97,14 @@ static void send_config(const pedal_config_t *config) {
 
     n = snprintf(buf, sizeof(buf),
         "LED:"
-        "enabled=%u,count=%u,brightness=%u,"
+        "enabled=%u,count=%u,brightness=%u,data_pin=%d,clock_pin=%d,"
         "loop_enabled=%u,loop_start=%u,loop_end=%u,"
         "breathe_enabled=%u,breathe_start=%u,breathe_end=%u,"
         "breathe_min=%u,breathe_max=%u,"
         "wave_enabled=%u,wave_origin=%u,"
         "loop_speed=%u,breathe_speed=%u,wave_speed=%u",
         config->leds.enabled, config->leds.count, config->leds.base_brightness,
+        config->leds.data_pin, config->leds.clock_pin,
         config->leds.loop_enabled, config->leds.loop_start, config->leds.loop_end,
         config->leds.breathe_enabled, config->leds.breathe_start, config->leds.breathe_end,
         config->leds.breathe_min_bright, config->leds.breathe_max_bright,
@@ -310,6 +311,26 @@ static bool handle_set(pedal_config_t *config, const char *param) {
         serial_writeln("OK");
         return true;
     }
+    if (key_len == 12 && strncmp(param, "led_data_pin", 12) == 0) {
+        int v = atoi(val_str);
+        if (!apa102_spi_pin_is_valid(v, config->leds.clock_pin)) {
+            serial_writeln("ERR:invalid SPI0 pair");
+            return true;
+        }
+        config->leds.data_pin = (int8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
+    if (key_len == 13 && strncmp(param, "led_clock_pin", 13) == 0) {
+        int v = atoi(val_str);
+        if (!apa102_spi_pin_is_valid(config->leds.data_pin, v)) {
+            serial_writeln("ERR:invalid SPI0 pair");
+            return true;
+        }
+        config->leds.clock_pin = (int8_t)v;
+        serial_writeln("OK");
+        return true;
+    }
 
     if (key_len > 10 && strncmp(param, "led_color_", 10) == 0) {
         int idx = atoi(param + 10);
@@ -510,7 +531,7 @@ static void run_scan(pedal_config_t *config) {
     for (int pin = 0; pin <= 28; pin++) {
         if (config_pin_is_usb_host_reserved(config, pin)) continue;
         if (config->leds.enabled &&
-            (pin == LED_SPI_DI_PIN || pin == LED_SPI_SCK_PIN)) continue;
+            (pin == config->leds.data_pin || pin == config->leds.clock_pin)) continue;
         gpio_init(pin);
         gpio_set_dir(pin, GPIO_IN);
         gpio_pull_up(pin);
@@ -629,7 +650,7 @@ void config_mode_main(pedal_config_t *config) {
     int  line_pos = 0;
 
     if (config->leds.enabled && config->leds.count > 0) {
-        apa102_init();
+        apa102_init(&config->leds);
     }
 
     // Pre-connection timeout — reboot if host never connects within 30s

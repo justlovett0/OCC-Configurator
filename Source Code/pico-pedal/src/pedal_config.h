@@ -23,7 +23,7 @@
 #include "apa102_leds.h"
 
 #define CONFIG_MAGIC              0x5045444C  // "PEDL"
-#define CONFIG_VERSION            4
+#define CONFIG_VERSION            5
 #define DEVICE_NAME_MAX           31          // + null terminator = 32 bytes
 
 // ── Device type identifier (sent as DEVTYPE: in GET_CONFIG response) ──

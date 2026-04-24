@@ -82,6 +82,8 @@ void config_set_defaults(guitar_config_t *config) {
     config->leds.enabled = 0;
     config->leds.count = 0;
     config->leds.base_brightness = 5;
+    config->leds.data_pin = LED_SPI_DEFAULT_DATA_PIN;
+    config->leds.clock_pin = LED_SPI_DEFAULT_CLOCK_PIN;
 
     const uint8_t def_colors[][3] = {
         {0, 255, 0},     // green
@@ -140,6 +142,7 @@ bool config_is_valid(const guitar_config_t *config) {
     if (config->magic != CONFIG_MAGIC) return false;
     if (config->version != CONFIG_VERSION) return false;
     if (config->checksum != _calc_checksum(config)) return false;
+    if (!apa102_spi_pin_is_valid(config->leds.data_pin, config->leds.clock_pin)) return false;
     return true;
 }
 

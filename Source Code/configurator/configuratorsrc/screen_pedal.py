@@ -15,7 +15,10 @@ from .firmware_utils import (flash_uf2_with_reboot, enter_bootsel_for,
                               apply_config_to_pico)
 from .xinput_utils import (XINPUT_AVAILABLE, ERROR_SUCCESS, xinput_get_connected,
                            MAGIC_STEPS, xinput_send_vibration)
-from .utils import _centered_dialog, _center_window, _make_flash_popup, _find_preset_configs
+from .utils import (_bind_global_mousewheel, _center_window, _centered_dialog,
+                     _find_preset_configs, _make_flash_popup,
+                     _mousewheel_units, _unbind_global_mousewheel,
+                     HOST_SYSTEM_LABEL, PLAY_MODE_LABEL)
 class PedalApp:
     """
     Pedal Controller configurator screen.
@@ -56,7 +59,11 @@ class PedalApp:
         "D+ on first pin, D- on second",
         "D- on first pin, D+ on second",
     ]
-    LED_SPI_PINS = {6, 7}
+    LED_DATA_PINS = [3, 7, 19, 23]
+    LED_CLOCK_PINS = [2, 6, 18, 22]
+    LED_DEFAULT_DATA_PIN = 7
+    LED_DEFAULT_CLOCK_PIN = 6
+    LED_PIN_COMBO_STYLE = "LedPin.TCombobox"
     PEDAL_LED_INPUT_INDICES = [0, 1, 2, 3]
 
     def __init__(self, root, on_back=None):
@@ -151,7 +158,7 @@ class PedalApp:
                     ("Digital pin input is typically for buttons, Analog pin input is for things like accelerometers, joysticks, or triggers.", None),
                 )),
                 ("Lighting & Effects", _help_text(
-                    ("Controller LEDs are communicated through GPIO 6 and GPIO 7. Tell OCC how many LEDs are in series on those LED pins, and you can individually address each one.", None),
+                    ("Controller LEDs use configurable SPI0 GPIO pins. By default the pedal firmware uses DI on GPIO 7 and CI on GPIO 6, and you can change both pins in the LED section.", None),
                     ("\n\n", None),
                     ("OCC has multiple lighting effects programmed in:", "bold"),
                     ("\n\n", None),
@@ -222,6 +229,8 @@ class PedalApp:
         self.led_enabled = tk.BooleanVar(value=False)
         self.led_count = tk.IntVar(value=0)
         self.led_base_brightness = tk.IntVar(value=5)
+        self.led_data_pin = tk.IntVar(value=self.LED_DEFAULT_DATA_PIN)
+        self.led_clock_pin = tk.IntVar(value=self.LED_DEFAULT_CLOCK_PIN)
         self.led_colors = [tk.StringVar(value="FFFFFF") for _ in range(MAX_LEDS)]
         self.led_maps = [tk.IntVar(value=0) for _ in range(len(self.PEDAL_LED_INPUT_INDICES))]
         self.led_active_br = [tk.IntVar(value=7) for _ in range(len(self.PEDAL_LED_INPUT_INDICES))]
@@ -246,6 +255,8 @@ class PedalApp:
         self._led_map_cbs = {}
         self._led_map_widgets = []
         self._led_map_pin_lbls = {}
+        self._led_data_combo = None
+        self._led_clock_combo = None
 
         self.scanning     = False
         self.scan_target  = None
@@ -403,7 +414,9 @@ class PedalApp:
     def _on_mousewheel(self, event):
         if not self._scroll_enabled:
             return
-        delta = int(-1 * (event.delta / 120))
+        delta = _mousewheel_units(event)
+        if delta is None:
+            return
         content_h = max(1, self.content.winfo_reqheight())
         cur_frac  = self._scroll_canvas.yview()[0]
         new_frac  = cur_frac + delta * 60 / content_h
@@ -475,7 +488,22 @@ class PedalApp:
             return set()
         return {host_pin, host_pin + 1}
 
+    def _current_led_pins(self, cfg=None):
+        if cfg is not None:
+            try:
+                enabled = int(cfg.get("led_enabled", 1 if self.led_enabled.get() else 0)) != 0
+                data_pin = int(cfg.get("led_data_pin", self.led_data_pin.get()))
+                clock_pin = int(cfg.get("led_clock_pin", self.led_clock_pin.get()))
+            except (TypeError, ValueError):
+                return False, None, None
+        else:
+            enabled = self.led_enabled.get()
+            data_pin = self.led_data_pin.get()
+            clock_pin = self.led_clock_pin.get()
+        return enabled, data_pin, clock_pin
+
     def _validate_usb_host_conflicts(self, host_pin=None, cfg=None):
+        led_error = None
         if cfg is not None:
             try:
                 host_pin = int(cfg.get("usb_host_pin", self._usb_host_pin_var.get()))
@@ -492,7 +520,6 @@ class PedalApp:
                               for i in range(self.PEDAL_COUNT)]
                 adc_pins = [int(cfg.get(f"adc{i}", self._adc_pin_vars[i].get()))
                             for i in range(2)]
-                leds_enabled = int(cfg.get("led_enabled", 1 if self.led_enabled.get() else 0)) != 0
             except (TypeError, ValueError):
                 return "One or more assigned GPIO pins are invalid."
         else:
@@ -500,23 +527,38 @@ class PedalApp:
                 host_pin = self._usb_host_pin_var.get()
             pedal_pins = [v.get() for v in self._pin_vars]
             adc_pins = [v.get() for v in self._adc_pin_vars]
-            leds_enabled = self.led_enabled.get()
+
+        leds_enabled, led_data_pin, led_clock_pin = self._current_led_pins(cfg=cfg)
+        if leds_enabled is False and led_data_pin is None:
+            return "LED data/clock pins must be valid GPIO numbers."
+        if leds_enabled:
+            if led_data_pin not in self.LED_DATA_PINS:
+                led_error = f"LED data pin must be one of: {', '.join(f'GPIO {p}' for p in self.LED_DATA_PINS)}."
+            elif led_clock_pin not in self.LED_CLOCK_PINS:
+                led_error = f"LED clock pin must be one of: {', '.join(f'GPIO {p}' for p in self.LED_CLOCK_PINS)}."
+            elif led_data_pin == led_clock_pin:
+                led_error = "LED data and clock pins must be different GPIOs."
+        if led_error:
+            return led_error
 
         if host_pin not in self.USB_HOST_START_PINS:
             return "USB host pair must use a valid consecutive GPIO pair."
 
         reserved = self._current_usb_host_reserved_pins(host_pin)
-        if leds_enabled and (reserved & self.LED_SPI_PINS):
-            pins_txt = ", ".join(f"GPIO {pin}" for pin in sorted(reserved & self.LED_SPI_PINS))
-            return f"LEDs use GP6 and GP7. Choose a different USB host pair because it overlaps {pins_txt}."
+        led_pins = {led_data_pin, led_clock_pin} if leds_enabled else set()
+        if reserved & led_pins:
+            pins_txt = ", ".join(f"GPIO {pin}" for pin in sorted(reserved & led_pins))
+            return f"Choose a different USB host pair because it overlaps the selected LED pins: {pins_txt}."
         for idx, pin in enumerate(pedal_pins):
             if pin in reserved:
                 return f"Pedal {idx + 1} uses GPIO {pin}, which is reserved for the USB host port."
-            if leds_enabled and pin in self.LED_SPI_PINS:
+            if leds_enabled and pin in led_pins:
                 return f"Pedal {idx + 1} uses GPIO {pin}, which is reserved for LEDs when lighting is enabled."
         for idx, pin in enumerate(adc_pins):
             if pin in reserved:
                 return f"Analog {idx + 1} uses GPIO {pin}, which is reserved for the USB host port."
+            if leds_enabled and pin in led_pins:
+                return f"Analog {idx + 1} uses GPIO {pin}, which is reserved for LEDs when lighting is enabled."
         return None
 
     def _show_usb_host_conflict(self, message):
@@ -662,7 +704,7 @@ class PedalApp:
                 f"Choose a different pin for Pedal {idx + 1}."
             )
             return
-        if self.led_enabled.get() and pin in self.LED_SPI_PINS:
+        if self.led_enabled.get() and pin in {self.led_data_pin.get(), self.led_clock_pin.get()}:
             current_pin = self._pin_vars[idx].get()
             if current_pin in DIGITAL_PINS:
                 combo.current(DIGITAL_PINS.index(current_pin))
@@ -672,6 +714,29 @@ class PedalApp:
             )
             return
         self._pin_vars[idx].set(pin)
+
+    def _on_led_pin_combo(self, kind, combo):
+        pin_list = self.LED_DATA_PINS if kind == "data" else self.LED_CLOCK_PINS
+        if combo is None or combo.current() < 0:
+            return
+        new_pin = pin_list[combo.current()]
+        cfg = {
+            "led_enabled": 1 if self.led_enabled.get() else 0,
+            "led_data_pin": self.led_data_pin.get(),
+            "led_clock_pin": self.led_clock_pin.get(),
+        }
+        cfg[f"led_{kind}_pin"] = new_pin
+        error = self._validate_usb_host_conflicts(cfg=cfg)
+        if error:
+            current_pin = self.led_data_pin.get() if kind == "data" else self.led_clock_pin.get()
+            if current_pin in pin_list:
+                combo.current(pin_list.index(current_pin))
+            self._show_usb_host_conflict(error)
+            return
+        if kind == "data":
+            self.led_data_pin.set(new_pin)
+        else:
+            self.led_clock_pin.set(new_pin)
 
     def _on_map_combo(self, idx, combo):
         self._map_vars[idx].set(combo.current())
@@ -1198,6 +1263,13 @@ class PedalApp:
         return card, body
 
     def _make_led_section(self):
+        style = ttk.Style()
+        style.configure(self.LED_PIN_COMBO_STYLE, foreground="#000000", fieldbackground="#ffffff")
+        style.map(self.LED_PIN_COMBO_STYLE,
+                  foreground=[("readonly", "#000000")],
+                  fieldbackground=[("readonly", "#ffffff")],
+                  selectforeground=[("readonly", "#000000")],
+                  selectbackground=[("readonly", "#ffffff")])
         card = self._make_card()
         inner = tk.Frame(card, bg=BG_CARD)
         inner.pack(fill="x", padx=12, pady=10)
@@ -1205,9 +1277,9 @@ class PedalApp:
                  bg=BG_CARD, fg=ACCENT_BLUE,
                  font=(FONT_UI, 9, "bold")).pack(anchor="w", pady=(0, 4))
         tk.Label(inner,
-                 text="Wire SCK (CI) -> GP6, MOSI (DI) -> GP7. Chain LEDs in series. "
+                 text="Select SPI0-compatible CI and DI pins below. Defaults are CI -> GP6 and DI -> GP7. Chain LEDs in series. "
                       "VCC -> VBUS (5V), GND -> GND. "
-                      "WARNING: GP6 and GP7 are reserved for LEDs when enabled. "
+                      "WARNING: The selected LED pins are reserved for LEDs when enabled. "
                       "Reactive LED mappings are available for Pedal 1-4 only; analog inputs do not trigger LED reactions.",
                  bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8), wraplength=820,
                  justify="left", anchor="w").pack(fill="x", pady=(0, 6))
@@ -1244,6 +1316,28 @@ class PedalApp:
         self._all_widgets.append(br_sp)
         self._led_widgets.append(br_sp)
         tk.Label(top, text="(0=off, 9=max)", bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 7)).pack(side="left", padx=(4, 0))
+
+        pin_row = tk.Frame(inner, bg=BG_CARD)
+        pin_row.pack(fill="x", pady=(6, 0))
+        tk.Label(pin_row, text="Data (DI):", bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        data_combo = ttk.Combobox(pin_row, state="readonly", width=8, style=self.LED_PIN_COMBO_STYLE,
+                                  values=[f"GPIO {p}" for p in self.LED_DATA_PINS])
+        data_combo.current(self.LED_DATA_PINS.index(self.LED_DEFAULT_DATA_PIN))
+        data_combo.pack(side="left", padx=(0, 16))
+        data_combo.bind("<<ComboboxSelected>>",
+                        lambda _e, c=data_combo: self._on_led_pin_combo("data", c))
+        self._led_data_combo = data_combo
+        self._all_widgets.append(data_combo)
+
+        tk.Label(pin_row, text="Clock (CI):", bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8)).pack(side="left", padx=(0, 3))
+        clock_combo = ttk.Combobox(pin_row, state="readonly", width=8, style=self.LED_PIN_COMBO_STYLE,
+                                   values=[f"GPIO {p}" for p in self.LED_CLOCK_PINS])
+        clock_combo.current(self.LED_CLOCK_PINS.index(self.LED_DEFAULT_CLOCK_PIN))
+        clock_combo.pack(side="left")
+        clock_combo.bind("<<ComboboxSelected>>",
+                         lambda _e, c=clock_combo: self._on_led_pin_combo("clock", c))
+        self._led_clock_combo = clock_combo
+        self._all_widgets.append(clock_combo)
 
         self._led_colors_frame = tk.Frame(inner, bg=BG_CARD)
         self._led_colors_frame.pack(fill="x", pady=(6, 0))
@@ -1772,6 +1866,14 @@ class PedalApp:
             self.led_count.set(int(cfg["led_count"]))
         if "led_brightness" in cfg:
             self.led_base_brightness.set(self._brightness_from_hw(int(cfg["led_brightness"])))
+        if "led_data_pin" in cfg:
+            self.led_data_pin.set(int(cfg["led_data_pin"]))
+        if "led_clock_pin" in cfg:
+            self.led_clock_pin.set(int(cfg["led_clock_pin"]))
+        if self._led_data_combo is not None and self.led_data_pin.get() in self.LED_DATA_PINS:
+            self._led_data_combo.current(self.LED_DATA_PINS.index(self.led_data_pin.get()))
+        if self._led_clock_combo is not None and self.led_clock_pin.get() in self.LED_CLOCK_PINS:
+            self._led_clock_combo.current(self.LED_CLOCK_PINS.index(self.led_clock_pin.get()))
         if "led_loop_enabled" in cfg:
             self.led_loop_enabled.set(int(cfg["led_loop_enabled"]) != 0)
         if "led_loop_start" in cfg:
@@ -1851,6 +1953,8 @@ class PedalApp:
         self.pico.set_value("led_enabled", "1" if self.led_enabled.get() else "0")
         self.pico.set_value("led_count", str(self.led_count.get()))
         self.pico.set_value("led_brightness", str(self._brightness_to_hw(self.led_base_brightness.get())))
+        self.pico.set_value("led_data_pin", str(self.led_data_pin.get()))
+        self.pico.set_value("led_clock_pin", str(self.led_clock_pin.get()))
         count = self.led_count.get()
         for i in range(min(count, MAX_LEDS)):
             color = self.led_colors[i].get().strip().upper()
@@ -1973,11 +2077,11 @@ class PedalApp:
         self.root.title("OCC - Pedal Controller Configurator")
         self.root.config(menu=self._menu_bar)
         self.frame.pack(fill="both", expand=True)
-        self._scroll_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        _bind_global_mousewheel(self._scroll_canvas, self._on_mousewheel)
 
     def hide(self):
         """Hide this screen; reboot device to play mode if connected."""
-        self._scroll_canvas.unbind_all("<MouseWheel>")
+        _unbind_global_mousewheel(self._scroll_canvas)
         if self.pico.connected:
             try:
                 self.pico.reboot()
@@ -2036,13 +2140,13 @@ class PedalApp:
 
     def _connect_xinput(self):
         """Called when device is in XInput play mode — send magic, wait for port."""
-        self._set_status("   Scanning for XInput controllers...", ACCENT_BLUE)
+        self._set_status(f"   Scanning for {PLAY_MODE_LABEL} controllers...", ACCENT_BLUE)
         controllers = xinput_get_connected() if XINPUT_AVAILABLE else []
         if not controllers:
             self._set_status("   No controllers found", ACCENT_RED)
             messagebox.showwarning("No Controllers",
-                "No XInput controllers detected.\n"
-                "Make sure the pedal controller is plugged in and recognised by Windows.")
+                "No supported play-mode controllers detected.\n"
+                f"Make sure the pedal controller is plugged in and recognised by {HOST_SYSTEM_LABEL}.")
             return
 
         slot = controllers[0][0]

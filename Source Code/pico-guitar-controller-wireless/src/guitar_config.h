@@ -25,7 +25,7 @@
 #include "apa102_leds.h"
 
 #define CONFIG_MAGIC              0x47554954  // "GUIT"
-#define CONFIG_VERSION            15
+#define CONFIG_VERSION            16
 #define DEVICE_NAME_MAX           31          // + null terminator = 32 bytes
 
 // ── Device type identifier (sent as DEVTYPE: in GET_CONFIG response) ──

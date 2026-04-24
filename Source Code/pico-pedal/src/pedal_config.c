@@ -135,6 +135,8 @@ void config_set_defaults(pedal_config_t *config) {
     config->leds.enabled = 0;
     config->leds.count = 0;
     config->leds.base_brightness = 5;
+    config->leds.data_pin = LED_SPI_DEFAULT_DATA_PIN;
+    config->leds.clock_pin = LED_SPI_DEFAULT_CLOCK_PIN;
 
     for (int i = 0; i < 4 && i < MAX_LEDS; i++) {
         config->leds.colors[i].r = 255;
@@ -177,6 +179,7 @@ bool config_is_valid(const pedal_config_t *config) {
     if (config->checksum != _calc_checksum(config)) return false;
     if (!config_usb_host_pin_valid(config->usb_host_pin)) return false;
     if (config->usb_host_dm_first > 1) return false;
+    if (!apa102_spi_pin_is_valid(config->leds.data_pin, config->leds.clock_pin)) return false;
     return true;
 }
 

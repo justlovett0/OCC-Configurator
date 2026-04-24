@@ -18,7 +18,8 @@ from .firmware_utils import (find_rpi_rp2_drive, find_rpi_rp2_drive_info,
                               flash_resetfw_and_wait, find_uf2_files, find_resetFW_uf2,
                               find_uf2_for_device_type)
 from .xinput_utils import XINPUT_AVAILABLE, xinput_get_connected, MAGIC_STEPS, xinput_send_vibration, ERROR_SUCCESS
-from .utils import _centered_dialog, _center_window, _find_preset_configs
+from .utils import (_center_window, _centered_dialog, _find_preset_configs,
+                     _format_detected_status, _signal_unavailable_message)
 
 class MainMenu:
     """
@@ -333,7 +334,7 @@ class MainMenu:
             if XINPUT_AVAILABLE:
                 try:
                     controllers = xinput_get_connected()
-                    SUBTYPE_LABELS = {8: "Drum Kit", 6: "6-Fret Guitar", 7: "Standard Guitar", 5: "Dongle", 3: "Arcade Stick"}
+                    SUBTYPE_LABELS = {8: "Drum Kit", 6: "6-Fret Guitar", 7: "Standard Guitar", 11: "Dongle", 3: "Arcade Stick", 1: "Retro Controller"}
                     occ_devices = [c for c in controllers if c[1] in OCC_SUBTYPES]
                     # Separate dongles from configurable devices (guitar / drum kit).
                     dongle_devices    = [c for c in occ_devices if c[1] in DONGLE_XINPUT_SUBTYPES]
@@ -349,7 +350,7 @@ class MainMenu:
                         self._xinput_dongle_count  = len(dongle_devices)
                         self._ctrl_icon.config(text="●", fg=ACCENT_GREEN)
                         self._ctrl_status.config(
-                            text=f"{first_label} detected via XInput  ({count} device{'s' if count > 1 else ''})",
+                            text=_format_detected_status(first_label, count),
                             fg=ACCENT_GREEN)
                         subtype = config_devices[0][1]
                         EASY_CONFIG_SUBTYPES = {7, 8}  # standard guitar and drum kit
@@ -374,7 +375,7 @@ class MainMenu:
                         self._xinput_first_subtype = dongle_devices[0][1]
                         self._ctrl_icon.config(text="●", fg=ACCENT_GREEN)
                         self._ctrl_status.config(
-                            text=f"Dongle detected via XInput  ({count} device{'s' if count > 1 else ''})",
+                            text=_format_detected_status("Dongle", count),
                             fg=ACCENT_GREEN)
                         self._ctrl_detail.config(
                             text="Dongle relays a wireless controller — no configuration available here.",
@@ -561,7 +562,7 @@ class MainMenu:
             uf2 = find_uf2_for_device_type(device_type)
             self._fw_icon.config(text="●", fg=ACCENT_GREEN)
             self._fw_status.config(
-                text=f"{value} detected via XInput  ({xinput_count} device{'s' if xinput_count > 1 else ''})",
+                text=_format_detected_status(value, xinput_count),
                 fg=ACCENT_GREEN)
             if uf2:
                 bundled_date_str = get_bundled_fw_date_str(uf2)
@@ -598,7 +599,7 @@ class MainMenu:
             count = value
             self._fw_icon.config(text="●", fg=ACCENT_GREEN)
             self._fw_status.config(
-                text=f"Dongle detected via XInput  ({count} device{'s' if count > 1 else ''})",
+                text=_format_detected_status("Dongle", count),
                 fg=ACCENT_GREEN)
             self._fw_detail.config(
                 text="To flash dongle firmware: hold BOOTSEL while plugging in the dongle.",
@@ -700,7 +701,7 @@ class MainMenu:
             count = xinput_count
             self._rst_icon.config(text="●", fg=ACCENT_GREEN)
             self._rst_status.config(
-                text=f"{xinput_label} detected via XInput  ({count} device{'s' if count > 1 else ''})",
+                text=_format_detected_status(xinput_label, count),
                 fg=ACCENT_GREEN)
             if resetFW:
                 self._rst_detail.config(
@@ -721,7 +722,7 @@ class MainMenu:
             dongle_count = self._xinput_dongle_count
             self._rst_icon.config(text="●", fg=ACCENT_GREEN)
             self._rst_status.config(
-                text=f"Dongle detected via XInput  ({dongle_count} device{'s' if dongle_count > 1 else ''})",
+                text=_format_detected_status("Dongle", dongle_count),
                 fg=ACCENT_GREEN)
             self._rst_detail.config(
                 text="Hold BOOTSEL while plugging in the dongle to enable factory reset.",
@@ -1695,10 +1696,10 @@ class MainMenu:
                 "Firmware Switcher — BOOTSEL Failed",
                 "Failed to send BOOTSEL command to the Alternatefw device.\n\n"
                 "This usually means one of:\n"
-                "  • The device is driven by the Xbox 360 XInput driver instead\n"
-                "    of WinUSB — Windows may not allow direct USB control access.\n"
+                "  • The device is still claimed by another driver or app, so\n"
+                "    direct USB control access is unavailable.\n"
                 "  • The device was unplugged before the command was sent.\n"
-                "  • You need to run this configurator as Administrator.\n\n"
+                "  • PyUSB/libusb access is missing or blocked by permissions.\n\n"
                 "Manual fix: Hold the BOOTSEL button on the Pico while\n"
                 "plugging in the USB cable — it will appear as RPI-RP2.\n\n"
                 f"Diagnostic log (last 20 lines):\n{log_text}",
@@ -2034,7 +2035,7 @@ class MainMenu:
                     if not XINPUT_AVAILABLE:
                         self.root.after(0, lambda: messagebox.showerror(
                             "Check for Updates",
-                            "XInput is not available on this system."))
+                            _signal_unavailable_message()))
                         finish()
                         return
                     controllers = xinput_get_connected() if XINPUT_AVAILABLE else []
@@ -2058,7 +2059,7 @@ class MainMenu:
                             time.sleep(0.08)
                         xinput_send_vibration(slot, 0, 0)
                     except Exception as exc:
-                        ui_detail(f"Error sending XInput signal: {exc}", ACCENT_RED)
+                        ui_detail(f"Error sending controller signal: {exc}", ACCENT_RED)
                         finish()
                         return
 
@@ -2213,7 +2214,7 @@ class MainMenu:
 
         if via == 'xinput' and not XINPUT_AVAILABLE:
             messagebox.showerror("Backup & Update",
-                "XInput is not available on this system.\n"
+                _signal_unavailable_message() + "\n"
                 "Cannot send the config-mode signal to the controller.")
             return
 
@@ -2322,7 +2323,7 @@ class MainMenu:
                 total_steps = 7
                 self.root.after(0, lambda: set_status(
                     f"Step 1 / {total_steps}  —  Switching controller to config mode…",
-                    f"Sending signal to XInput slot {slot + 1}"))
+                    f"Sending config signal to controller slot {slot + 1}"))
                 try:
                     for left, right in MAGIC_STEPS:
                         result = xinput_send_vibration(slot, left, right)
@@ -2333,7 +2334,7 @@ class MainMenu:
                         time.sleep(0.08)
                     xinput_send_vibration(slot, 0, 0)
                 except Exception as exc:
-                    fail("Error sending XInput signal.", str(exc))
+                    fail("Error sending controller signal.", str(exc))
                     return
 
                 self.root.after(0, lambda: set_status(
@@ -2349,7 +2350,7 @@ class MainMenu:
                     time.sleep(0.3)
                 if not port:
                     fail("Timeout: controller did not enter config mode.",
-                         "Close any games or apps that may be holding the XInput device.")
+                         "Close any games or apps that may be holding the controller.")
                     return
 
             # Set step labels based on entry path
@@ -2455,7 +2456,7 @@ class MainMenu:
                 port2 = None
 
                 if XINPUT_AVAILABLE:
-                    # Wait for the controller to reappear as an XInput device
+                    # Wait for the controller to reappear in play mode
                     xinput_slot2 = None
                     self.root.after(0, lambda: set_status(
                         f"{step_reboot}  —  Waiting for controller to reboot…",
@@ -2475,8 +2476,8 @@ class MainMenu:
                     if xinput_slot2 is not None:
                         self.root.after(0, lambda: set_status(
                             f"{step_reboot}  —  Controller detected, switching to config mode…",
-                            "Sending config signal via XInput"))
-                        time.sleep(2.0)   # give Windows time to fully enumerate
+                            "Sending config signal via play mode"))
+                        time.sleep(2.0)   # give the OS time to finish enumerating
                         try:
                             for left, right in MAGIC_STEPS:
                                 xinput_send_vibration(xinput_slot2, left, right)
@@ -2532,11 +2533,11 @@ class MainMenu:
                 if xinput_slot2 is not None:
                     self.root.after(0, lambda: set_status(
                         f"{step_reboot}  —  Controller detected, waiting for enumeration…",
-                        "Giving Windows time to fully recognise the controller"))
+                        "Giving the system time to fully recognise the controller"))
                     time.sleep(3.0)
 
                 if xinput_slot2 is None:
-                    fail("Controller did not reappear as an XInput device.",
+                    fail("Controller did not reappear in play mode.",
                          f"Firmware was flashed successfully.\n"
                          f"Backup saved to:\n{backup_path}\n\n"
                          "Import it manually via Configure Controller → Import Configuration.")
@@ -2590,7 +2591,7 @@ class MainMenu:
                     except PermissionError:
                         self.root.after(0, lambda: set_status(
                             f"{step_restore}  —  Restoring configuration…",
-                            "Waiting for Windows to release the COM port…"))
+                            "Waiting for the system to release the serial port…"))
                         time.sleep(1.5)
                     except Exception as exc:
                         last_exc = exc
@@ -2890,7 +2891,7 @@ class MainMenu:
                 # ── XInput path: send magic signal → wait for config port ──
                 self.root.after(0, lambda: set_status(
                     "Step 1 / 3  —  Switching to config mode…",
-                    "Sending magic XInput signal"))
+                    "Sending magic controller signal"))
                 try:
                     controllers = xinput_get_connected() if XINPUT_AVAILABLE else []
                     occ_devices = [c for c in controllers if c[1] in OCC_SUBTYPES]
@@ -2905,7 +2906,7 @@ class MainMenu:
                         time.sleep(0.08)
                     xinput_send_vibration(slot, 0, 0)
                 except Exception as exc:
-                    self.root.after(0, lambda: finish_err("XInput signal failed.", str(exc)))
+                    self.root.after(0, lambda: finish_err("Controller signal failed.", str(exc)))
                     return
 
                 self.root.after(0, lambda: set_status(
@@ -2945,7 +2946,7 @@ class MainMenu:
                         if occ_devices:
                             self.root.after(0, lambda: set_status(
                                 "Step 1 / 2  —  Switching to config mode…",
-                                "Controller found via XInput — sending config signal"))
+                                "Controller found in play mode — sending config signal"))
                             try:
                                 slot = occ_devices[0][0]
                                 for left, right in MAGIC_STEPS:

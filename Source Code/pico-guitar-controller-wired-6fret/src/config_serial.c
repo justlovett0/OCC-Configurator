@@ -242,6 +242,10 @@ static void send_config(const guitar_config_t *config) {
                     config->leds.count);
     pos += snprintf(buf + pos, sizeof(buf) - pos, "brightness=%d,",
                     config->leds.base_brightness);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "data_pin=%d,",
+                    config->leds.data_pin);
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "clock_pin=%d,",
+                    config->leds.clock_pin);
     pos += snprintf(buf + pos, sizeof(buf) - pos, "loop_enabled=%d,",
                     config->leds.loop_enabled);
     pos += snprintf(buf + pos, sizeof(buf) - pos, "loop_start=%d,",
@@ -413,6 +417,22 @@ static bool handle_set(guitar_config_t *config, const char *kv_str) {
         int b = atoi(val);
         if (b < 0 || b > 31) { serial_writeln("ERR:0-31"); return false; }
         config->leds.base_brightness = (uint8_t)b;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_data_pin") == 0) {
+        int pin = atoi(val);
+        if (!apa102_spi_pin_is_valid(pin, config->leds.clock_pin)) {
+            serial_writeln("ERR:invalid SPI0 pair"); return false;
+        }
+        config->leds.data_pin = (int8_t)pin;
+        serial_writeln("OK"); return true;
+    }
+    if (strcmp(key, "led_clock_pin") == 0) {
+        int pin = atoi(val);
+        if (!apa102_spi_pin_is_valid(config->leds.data_pin, pin)) {
+            serial_writeln("ERR:invalid SPI0 pair"); return false;
+        }
+        config->leds.clock_pin = (int8_t)pin;
         serial_writeln("OK"); return true;
     }
 
@@ -1072,9 +1092,9 @@ void config_mode_main(guitar_config_t *config) {
                     int idx = atoi(cmd_buf + 10);
                     if (idx >= 0 && idx < MAX_LEDS && idx < config->leds.count) {
                         serial_writeln("OK");
-                        apa102_init();
                         led_config_t tmp;
                         memcpy(&tmp, &config->leds, sizeof(led_config_t));
+                        apa102_init(&tmp);
                         uint8_t br[MAX_LEDS];
                         memset(br, 0, sizeof(br));
                         br[idx] = 31;
@@ -1084,9 +1104,9 @@ void config_mode_main(guitar_config_t *config) {
                     }
                 }
                 else if (strcmp(cmd_buf, "LED_OFF") == 0) {
-                    apa102_init();
                     led_config_t tmp;
                     memcpy(&tmp, &config->leds, sizeof(led_config_t));
+                    apa102_init(&tmp);
                     apa102_all_off(&tmp);
                     serial_writeln("OK");
                 }
