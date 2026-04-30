@@ -1,4 +1,4 @@
-import sys, os, time, struct, ctypes, json, shutil, datetime, string
+import sys, os, time, struct, ctypes, json, shutil, datetime, string, subprocess, io, contextlib
 from tkinter import messagebox
 from .constants import (NUKE_UF2_FILENAME, DEVICE_TYPE_UF2_HINTS,
                          CONFIG_MODE_VID, CONFIG_MODE_PIDS, MAX_LEDS,
@@ -7,7 +7,24 @@ from .constants import (NUKE_UF2_FILENAME, DEVICE_TYPE_UF2_HINTS,
 from .xinput_utils import (XINPUT_AVAILABLE, xinput_get_connected,
                              xinput_send_vibration, MAGIC_STEPS)
 from .utils import CONTROLLER_SIGNAL_LABEL
+from .serial_comms import PicoSerial
 #  UF2 FLASHING
+
+
+def _is_esp_platform(screen):
+    return getattr(getattr(screen, "pico", None), "platform", None) == "esp32s3"
+
+
+def _show_esp32_bootloader_instructions():
+    messagebox.showinfo(
+        "ESP32-S3 Bootloader Mode",
+        "ESP32-S3 boards do not use RP2040 BOOTSEL mass-storage mode.\n\n"
+        "To enter firmware download mode on the ESP32-S3 board:\n"
+        "  1. Hold the BOOT button\n"
+        "  2. Tap RESET / EN\n"
+        "  3. Release BOOT after the reset pulse\n\n"
+        "Then flash the ESP32 firmware with your normal ESP toolchain."
+    )
 
 
 def find_uf2_files():
@@ -34,6 +51,20 @@ def find_uf2_files():
     return sorted(found.items())
 
 
+def _firmware_search_dirs():
+    search_dirs = []
+    bundle_dir = getattr(sys, '_MEIPASS', None)
+    if bundle_dir:
+        search_dirs.append(bundle_dir)
+    script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    src_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(src_dir)
+    for d in (script_dir, parent_dir, src_dir):
+        if d not in search_dirs:
+            search_dirs.append(d)
+    return search_dirs
+
+
 def _group_uf2_files(uf2_files):
     """Group wired/wireless UF2 pairs into logical firmware families.
 
@@ -58,6 +89,193 @@ def _group_uf2_files(uf2_files):
             order.append(core)
         groups[core][variant] = path
     return [(c.replace("_", " "), groups[c]["wired"], groups[c]["wireless"]) for c in order]
+
+
+def find_esp32_firmware_bundles():
+    """Return discovered ESP32 firmware bundles from the configurator folder."""
+    found = {}
+    suffix = ".flasher_args.json"
+    for d in _firmware_search_dirs():
+        try:
+            for f in os.listdir(d):
+                if not f.endswith(suffix) or "_ESP32" not in f:
+                    continue
+                base = f[:-len(suffix)]
+                bundle = {
+                    "base_name": base,
+                    "metadata_path": os.path.join(d, f),
+                    "app_path": os.path.join(d, base + ".bin"),
+                    "bootloader_path": os.path.join(d, base + "_bootloader.bin"),
+                    "partition_path": os.path.join(d, base + "_partition-table.bin"),
+                    "flash_args_path": os.path.join(d, base + ".flash_args"),
+                }
+                if not (
+                    os.path.isfile(bundle["app_path"])
+                    and os.path.isfile(bundle["bootloader_path"])
+                    and os.path.isfile(bundle["partition_path"])
+                ):
+                    continue
+                if base not in found:
+                    found[base] = bundle
+        except OSError:
+            pass
+    return [found[k] for k in sorted(found)]
+
+
+def _group_esp32_firmware_bundles(bundles):
+    """Group wired/wireless ESP32 bundles into logical firmware families."""
+    groups = {}
+    order = []
+    for bundle in bundles:
+        stem = bundle["base_name"]
+        if stem.startswith("Wired_"):
+            core, variant = stem[6:], "wired"
+        elif stem.startswith("Wireless_"):
+            core, variant = stem[9:], "wireless"
+        else:
+            core, variant = stem, "wired"
+        if core.endswith("_ESP32"):
+            core = core[:-6]
+        if core not in groups:
+            groups[core] = {"wired": None, "wireless": None}
+            order.append(core)
+        groups[core][variant] = bundle
+    return [(c.replace("_", " "), groups[c]["wired"], groups[c]["wireless"]) for c in order]
+
+
+def _load_esp32_bundle_metadata(bundle):
+    with open(bundle["metadata_path"], "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _resolve_esp32_bundle_files(bundle, metadata):
+    flash_files = {
+        metadata.get("bootloader", {}).get("offset"): bundle["bootloader_path"],
+        metadata.get("partition-table", {}).get("offset"): bundle["partition_path"],
+        metadata.get("app", {}).get("offset"): bundle["app_path"],
+    }
+    ordered = []
+    for offset, _ in sorted(metadata.get("flash_files", {}).items(), key=lambda item: int(item[0], 0)):
+        actual_path = flash_files.get(offset)
+        if not actual_path or not os.path.isfile(actual_path):
+            raise RuntimeError(f"Missing ESP32 bundle file for offset {offset}.")
+        ordered.extend([offset, actual_path])
+    if not ordered:
+        raise RuntimeError("ESP32 flash metadata did not contain any flash offsets.")
+    return ordered
+
+
+def _build_esp32_flash_args(bundle, port):
+    metadata = _load_esp32_bundle_metadata(bundle)
+    extra = metadata.get("extra_esptool_args", {})
+    args = []
+    chip = extra.get("chip", "esp32s3")
+    before = extra.get("before")
+    after = extra.get("after")
+    if chip:
+        args.extend(["--chip", chip])
+    args.extend(["--port", port, "--baud", "460800"])
+    if before:
+        args.extend(["--before", before])
+    if after:
+        args.extend(["--after", after])
+    if not extra.get("stub", True):
+        args.append("--no-stub")
+    args.append("write_flash")
+    args.extend(metadata.get("write_flash_args", []))
+    args.extend(_resolve_esp32_bundle_files(bundle, metadata))
+    return args
+
+
+def _try_import_esptool():
+    try:
+        import esptool  # type: ignore
+        return esptool
+    except Exception:
+        return None
+
+
+def _external_esptool_candidates():
+    candidates = []
+    idf_env = os.environ.get("IDF_PYTHON_ENV_PATH")
+    if idf_env:
+        candidates.append(os.path.join(idf_env, "Scripts", "python.exe"))
+    candidates.append(r"C:\Espressif\tools\python\v6.0.1\venv\Scripts\python.exe")
+    seen = set()
+    for candidate in candidates:
+        candidate = os.path.abspath(candidate)
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        yield candidate
+
+
+def _run_external_esptool(args):
+    for python_exe in _external_esptool_candidates():
+        if not os.path.isfile(python_exe):
+            continue
+        probe = subprocess.run(
+            [python_exe, "-c", "import esptool"],
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode != 0:
+            continue
+        result = subprocess.run(
+            [python_exe, "-m", "esptool", *args],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return
+        output = (result.stdout or "") + ("\n" + result.stderr if result.stderr else "")
+        raise RuntimeError(output.strip() or "esptool failed.")
+    raise RuntimeError(
+        "esptool is not available. Install it with 'py -m pip install esptool' "
+        "or use an ESP-IDF Python environment."
+    )
+
+
+def flash_esp32_bundle(bundle, port, status_cb=None):
+    """Flash an ESP32 firmware bundle over a serial download-mode port."""
+    def _status(msg):
+        if status_cb:
+            status_cb(msg)
+
+    args = _build_esp32_flash_args(bundle, port)
+    _status(f"Flashing ESP32-S3 firmware on {port}...")
+    esptool = _try_import_esptool()
+    if esptool is not None:
+        stdout_buf = io.StringIO()
+        stderr_buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+                esptool.main(args)
+        except SystemExit as exc:
+            if exc.code not in (0, None):
+                output = (stdout_buf.getvalue() + "\n" + stderr_buf.getvalue()).strip()
+                raise RuntimeError(output or f"esptool exited with code {exc.code}.")
+        except Exception:
+            output = (stdout_buf.getvalue() + "\n" + stderr_buf.getvalue()).strip()
+            raise RuntimeError(output or "esptool failed while flashing the ESP32.")
+        return
+
+    _run_external_esptool(args)
+
+
+def find_esp32_download_target(preferred_device=None):
+    """Return an ESP32-S3 native USB download-mode target dict, or None."""
+    record = PicoSerial.find_esp_download_port_record(preferred_device)
+    if not record:
+        return None
+    return {
+        "transport": "esp32s3_download",
+        "device": record["device"],
+        "label": f"{record['label']}  ({record['device']})",
+        "platform": record["platform"],
+        "vid": record["vid"],
+        "pid": record["pid"],
+    }
 
 
 def load_fw_presets():
@@ -550,3 +768,77 @@ def enter_bootsel_for(screen):
         screen._set_status("   BOOTSEL mode — RPI-RP2 drive should appear", ACCENT_ORANGE)
     except Exception as exc:
         screen._set_status(f"   BOOTSEL failed: {exc}", ACCENT_RED)
+
+
+def _enter_bootsel_for_esp_aware(screen):
+    """ESP-aware replacement for the legacy BOOTSEL helper."""
+    if screen.pico.connected and _is_esp_platform(screen):
+        screen._set_status("   ESP32-S3 manual bootloader mode required", ACCENT_ORANGE)
+        _show_esp32_bootloader_instructions()
+        return
+
+    if screen.pico.connected:
+        if messagebox.askyesno(
+            "BOOTSEL Mode",
+            "Enter BOOTSEL mode?\n\n"
+            "The controller will appear as a USB drive (RPI-RP2)\n"
+            "for firmware flashing.",
+        ):
+            screen.pico.bootsel()
+            screen._set_status("   BOOTSEL mode - RPI-RP2 drive should appear", ACCENT_ORANGE)
+        return
+
+    if not XINPUT_AVAILABLE:
+        messagebox.showinfo(
+            "Not Connected",
+            "Connect to the controller first,\n"
+            "or hold BOOTSEL while plugging in.",
+        )
+        return
+
+    if sys.platform == "win32":
+        bootsel_prompt = "The controller isn't in Config Mode.\n\nSwitch via XInput then enter BOOTSEL?"
+    else:
+        bootsel_prompt = "The controller isn't in Config Mode.\n\nSwitch from play mode, then enter BOOTSEL?"
+
+    if not messagebox.askyesno(f"BOOTSEL via {CONTROLLER_SIGNAL_LABEL}", bootsel_prompt):
+        return
+
+    screen._set_status("   Switching to config mode...", ACCENT_BLUE)
+    controllers = xinput_get_connected()
+    if not controllers:
+        screen._set_status("   No controllers found", ACCENT_RED)
+        return
+
+    slot = controllers[0][0]
+    for left, right in MAGIC_STEPS:
+        xinput_send_vibration(slot, left, right)
+        time.sleep(0.08)
+    xinput_send_vibration(slot, 0, 0)
+
+    screen._set_status("   Waiting for config port...", ACCENT_BLUE)
+    port = screen._wait_for_port(8.0)
+    if not port:
+        screen._set_status("   Failed to enter config mode", ACCENT_RED)
+        return
+
+    try:
+        screen.pico.connect(port)
+        for _ in range(3):
+            if screen.pico.ping():
+                break
+            time.sleep(0.3)
+
+        if _is_esp_platform(screen):
+            screen._set_status("   ESP32-S3 manual bootloader mode required", ACCENT_ORANGE)
+            screen.pico.disconnect()
+            _show_esp32_bootloader_instructions()
+        else:
+            screen._set_status("   Sending BOOTSEL command...", ACCENT_ORANGE)
+            screen.pico.bootsel()
+            screen._set_status("   BOOTSEL mode - RPI-RP2 drive should appear", ACCENT_ORANGE)
+    except Exception as exc:
+        screen._set_status(f"   BOOTSEL failed: {exc}", ACCENT_RED)
+
+
+enter_bootsel_for = _enter_bootsel_for_esp_aware

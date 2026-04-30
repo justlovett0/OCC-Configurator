@@ -16,7 +16,7 @@ from .firmware_utils import (find_rpi_rp2_drive, find_rpi_rp2_drive_info,
                               get_bundled_fw_date, get_bundled_fw_date_str, parse_fw_date,
                               flash_uf2, flash_uf2_with_reboot, enter_bootsel_for,
                               flash_resetfw_and_wait, find_uf2_files, find_resetFW_uf2,
-                              find_uf2_for_device_type)
+                              find_uf2_for_device_type, find_esp32_download_target)
 from .xinput_utils import XINPUT_AVAILABLE, xinput_get_connected, MAGIC_STEPS, xinput_send_vibration, ERROR_SUCCESS
 from .utils import (_center_window, _centered_dialog, _find_preset_configs,
                      _format_detected_status, _signal_unavailable_message)
@@ -53,6 +53,8 @@ class MainMenu:
         # before we switch screens.  POLL_MS=1000ms so 2 polls = ~2s minimum.
         self._bootsel_stable_count = 0
         self._BOOTSEL_STABLE_NEEDED = 2   # polls required (~2s at 1000ms each)
+        self._esp_flash_stable_count = 0
+        self._esp_flash_stable_port = None
         # Alternatefw one-time popup: shown at most once per session
         self._alternatefw_popup_shown = False
         # GP2040-CE one-time popup: shown at most once per session
@@ -281,6 +283,7 @@ class MainMenu:
         # screens.  This prevents bouncing when the drive briefly appears and
         # disappears during a factory reset / reboot cycle.
         drive = find_rpi_rp2_drive()
+        esp_target = find_esp32_download_target()
         if drive:
             self._bootsel_stable_count += 1
             hold_active = self._factory_reset_screen_hold_active()
@@ -293,6 +296,24 @@ class MainMenu:
                 return   # poll stops here; flash screen has its own poll loop
         else:
             self._bootsel_stable_count = 0   # reset on any miss
+        if not drive and esp_target:
+            if esp_target["device"] == self._esp_flash_stable_port:
+                self._esp_flash_stable_count += 1
+            else:
+                self._esp_flash_stable_port = esp_target["device"]
+                self._esp_flash_stable_count = 1
+            hold_active = self._factory_reset_screen_hold_active()
+            if self._esp_flash_stable_count >= self._BOOTSEL_STABLE_NEEDED \
+                    and self._on_flash_screen \
+                    and not self._factory_reset_in_progress \
+                    and not hold_active:
+                self._esp_flash_stable_count = 0
+                self._esp_flash_stable_port = None
+                self._on_flash_screen(esp_target)
+                return
+        else:
+            self._esp_flash_stable_count = 0
+            self._esp_flash_stable_port = None
         self._refresh_controller_status()
         self._refresh_firmware_status()
         self._refresh_reset_card()
@@ -463,6 +484,7 @@ class MainMenu:
         if getattr(self, '_check_in_progress', False):
             return
         drive         = find_rpi_rp2_drive()
+        esp_target    = find_esp32_download_target()
         config_port   = PicoSerial.find_config_port()
         xinput_count  = getattr(self, '_xinput_count', 0)        # non-dongle OCC devices
         dongle_count  = getattr(self, '_xinput_dongle_count', 0)
@@ -479,6 +501,8 @@ class MainMenu:
         #   5. Nothing detected
         if drive:
             new_state = ("bootsel", drive)
+        elif esp_target:
+            new_state = ("esp_download", esp_target)
         elif config_port and not self._backup_in_progress:
             new_state = ("config", config_port)
         elif xinput_count:
@@ -509,6 +533,15 @@ class MainMenu:
                 text="Ready to flash firmware.", fg=TEXT_DIM)
             self._build_flash_button(value)
 
+        elif state == "esp_download":
+            self._clear_fw_check_result()
+            self._fw_icon.config(text="â—", fg=ACCENT_GREEN)
+            self._fw_status.config(
+                text=f"ESP32-S3 in download mode  Â·  {value['device']}", fg=ACCENT_GREEN)
+            self._fw_detail.config(
+                text="Ready to flash ESP32 firmware.", fg=TEXT_DIM)
+            self._build_flash_button(value)
+
         elif state == "config":
             # Try to read device name and type from the connected port
             device_name = "Controller"
@@ -522,6 +555,17 @@ class MainMenu:
                 device_type = cfg.get("device_type", "unknown")
             except Exception:
                 pass
+
+            port_record = PicoSerial.find_port_record(value) or {}
+            if port_record.get("platform") == "esp32s3":
+                self._clear_fw_check_result()
+                self._fw_icon.config(text="â—", fg=ACCENT_GREEN)
+                self._fw_status.config(
+                    text=f"{device_name}  â€”  Config mode  Â·  {value}", fg=ACCENT_GREEN)
+                self._fw_detail.config(
+                    text="ESP32 reflashing requires download mode: hold BOOT, tap RESET / EN, then return here.",
+                    fg=TEXT_DIM)
+                return
 
             uf2 = find_uf2_for_device_type(device_type)
             self._fw_icon.config(text="●", fg=ACCENT_GREEN)
@@ -610,7 +654,7 @@ class MainMenu:
             self._fw_icon.config(text="○", fg=TEXT_DIM)
             self._fw_status.config(text="No controller detected", fg=TEXT_DIM)
             self._fw_detail.config(
-                text="Connect a controller or hold BOOTSEL while plugging in.",
+                text="Connect a controller, hold BOOTSEL for a Pico, or enter ESP32-S3 download mode with BOOT + RESET.",
                 fg=TEXT_DIM)
 
     def _make_fw_target_key(self, uf2_path, device_type, via, cfg_port):
@@ -3063,6 +3107,8 @@ class MainMenu:
                 pass
             self._flash_screen_job = None
         self._bootsel_stable_count = 0   # always start fresh debounce on show
+        self._esp_flash_stable_count = 0
+        self._esp_flash_stable_port = None
         # Reset Alternatefw detection so incompatible-firmware check reruns
         # fresh every time the main menu is shown (e.g. after firmware switch).
         self._alternatefw_popup_shown = False

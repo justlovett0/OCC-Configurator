@@ -1,34 +1,89 @@
 import serial
 import serial.tools.list_ports
 import time
-from .constants import CONFIG_MODE_VID, CONFIG_MODE_PIDS, BAUD_RATE, TIMEOUT
-#  SERIAL COMMUNICATION
+
+from .constants import BAUD_RATE, TIMEOUT, get_occ_port_metadata, get_esp_download_metadata
 
 
 class PicoSerial:
     def __init__(self):
         self.ser = None
+        self.platform = None
+        self.usb_vid = None
+        self.usb_pid = None
+
+    @staticmethod
+    def _port_metadata(port_info):
+        return get_occ_port_metadata(port_info.vid, port_info.pid)
+
+    @staticmethod
+    def _esp_download_metadata(port_info):
+        return get_esp_download_metadata(port_info.vid, port_info.pid)
+
+    @classmethod
+    def find_port_record(cls, device=None):
+        """Return metadata for the first OCC config port, or the named device."""
+        for p in serial.tools.list_ports.comports():
+            meta = cls._port_metadata(p)
+            if not meta:
+                continue
+            if device is None or p.device == device:
+                return {
+                    "device": p.device,
+                    "label": meta["label"],
+                    "platform": meta.get("platform", "rp2040"),
+                    "vid": p.vid,
+                    "pid": p.pid,
+                }
+        return None
+
+    @classmethod
+    def find_esp_download_port_record(cls, device=None):
+        """Return metadata for the first supported ESP download-mode port."""
+        for p in serial.tools.list_ports.comports():
+            meta = cls._esp_download_metadata(p)
+            if not meta:
+                continue
+            if device is None or p.device == device:
+                return {
+                    "device": p.device,
+                    "label": meta["label"],
+                    "platform": meta.get("platform", "esp32s3"),
+                    "vid": p.vid,
+                    "pid": p.pid,
+                    "description": p.description,
+                }
+        return None
+
+    @staticmethod
+    def find_esp_download_port():
+        record = PicoSerial.find_esp_download_port_record()
+        return record["device"] if record else None
 
     @staticmethod
     def find_config_port():
         """Return the first COM port that belongs to any known OCC firmware variant."""
-        for p in serial.tools.list_ports.comports():
-            if p.vid == CONFIG_MODE_VID and p.pid in CONFIG_MODE_PIDS:
-                return p.device
-        return None
+        record = PicoSerial.find_port_record()
+        return record["device"] if record else None
 
     @staticmethod
     def list_ports():
         result = []
         for p in serial.tools.list_ports.comports():
-            is_pico = (p.vid == CONFIG_MODE_VID and p.pid in CONFIG_MODE_PIDS)
-            device_label = CONFIG_MODE_PIDS.get(p.pid, "OCC Device") if is_pico else p.description
-            label = f"{p.device} — {device_label}" if is_pico else f"{p.device} — {p.description}"
-            result.append((p.device, label, is_pico))
+            meta = PicoSerial._port_metadata(p)
+            is_occ = meta is not None
+            device_label = meta["label"] if is_occ else p.description
+            label = f"{p.device} - {device_label}" if is_occ else f"{p.device} - {p.description}"
+            result.append((p.device, label, is_occ))
         return result
 
     def connect(self, port):
         self.disconnect()
+        record = self.find_port_record(port)
+        if record:
+            self.platform = record["platform"]
+            self.usb_vid = record["vid"]
+            self.usb_pid = record["pid"]
         last_exc = None
         for attempt in range(5):
             try:
@@ -43,14 +98,7 @@ class PicoSerial:
         raise last_exc
 
     def flush_input(self):
-        """Discard any bytes sitting in the OS receive buffer.
-
-        Call this after stopping a SCAN/MONITOR session and before sending new
-        commands.  The firmware streams PIN:/MVAL: lines continuously while in
-        scan mode; those lines accumulate in the OS buffer and will be returned
-        by the next readline() call — corrupting the response to whatever
-        command follows.  reset_input_buffer() atomically discards them all.
-        """
+        """Discard any bytes sitting in the OS receive buffer."""
         try:
             if self.connected:
                 self.ser.reset_input_buffer()
@@ -64,6 +112,9 @@ class PicoSerial:
             except Exception:
                 pass
         self.ser = None
+        self.platform = None
+        self.usb_vid = None
+        self.usb_pid = None
 
     @property
     def connected(self):
@@ -83,11 +134,6 @@ class PicoSerial:
             return False
 
     def get_fw_date(self):
-        """Query the firmware build date via GET_FW_DATE.
-
-        Returns the raw date string (e.g. 'Jun 15 2025') or None if
-        the firmware doesn't support this command (older builds).
-        """
         try:
             r = self.send("GET_FW_DATE")
             if r.startswith("FW_DATE:"):
@@ -97,19 +143,7 @@ class PicoSerial:
         return None
 
     def get_config(self):
-        """Read config.
-        Firmware sends:
-          DEVTYPE:<type>
-          CFG:...
-          LED:...
-          LED_COLORS:...
-          LED_MAP:...
-        Returns a dict with all key/value pairs plus 'device_type'.
-        """
-        # First line is usually DEVTYPE, but stale serial data can occasionally
-        # leave an OK/PIN:/blank line ahead of the actual response. Scan forward
-        # for the first DEVTYPE:/CFG: line instead of assuming the first line is
-        # always the start of the GET_CONFIG response.
+        """Read config and return a dict with all key/value pairs plus device_type."""
         self.ser.write(b"GET_CONFIG\n")
         self.ser.flush()
 
@@ -133,7 +167,6 @@ class PicoSerial:
             device_type = r[8:].strip()
             cfg_line = _read_config_line()
         elif r.startswith("CFG:"):
-            # Old firmware without DEVTYPE — treat as unknown
             cfg_line = r
         else:
             raise ValueError(f"Bad response: {r}")
@@ -150,7 +183,7 @@ class PicoSerial:
         for _ in range(3):
             line = self.ser.readline().decode("ascii", errors="replace").strip()
             if not line:
-                break  # timeout = no more lines (e.g. retro controller has no LEDs)
+                break
             if line.startswith("LED:"):
                 for kv in line[4:].split(","):
                     kv = kv.strip()
@@ -181,11 +214,6 @@ class PicoSerial:
             raise ValueError("ROTATE_BLE_IDENTITY failed")
 
     def start_scan(self):
-        """Start SCAN. Returns list of pre-scan lines (like I2C:ADXL345) before OK."""
-        # If the UI just navigated away from a scanning page, STOP may have been
-        # sent fire-and-forget. Give firmware a tiny chance to consume it before
-        # sending SCAN, otherwise the new SCAN can be read by the old scan loop
-        # and ignored while the UI already says "waiting".
         old_timeout = self.ser.timeout
         try:
             self.ser.write(b"STOP\n")
@@ -217,7 +245,7 @@ class PicoSerial:
                 line = self.ser.readline().decode("ascii", errors="replace").strip()
                 if line == "OK":
                     return pre_lines
-                elif line:
+                if line:
                     pre_lines.append(line)
         finally:
             self.ser.timeout = old_timeout
@@ -233,7 +261,6 @@ class PicoSerial:
                 return
 
     def request_stop_scan(self):
-        """Send STOP without waiting for the firmware acknowledgement."""
         try:
             if self.connected:
                 self.ser.write(b"STOP\n")
@@ -251,55 +278,32 @@ class PicoSerial:
             self.ser.timeout = old_timeout
 
     def start_monitor_adc(self, pin):
-        """Start ADC monitoring. Returns 'OK' or raises."""
         r = self.send(f"MONITOR_ADC:{pin}")
         if r != "OK":
             raise ValueError(f"MONITOR_ADC: {r}")
 
     def start_monitor_i2c(self, axis=None):
-        """Start I2C accelerometer monitoring.
-
-        axis=0/1/2 — single-axis mode (MONITOR_I2C:<axis>): firmware sends only
-        MVAL:<value> at 50 Hz. Used by the live bar graph in the configurator.
-
-        axis=None — all-axes debug mode (MONITOR_I2C): firmware sends MVAL_X/Y/Z
-        at 20 Hz. Used by the debug console MONITOR I2C button.
-        """
         cmd = f"MONITOR_I2C:{axis}" if axis is not None else "MONITOR_I2C"
         r = self.send(cmd)
         if r != "OK":
             raise ValueError(f"{cmd}: {r}")
 
     def start_monitor_digital(self, pin):
-        """Start digital pin monitoring."""
         r = self.send(f"MONITOR_DIG:{pin}")
         if r != "OK":
             raise ValueError(f"MONITOR_DIG: {r}")
 
     def stop_monitor(self):
-        """Stop monitoring (same as stop_scan)."""
         self.stop_scan()
 
     def request_stop_monitor(self):
-        """Send STOP for monitor mode without waiting for acknowledgement."""
         self.request_stop_scan()
 
     def drain_monitor_latest(self, timeout=0.05):
-        """Drain ALL buffered MVAL lines and return only the most recent value.
-
-        This prevents the serial buffer from building up a backlog of stale
-        readings. If the consumer (UI) is slower than the producer (firmware),
-        older queued values are discarded so the bar graph always shows the
-        current sensor state.
-
-        Returns (latest_int_value_or_None, list_of_non_mval_lines).
-        The non-MVAL lines (ERR:, etc.) are returned for the debug console.
-        """
         latest_val = None
         passthrough = []
 
         try:
-            # Block briefly waiting for at least one line to arrive
             old_timeout = self.ser.timeout
             self.ser.timeout = timeout
             try:
@@ -315,8 +319,6 @@ class PicoSerial:
             finally:
                 self.ser.timeout = old_timeout
 
-            # Now drain everything else already sitting in the OS buffer —
-            # no blocking, just consume what's there right now.
             self.ser.timeout = 0
             try:
                 while self.ser.in_waiting:

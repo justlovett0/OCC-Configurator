@@ -178,18 +178,41 @@ RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases"
 
 
 CONFIG_MODE_VID = 0x2E8A
+ESP_CONFIG_MODE_VID = 0x303A
+ESP_DOWNLOAD_MODE_VID = 0x303A
 
-# All config-mode PIDs recognised by this configurator.
-# Add a new entry here whenever a new firmware variant is created.
-# Key = PID (int), Value = human-readable device label shown in port list.
-CONFIG_MODE_PIDS = {
-    0xF00D: "Guitar Config",
-    0xF00E: "Drum Kit Config",
-    0xF00F: "Retro Gamepad Config",
-    0xF010: "Pedal Config",
-    0xF011: "Keyboard Macro Config",
-    0xF012: "Arcade Stick Config",
+# All OCC config-mode USB IDs recognised by this configurator.
+# Key = (vid, pid), Value = metadata used for port detection and UI labels.
+CONFIG_MODE_USB_IDS = {
+    (0x2E8A, 0xF00D): {"label": "Guitar Config", "platform": "rp2040"},
+    (0x2E8A, 0xF00E): {"label": "Drum Kit Config", "platform": "rp2040"},
+    (0x2E8A, 0xF00F): {"label": "Retro Gamepad Config", "platform": "rp2040"},
+    (0x2E8A, 0xF010): {"label": "Pedal Config", "platform": "rp2040"},
+    (0x2E8A, 0xF011): {"label": "Keyboard Macro Config", "platform": "rp2040"},
+    (0x2E8A, 0xF012): {"label": "Arcade Stick Config", "platform": "rp2040"},
+    (0x303A, 0x10D1): {"label": "ESP32-S3 Guitar Config", "platform": "esp32s3"},
+    (0x303A, 0x10D2): {"label": "ESP32-S3 Wireless Guitar Config", "platform": "esp32s3"},
 }
+
+# Back-compat helpers used by older configurator code paths.
+CONFIG_MODE_PIDS = {
+    pid: meta["label"]
+    for (vid, pid), meta in CONFIG_MODE_USB_IDS.items()
+    if vid == CONFIG_MODE_VID
+}
+
+
+def get_occ_port_metadata(vid, pid):
+    return CONFIG_MODE_USB_IDS.get((vid, pid))
+
+
+ESP_DOWNLOAD_USB_IDS = {
+    (0x303A, 0x1001): {"label": "ESP32-S3 Download Mode", "platform": "esp32s3"},
+}
+
+
+def get_esp_download_metadata(vid, pid):
+    return ESP_DOWNLOAD_USB_IDS.get((vid, pid))
 BAUD_RATE = 115200
 TIMEOUT = 2.0
 

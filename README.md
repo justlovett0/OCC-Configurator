@@ -69,11 +69,32 @@
 1. Download the latest release from the [Releases](https://github.com/justlovett0/OCC-Configurator/releases) page.
 2. Run `OCC_Configurator.exe` — no installation needed.
 3. Hold BOOTSEL on your Pico and plug it in via USB. The configurator will detect it and display the firmware selection screen.
-4. Select the firmware variant that matches your controller/device type and click it to flash.
+4. Select the firmware variant or controller preset that matches your controller/device type and click it to flash.
 5. Once flashed, click either of the **Configure Controller** options from the main menu to open the configurator and assign your button pins.
+	a. Some controller presets will popup "Quick Tune," which will assist in setting up Axis or LEDs.
 6. Click **Save & Play Mode** to write the config to flash and return to play mode.
 
-For new users, I recommend you use the **Easy Config** wizard for guided step-by-step pin assignment, whammy calibration, tilt setup, and LED configuration.
+For new users, I recommend you use the **Easy Config** wizard for guided step-by-step pin assignment, whammy calibration, tilt setup, and LED configuration. (Not all controller types supported)
+
+## Converting Controller to OCC
+
+- OCC will attempt to auto-detect a non-OCC controller.
+- OCC will always detect any Raspberry Pi Pico in BOOTSEL/USB mode.
+- Hold `BOOTSEL` while connecting a Pico to your PC, or use the tool that configures your current controller to put it in factory mode.
+
+If a controller with different firmware is detected, OCC will prompt you to switch it to OCC firmware:
+
+<p align="center">
+  <img src="Screenshots/OCC_Detect.png" alt="OCC detects a controller with different firmware and prompts to switch to OCC firmware" />
+</p>
+
+If your current controller software includes a factory reset or reboot-to-USB option, you can use that instead of reconnecting while holding `BOOTSEL`:
+
+<p align="center">
+  <img src="Screenshots/OtherFWReset.png" alt="Factory reset or reboot-to-USB option that puts the controller into BOOTSEL mode" />
+</p>
+
+Once the controller is in BOOTSEL/USB mode, return to the OCC firmware selection screen and flash the correct OCC firmware for your controller.
 
 ## Building from Source
 

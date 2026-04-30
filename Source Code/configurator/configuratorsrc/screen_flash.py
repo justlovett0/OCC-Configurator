@@ -6,8 +6,10 @@ from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT
                          NUKE_UF2_FILENAME, OCC_SUBTYPES, DEVICE_TYPE_TO_GUITAR_PROFILE)
 from .fonts import FONT_UI, _resource_path
 from .widgets import RoundedButton, CustomDropdown, HelpDialog, HelpButton, _help_text
-from .firmware_utils import (find_uf2_files, _group_uf2_files, load_fw_presets,
+from .firmware_utils import (find_uf2_files, _group_uf2_files, find_esp32_firmware_bundles,
+                              _group_esp32_firmware_bundles, load_fw_presets,
                               _apply_preset_config, flash_uf2, flash_uf2_with_reboot,
+                              flash_esp32_bundle, find_esp32_download_target,
                               find_rpi_rp2_drive, find_rpi_rp2_drive_info,
                               get_bundled_fw_date_str, find_resetFW_uf2)
 from .serial_comms import PicoSerial
@@ -44,6 +46,8 @@ class FlashFirmwareScreen:
         self._last_drive = None
         self._help_dialog = None
         self._busy = False        # suppresses _poll navigation during preset install
+        self._flash_target = None
+        self._transport = "rp2040"
 
         self.frame = tk.Frame(root, bg=BG_MAIN)
         self._build()
@@ -60,6 +64,7 @@ class FlashFirmwareScreen:
         ("Arcade Stick",           17, 1, 0, "Wired only",           "Fight stick layout: 4 directional + 8 action + 5 nav buttons. Stick maps to D-Pad, L-Stick, or R-Stick."),
         ("Keyboard Macro Pad",     16, 0, 0, "Wired only",           "Programmable macro board. Each button maps to a custom keyboard shortcut."),
         ("Dongle 4Channel",         0, 0, 0, "Wireless (receiver)", "USB wireless receiver. Bridges up to 4 OCC wireless controllers to a single USB port. Non-configurable."),
+        ("Dongle 3Channel ESP32",   0, 0, 0, "Wireless (receiver)", "ESP32-S3 USB wireless receiver. Bridges up to 3 OCC wireless controllers to a single USB port. Non-configurable."),
     ]
 
     def _open_firmware_info(self):
@@ -263,9 +268,10 @@ class FlashFirmwareScreen:
         rst_inner = tk.Frame(rst_card, bg=BG_CARD)
         rst_inner.pack(fill="x", padx=20, pady=14)
 
-        tk.Label(rst_inner, text="Reset Pico",
-                 bg=BG_CARD, fg=ACCENT_RED,
-                 font=(FONT_UI, 9, "bold")).pack(anchor="w", pady=(0, 4))
+        self._rst_title = tk.Label(rst_inner, text="Reset Pico",
+                                   bg=BG_CARD, fg=ACCENT_RED,
+                                   font=(FONT_UI, 9, "bold"))
+        self._rst_title.pack(anchor="w", pady=(0, 4))
 
         rst_body = tk.Frame(rst_inner, bg=BG_CARD)
         rst_body.pack(fill="x")
@@ -307,15 +313,25 @@ class FlashFirmwareScreen:
 
     def _refresh_device_combo(self):
         """Populate the device dropdown from live USB detection."""
-        info = find_rpi_rp2_drive_info()
-        if info:
-            drive, label = info
-            self._device_combo.config(values=[label])
-            self._device_var.set(label)
-            self._device_combo.current(0)
+        if self._transport == "esp32s3":
+            target = find_esp32_download_target(
+                preferred_device=self._flash_target.get("device") if self._flash_target else None
+            )
+            if target:
+                self._device_combo.config(values=[target["label"]])
+                self._device_var.set(target["label"])
+                self._device_combo.current(0)
+                return
         else:
-            self._device_combo.config(values=["No USB device detected"])
-            self._device_var.set("No USB device detected")
+            info = find_rpi_rp2_drive_info()
+            if info:
+                drive, label = info
+                self._device_combo.config(values=[label])
+                self._device_var.set(label)
+                self._device_combo.current(0)
+                return
+        self._device_combo.config(values=["No USB device detected"])
+        self._device_var.set("No USB device detected")
 
     # Tab management
 
@@ -810,7 +826,10 @@ class FlashFirmwareScreen:
         for w in self._tile_frame.winfo_children():
             w.destroy()
 
-        groups = _group_uf2_files(find_uf2_files())
+        if self._transport == "esp32s3":
+            groups = _group_esp32_firmware_bundles(find_esp32_firmware_bundles())
+        else:
+            groups = _group_uf2_files(find_uf2_files())
         tile_total_h = self.TILE_IMG_H + self.TILE_LBL_H
 
         # Always show exactly COLS * FIXED_ROWS tiles
@@ -907,14 +926,14 @@ class FlashFirmwareScreen:
                     la.config(bg="#222226")
                     nl.config(bg="#222226")
                 def _click(e, wired=wired_path, wireless=wireless_path, dname=display_name):
-                    drive = find_rpi_rp2_drive()
-                    if not drive:
+                    target = self._current_target()
+                    if not target:
                         return
                     choice = _ask_wired_or_wireless(self.root, has_wired=bool(wired), has_wireless=bool(wireless))
                     if choice == "wireless":
-                        self._do_flash(wireless, drive, "Wireless")
+                        self._do_flash(wireless, target, "Wireless")
                     elif choice == "wired":
-                        self._do_flash(wired, drive, "Wired")
+                        self._do_flash(wired, target, "Wired")
 
                 def _rclick(e, wired=wired_path, wireless=wireless_path, dname=display_name):
                     self._on_tile_right_click(wired, wireless, dname, e.x_root, e.y_root)
@@ -933,6 +952,10 @@ class FlashFirmwareScreen:
         Searches the same directories find_uf2_files() uses.
         Returns the full path if found, else None.
         """
+        if isinstance(uf2_path, dict):
+            uf2_path = uf2_path.get("app_path")
+        if not uf2_path:
+            return None
         base = os.path.splitext(os.path.basename(uf2_path))[0]
         gif_name = base + ".gif"
         search_dirs = []
@@ -952,19 +975,19 @@ class FlashFirmwareScreen:
 
     def _on_tile_right_click(self, wired_path, wireless_path, display_name, x, y):
         """Right-click context menu on a firmware tile - manually pick wired or wireless."""
-        drive = find_rpi_rp2_drive()
-        if not drive:
+        target = self._current_target()
+        if not target:
             return
 
         def _flash_wireless():
             # User explicitly picked Wireless from context menu - just flash it
-            self._do_flash(wireless_path, drive, "Wireless")
+            self._do_flash(wireless_path, target, "Wireless")
 
         menu = tk.Menu(self.root, tearoff=0, bg=BG_CARD, fg=TEXT,
                        activebackground=ACCENT_BLUE, activeforeground="white")
         if wired_path:
             menu.add_command(label="Wired",
-                             command=lambda: self._do_flash(wired_path, drive, "Wired"))
+                             command=lambda: self._do_flash(wired_path, target, "Wired"))
         else:
             menu.add_command(label="Wired  (not available)", state="disabled")
         if wireless_path:
@@ -1059,7 +1082,7 @@ class FlashFirmwareScreen:
 
     # Flashing
 
-    def _do_flash(self, uf2_path, drive, variant_label="", no_wireless_note=False):
+    def _do_flash(self, firmware_payload, target, variant_label="", no_wireless_note=False):
         # Go back to main menu before flashing - prevents stale config screen
         if self._on_back:
             self._on_back()
@@ -1095,7 +1118,10 @@ class FlashFirmwareScreen:
         def _worker():
             error = None
             try:
-                flash_uf2_with_reboot(uf2_path, drive)
+                if target.get("transport") == "esp32s3_download":
+                    flash_esp32_bundle(firmware_payload, target["device"])
+                else:
+                    flash_uf2_with_reboot(firmware_payload, target["drive"])
             except Exception as e:
                 error = e
             # Hand results back to the UI thread
@@ -1106,7 +1132,7 @@ class FlashFirmwareScreen:
 
             if error:
                 _centered_dialog(self.root, "Flash Error",
-                                 f"Failed to copy firmware:\n{error}", kind="error")
+                                 f"Failed to flash firmware:\n{error}", kind="error")
                 return
 
             # 3. Success dialog - auto-closes after 3 seconds
@@ -1135,6 +1161,13 @@ class FlashFirmwareScreen:
     # Factory Reset
 
     def _do_factory_reset(self):
+        if self._transport == "esp32s3":
+            messagebox.showinfo(
+                "ESP32-S3",
+                "Factory Reset via resetFW.uf2 is Pico-only.\n\n"
+                "For ESP32-S3 boards, re-enter download mode and flash the firmware you want instead.",
+            )
+            return
         drive = find_rpi_rp2_drive()
         if not drive:
             messagebox.showwarning("Not Found",
@@ -1159,16 +1192,29 @@ class FlashFirmwareScreen:
     # Polling
 
     def _poll(self):
-        info = find_rpi_rp2_drive_info()
-        if info:
-            drive, label = info
-            self._rst_drive_label.config(text=f"Pico USB Detected: {label}")
-            self._last_drive = drive
-            self._refresh_device_combo()
+        if self._transport == "esp32s3":
+            target = find_esp32_download_target(
+                preferred_device=self._flash_target.get("device") if self._flash_target else None
+            )
+            if target:
+                self._flash_target = target
+                self._rst_drive_label.config(text=f"ESP32-S3 Detected: {target['label']}")
+                self._refresh_device_combo()
+            else:
+                if not self._busy:
+                    self._on_back()
+                    return
         else:
-            if not self._busy:   # stay on screen during preset install
-                self._on_back()
-                return
+            info = find_rpi_rp2_drive_info()
+            if info:
+                drive, label = info
+                self._rst_drive_label.config(text=f"Pico USB Detected: {label}")
+                self._last_drive = drive
+                self._refresh_device_combo()
+            else:
+                if not self._busy:   # stay on screen during preset install
+                    self._on_back()
+                    return
         self._poll_job = self.root.after(self.POLL_MS, self._poll)
 
     # Show / Hide
@@ -1178,14 +1224,39 @@ class FlashFirmwareScreen:
         # Clear any configurator menu bar left over from App / DrumApp
         self._empty_menu = getattr(self, '_empty_menu', None) or tk.Menu(self.root)
         self.root.config(menu=self._empty_menu)
+        if isinstance(drive, dict) and drive.get("transport") == "esp32s3_download":
+            self._flash_target = dict(drive)
+            self._transport = "esp32s3"
+        else:
+            self._flash_target = {"transport": "rp2040_bootsel", "drive": drive}
+            self._transport = "rp2040"
         self._switch_tab("firmware")
+        if self._transport == "esp32s3":
+            self._subtitle.config(
+                text="ESP32-S3 download mode detected!\nChoose firmware to flash over USB serial."
+            )
+            self._pres_tab_f.grid_remove()
+            self._fw_tab_f.grid_configure(column=0, columnspan=2, sticky="nsew")
+            self._rst_title.config(text="ESP32-S3 Flash Mode", fg=ACCENT_BLUE)
+            self._rst_btn.set_state("disabled")
+            self._rst_drive_label.config(
+                text=f"ESP32-S3 Detected: {self._flash_target.get('label', self._flash_target.get('device', '--'))}"
+            )
+        else:
+            self._subtitle.config(
+                text="Pico in BOOTSEL detected!\nConfirm device and choose firmware."
+            )
+            self._pres_tab_f.grid()
+            self._fw_tab_f.grid_configure(column=0, columnspan=1, sticky="nsew")
+            self._rst_title.config(text="Reset Pico", fg=ACCENT_RED)
         self._refresh_device_combo()
-        info = find_rpi_rp2_drive_info()
-        if info:
-            _, label = info
-            self._rst_drive_label.config(text=f"Pico USB Detected: {label}")
-        elif drive:
-            self._rst_drive_label.config(text=f"Pico USB Detected: {drive}")
+        if self._transport == "rp2040":
+            info = find_rpi_rp2_drive_info()
+            if info:
+                _, label = info
+                self._rst_drive_label.config(text=f"Pico USB Detected: {label}")
+            elif drive:
+                self._rst_drive_label.config(text=f"Pico USB Detected: {drive}")
         self._build_tiles()   # refresh tile list each time we appear
         self.frame.pack(fill="both", expand=True)
         self.frame.after(60, self._reflow_tiles)  # size tiles to fit after render
@@ -1196,3 +1267,16 @@ class FlashFirmwareScreen:
             self.root.after_cancel(self._poll_job)
             self._poll_job = None
         self.frame.pack_forget()
+
+    def _current_target(self):
+        if self._transport == "esp32s3":
+            return find_esp32_download_target(
+                preferred_device=self._flash_target.get("device") if self._flash_target else None
+            )
+        info = find_rpi_rp2_drive_info()
+        if info:
+            drive, label = info
+            return {"transport": "rp2040_bootsel", "drive": drive, "label": label}
+        if self._flash_target and self._flash_target.get("drive"):
+            return dict(self._flash_target)
+        return None
