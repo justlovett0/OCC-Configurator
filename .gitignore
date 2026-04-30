@@ -1,17 +1,10 @@
 # Local-only files
-CLAUDE.md
-ARCHITECTURE.md
-detailedcontext.md
 push.bat
 pushtorelease.bat
 OCC Configurator v0.20.exe
 OCC Configurator Linux ELF v0_20
 OCC Bridge Setup.exe
 New Version Changes.txt
-
-# GSD planning & Claude internals
-.planning/
-.claude/
 
 # CMake build output
 build/
@@ -33,3 +26,14 @@ bin/
 obj/
 *.user
 artifacts/
+
+# Keep README/reference screenshots tracked
+!Screenshots/
+!Screenshots/*.png
+!Screenshots/*.PNG
+!Screenshots/*.jpg
+!Screenshots/*.JPG
+!Screenshots/*.jpeg
+!Screenshots/*.JPEG
+!Screenshots/*.gif
+!Screenshots/*.GIF
