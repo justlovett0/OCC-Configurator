@@ -503,10 +503,12 @@ def main():
           return
       debug_log("Update check started")
       try:
-          latest, url = _fetch_latest_release()
+          release_info = _fetch_latest_release()
+          latest = release_info.get("version") if release_info else None
           if latest and _version_is_newer(latest, APP_VERSION):
-              debug_log(f"Update available: {latest}")
-              root.after(0, lambda: _show_update_dialog(root, latest, url))
+              asset_state = "with auto-update asset" if release_info.get("asset_url") else "manual download only"
+              debug_log(f"Update available: {latest} ({asset_state})")
+              root.after(0, lambda info=release_info: _show_update_dialog(root, info))
           else:
               debug_log("Update check complete: no newer release found")
       except Exception as exc:
