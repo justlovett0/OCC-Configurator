@@ -1457,7 +1457,7 @@ class EasyConfigScreen:
                  bg=BG_CARD, fg=TEXT, font=(FONT_UI, 11)).pack(anchor="w", pady=(0, 4))
         tk.Label(f,
                  text="Digital: any GPIO 0\u201322 (on/off).\n"
-                      "Analog: ADC pins GPIO 26\u201328 (potentiometer \u2014 recommended for full range).",
+                      "Analog: ADC pins GPIO 26\u201329 (potentiometer \u2014 recommended for full range).",
                  bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9)).pack(anchor="w", pady=(0, 14))
 
         mode_var = tk.StringVar(value=self.detected.get("whammy_mode", "analog"))
@@ -1466,7 +1466,7 @@ class EasyConfigScreen:
         tk.Label(mode_row, text="Mode:", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 9)).pack(side="left", padx=(0, 10))
         for val, lbl in [("digital", "Digital  (GPIO 0\u201322)"),
-                          ("analog",  "Analog   (GPIO 26\u201328, recommended)")]:
+                          ("analog",  "Analog   (GPIO 26\u201329, recommended)")]:
             tk.Radiobutton(mode_row, text=lbl, variable=mode_var, value=val,
                             bg=BG_CARD, fg=TEXT, selectcolor=BG_INPUT,
                             activebackground=BG_CARD, activeforeground=TEXT,
@@ -1760,7 +1760,7 @@ class EasyConfigScreen:
                                 pin = int(parts[0])
                             except (ValueError, IndexError):
                                 continue
-                            if mode == "analog" and 26 <= pin <= 28:
+                            if mode == "analog" and 26 <= pin <= 29:
                                 self.pico.stop_scan()
                                 self.scanning = False
                                 self.root.after(0, lambda p=pin: _on_detected(p, "analog"))
@@ -2645,7 +2645,7 @@ class EasyConfigScreen:
                  bg=BG_CARD, fg=TEXT, font=(FONT_UI, 11)).pack(anchor="w", pady=(0, 4))
         tk.Label(f,
                  text="Digital: any GPIO 0\u201322 (tilt switch).\n"
-                      "Analog: ADC pins GPIO 26\u201328 (sensor on ADC pin).\n"
+                      "Analog: ADC pins GPIO 26\u201329 (sensor on ADC pin).\n"
                       "I2C Accelerometer: ADXL345 or LIS3DH connected via I2C0 (auto-detected on scan).",
                  bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9)).pack(anchor="w", pady=(0, 12))
 
@@ -3032,7 +3032,7 @@ class EasyConfigScreen:
                                 pin = int(line[5:].split(":")[0])
                             except (ValueError, IndexError):
                                 continue
-                            if mode == "analog" and 26 <= pin <= 28:
+                            if mode == "analog" and 26 <= pin <= 29:
                                 self.pico.stop_scan()
                                 self.scanning = False
                                 self.root.after(0, lambda p=pin: _on_detected(p, "analog"))

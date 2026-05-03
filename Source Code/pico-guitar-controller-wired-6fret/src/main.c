@@ -105,7 +105,7 @@ static inline bool is_led_spi_pin(int8_t pin) {
 }
 
 static void init_gpio_pin(int8_t pin) {
-    if (pin < 0 || pin > 28) return;
+    if (pin < 0 || pin > 29) return;
     if (is_led_spi_pin(pin)) return;
     gpio_init(pin);
     gpio_set_dir(pin, GPIO_IN);
@@ -127,10 +127,10 @@ static void init_all_gpio(void) {
 static void init_adc(void) {
     adc_init();
     if (g_config.tilt_mode == INPUT_MODE_ANALOG &&
-        g_config.pin_tilt_analog >= 26 && g_config.pin_tilt_analog <= 28)
+        g_config.pin_tilt_analog >= 26 && g_config.pin_tilt_analog <= 29)
         adc_gpio_init(g_config.pin_tilt_analog);
     if (g_config.whammy_mode == INPUT_MODE_ANALOG &&
-        g_config.pin_whammy_analog >= 26 && g_config.pin_whammy_analog <= 28)
+        g_config.pin_whammy_analog >= 26 && g_config.pin_whammy_analog <= 29)
         adc_gpio_init(g_config.pin_whammy_analog);
     if (g_config.pin_joy_x >= 26 && g_config.pin_joy_x <= 28)
         adc_gpio_init(g_config.pin_joy_x);
@@ -169,7 +169,7 @@ static void init_i2c_tilt(void) {
 }
 
 static bool boot_override_button_held(int8_t pin) {
-    if (pin < 0 || pin > 28) return false;
+    if (pin < 0 || pin > 29) return false;
     gpio_init(pin);
     gpio_set_dir(pin, GPIO_IN);
     gpio_pull_up(pin);
@@ -178,13 +178,13 @@ static bool boot_override_button_held(int8_t pin) {
 }
 
 static inline bool read_pin(int8_t pin) {
-    if (pin < 0 || pin > 28) return false;
+    if (pin < 0 || pin > 29) return false;
     if (is_led_spi_pin(pin)) return false;
     return !gpio_get(pin);
 }
 
 static uint16_t read_adc_pin(int8_t pin) {
-    if (pin < 26 || pin > 28) return 0;
+    if (pin < 26 || pin > 29) return 0;
     adc_select_input(pin - 26);
     return adc_read();
 }

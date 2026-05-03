@@ -282,9 +282,11 @@ for _p in range(0, 23):
     DIGITAL_PIN_LABELS[_p] = f"GPIO {_p}"
 for _p in (26, 27, 28):
     DIGITAL_PIN_LABELS[_p] = f"GPIO {_p}  (ADC{_p - 26})"
+DIGITAL_PIN_LABELS[29] = "GPIO 29  (ADC3)"
 
 ANALOG_PIN_LABELS = {
-    26: "GPIO 26  (ADC0)", 27: "GPIO 27  (ADC1)", 28: "GPIO 28  (ADC2)"
+    26: "GPIO 26  (ADC0)", 27: "GPIO 27  (ADC1)", 28: "GPIO 28  (ADC2)",
+    29: "GPIO 29  (ADC3)"
 }
 
 # Valid I2C0 SDA pins on RP2040

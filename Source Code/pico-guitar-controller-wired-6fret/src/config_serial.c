@@ -317,7 +317,7 @@ static bool handle_set(guitar_config_t *config, const char *kv_str) {
     for (int i = 0; i < BTN_IDX_COUNT; i++) {
         if (strcmp(key, button_names[i]) == 0) {
             int pin = atoi(val);
-            if (pin < -1 || pin > 28) { serial_writeln("ERR:pin range"); return false; }
+            if (pin < -1 || pin > 29) { serial_writeln("ERR:pin range"); return false; }
             config->pin_buttons[i] = (int8_t)pin;
             serial_writeln("OK"); return true;
         }
@@ -336,7 +336,7 @@ static bool handle_set(guitar_config_t *config, const char *kv_str) {
     }
     if (strcmp(key, "tilt_pin") == 0) {
         int pin = atoi(val);
-        if (pin < -1 || pin > 28) { serial_writeln("ERR:pin range"); return false; }
+        if (pin < -1 || pin > 29) { serial_writeln("ERR:pin range"); return false; }
         if (config->tilt_mode == INPUT_MODE_ANALOG)
             config->pin_tilt_analog = (int8_t)pin;
         else
@@ -352,7 +352,7 @@ static bool handle_set(guitar_config_t *config, const char *kv_str) {
     }
     if (strcmp(key, "whammy_pin") == 0) {
         int pin = atoi(val);
-        if (pin < -1 || pin > 28) { serial_writeln("ERR:pin range"); return false; }
+        if (pin < -1 || pin > 29) { serial_writeln("ERR:pin range"); return false; }
         if (config->whammy_mode == INPUT_MODE_ANALOG)
             config->pin_whammy_analog = (int8_t)pin;
         else
@@ -711,7 +711,7 @@ static void run_scan(guitar_config_t *config) {
     // Init digital GPIO pins for scanning
     for (int pin = GPIO_MIN; pin <= GPIO_MAX; pin++) {
         if (!gpio_is_scannable(pin)) continue;
-        if (pin >= 26 && pin <= 28) continue;
+        if (pin >= 26 && pin <= 29) continue;
         gpio_init(pin);
         gpio_set_dir(pin, GPIO_IN);
         gpio_pull_up(pin);
@@ -719,12 +719,12 @@ static void run_scan(guitar_config_t *config) {
 
     // Init ADC channels
     adc_init();
-    for (int ch = 0; ch < 3; ch++) adc_gpio_init(26 + ch);
+    for (int ch = 0; ch < 4; ch++) adc_gpio_init(26 + ch);
     sleep_ms(20);
 
     // Measure noise floor for each ADC channel (adaptive threshold)
-    adc_channel_state_t adc_state[3];
-    for (int ch = 0; ch < 3; ch++) {
+    adc_channel_state_t adc_state[4];
+    for (int ch = 0; ch < 4; ch++) {
         measure_adc_noise(&adc_state[ch], ch);
     }
 
@@ -778,8 +778,8 @@ static void run_scan(guitar_config_t *config) {
             pin_was_pressed[pin] = pressed;
         }
 
-        // Analog pin scanning (GP26-28) with adaptive threshold
-        for (int ch = 0; ch < 3; ch++) {
+        // Analog pin scanning (GP26-29) with adaptive threshold
+        for (int ch = 0; ch < 4; ch++) {
             int pin = 26 + ch;
             adc_select_input(ch);
             uint16_t val = adc_read();
@@ -808,7 +808,7 @@ static void run_scan(guitar_config_t *config) {
 //--------------------------------------------------------------------
 
 static void run_monitor_adc(int pin) {
-    if (pin < 26 || pin > 28) {
+    if (pin < 26 || pin > 29) {
         serial_writeln("ERR:invalid ADC pin");
         return;
     }
@@ -949,7 +949,7 @@ static void run_monitor_i2c(guitar_config_t *config, int axis_filter) {
 
 // Monitor a digital pin — report 0 or 4095 (for consistent bar graph)
 static void run_monitor_digital(int pin) {
-    if (pin < 0 || pin > 28) {
+    if (pin < 0 || pin > 29) {
         serial_writeln("ERR:invalid pin");
         return;
     }

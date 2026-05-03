@@ -162,6 +162,18 @@ class App:
         self._set_controls_enabled(False)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    def _axis_analog_pins(self):
+        # GPIO 29 is available on wired guitars, but reserved by the Pico W radio.
+        if self._loaded_device_type == "guitar_combined":
+            return ANALOG_PINS
+        return [26, 27, 28, 29]
+
+    def _axis_digital_pins(self):
+        pins = list(DIGITAL_PINS)
+        if self._loaded_device_type != "guitar_combined":
+            pins.append(29)
+        return pins
+
     def _apply_guitar_profile(self, profile_name):
         profile = GUITAR_PROFILE_DEFS[profile_name]
         self._profile_title = profile["title"]
@@ -2233,28 +2245,30 @@ class App:
                     sens_frame.pack(fill="x", pady=(4, 0))
         elif mode == "analog":
             # Show pin row with analog pins, hide I2C row
+            axis_analog_pins = self._axis_analog_pins()
             i2c_row.pack_forget()
             if not pin_row.winfo_ismapped():
                 pin_row.pack(fill="x", pady=2)
-            combo["values"] = [ANALOG_PIN_LABELS[p] for p in ANALOG_PINS]
+            combo["values"] = [ANALOG_PIN_LABELS[p] for p in axis_analog_pins]
             cur = pin_var.get()
-            if cur in ANALOG_PINS:
-                combo.current(ANALOG_PINS.index(cur))
+            if cur in axis_analog_pins:
+                combo.current(axis_analog_pins.index(cur))
             else:
                 combo.current(0)
-                pin_var.set(ANALOG_PINS[0])
+                pin_var.set(axis_analog_pins[0])
             if sens_frame:
                 if not sens_frame.winfo_ismapped():
                     sens_frame.pack(fill="x", pady=(4, 0))
         else:
             # Digital mode — show pin row with digital pins, hide I2C row and sens
+            axis_digital_pins = self._axis_digital_pins()
             i2c_row.pack_forget()
             if not pin_row.winfo_ismapped():
                 pin_row.pack(fill="x", pady=2)
-            combo["values"] = [DIGITAL_PIN_LABELS[p] for p in DIGITAL_PINS]
+            combo["values"] = [DIGITAL_PIN_LABELS[p] for p in axis_digital_pins]
             cur = pin_var.get()
-            if cur in DIGITAL_PINS:
-                combo.current(DIGITAL_PINS.index(cur))
+            if cur in axis_digital_pins:
+                combo.current(axis_digital_pins.index(cur))
             else:
                 combo.current(1)
                 pin_var.set(0)
@@ -2322,9 +2336,9 @@ class App:
         combo, mode_var, pin_var = self._sp_combos[prefix][:3]
         idx = combo.current()
         if mode_var.get() == "analog":
-            pin_var.set(ANALOG_PINS[idx])
+            pin_var.set(self._axis_analog_pins()[idx])
         else:
-            pin_var.set(DIGITAL_PINS[idx])
+            pin_var.set(self._axis_digital_pins()[idx])
 
     def _set_controls_enabled(self, enabled):
         state = "normal" if enabled else "disabled"
@@ -3702,13 +3716,13 @@ class App:
                 combo, mode_var, pin_var, enable_var = self._sp_combos[prefix][:4]
                 pin_var.set(pin)
                 enable_var.set(True)
-                if 26 <= pin <= 28:
+                if pin in self._axis_analog_pins():
                     mode_var.set("analog")
                 self._refresh_analog_combo(prefix)
                 self._on_toggle_analog(prefix)
         elif target in ("joy_x", "joy_y"):
             # Joystick analog axis detect — pin must be an ADC pin
-            if 26 <= pin <= 28:
+            if pin in ANALOG_PINS:
                 if target == "joy_x":
                     self.joy_pin_x.set(pin)
                     self.joy_x_enabled.set(True)
@@ -3732,7 +3746,7 @@ class App:
         self._restore_detect_buttons()
 
         label = DIGITAL_PIN_LABELS.get(pin, f"GPIO {pin}")
-        extra = "  (analog)" if 26 <= pin <= 28 else ""
+        extra = "  (analog)" if pin in self._axis_analog_pins() else ""
         self._set_status(f"   Detected {label}{extra}", ACCENT_GREEN)
 
     def _cancel_detect(self):
@@ -4102,7 +4116,7 @@ class App:
             "STOP                         → ends SCAN or MONITOR mode",
             "MONITOR_I2C                  → streams MVAL_X/Y/Z: lines at 20 Hz (debug); send STOP to end",
             "MONITOR_I2C:<0|1|2>          → streams MVAL: for one axis at 50 Hz; send STOP to end",
-            "MONITOR_ADC:<pin>            → streams MVAL:<val> for GP26/27/28; send STOP to end",
+            "MONITOR_ADC:<pin>            → streams MVAL:<val> for GP26/27/28/29; send STOP to end",
             "MONITOR_DIG:<pin>            → streams MVAL:0 or MVAL:4095; send STOP to end",
             "SET:<key>=<value>            → set one config value, replies OK or ERR:reason",
             "  e.g.  SET:i2c_sda=4       → set SDA pin to GP4",
