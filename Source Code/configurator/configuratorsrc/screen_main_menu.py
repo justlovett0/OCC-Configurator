@@ -2394,7 +2394,7 @@ class MainMenu:
                     time.sleep(0.3)
                 if not port:
                     fail("Timeout: controller did not enter config mode.",
-                         "Close any games or apps that may be holding the controller.")
+                         "Close any games or apps (or steam) that may be holding the controller.")
                     return
 
             # Set step labels based on entry path
@@ -2967,7 +2967,7 @@ class MainMenu:
                 if not port:
                     self.root.after(0, lambda: finish_err(
                         "Timeout: controller did not enter config mode.",
-                        "Close any games using the controller and try again."))
+                        "Close any games (or steam) using the controller and try again."))
                     return
 
             else:

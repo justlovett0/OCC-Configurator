@@ -97,6 +97,7 @@ typedef struct {
 static debounce_state_t g_debounce[BTN_IDX_COUNT];
 static debounce_state_t g_debounce_tilt;
 static debounce_state_t g_debounce_whammy;
+static debounce_state_t g_debounce_dynamic[DYNAMIC_INPUT_COUNT];
 static uint32_t g_start_hold_start_us = 0;  // tracks when START was first pressed
 
 // Track which inputs are currently pressed (for LED driver)
@@ -289,6 +290,8 @@ static void init_gpio_pin(int8_t pin) {
 static void init_all_gpio(void) {
     for (int i = 0; i < BTN_IDX_COUNT; i++)
         init_gpio_pin(g_config.pin_buttons[i]);
+    for (int i = 0; i < DYNAMIC_INPUT_COUNT; i++)
+        init_gpio_pin(g_config.dynamic_pins[i]);
     if (g_config.tilt_mode == INPUT_MODE_DIGITAL && g_config.pin_tilt_digital >= 0)
         init_gpio_pin(g_config.pin_tilt_digital);
     if (g_config.whammy_mode == INPUT_MODE_DIGITAL && g_config.pin_whammy_digital >= 0)
@@ -363,6 +366,14 @@ static bool debounce(debounce_state_t *state, bool current_raw,
             state->stable = current_raw;
     }
     return state->stable;
+}
+
+static bool dynamic_target_is_button(uint8_t target) {
+    return target < BTN_IDX_COUNT;
+}
+
+static uint16_t dynamic_target_button_mask(uint8_t target) {
+    return dynamic_target_is_button(target) ? button_masks[target] : 0;
 }
 
 static uint16_t apply_sensitivity(uint16_t raw, uint16_t min_val, uint16_t max_val) {
@@ -552,6 +563,29 @@ static void read_all_inputs(input_state_t *state) {
         }
 
         state->buttons = buttons;
+    }
+
+    for (int i = 0; i < DYNAMIC_INPUT_COUNT; i++) {
+        int8_t pin = g_config.dynamic_pins[i];
+        uint8_t target = g_config.dynamic_targets[i];
+        if (pin < 0 || target == DYNAMIC_TARGET_DISABLED) continue;
+
+        bool raw = read_pin(pin);
+        bool active = debounce(&g_debounce_dynamic[i], raw, now_us, debounce_us);
+        if (!active) continue;
+
+        if (dynamic_target_is_button(target)) {
+            state->buttons |= dynamic_target_button_mask(target);
+            pressed |= (1u << target);
+        } else if (target == DYN_TARGET_TILT) {
+            if (state->right_stick_y < DIGITAL_AXIS_ON)
+                state->right_stick_y = DIGITAL_AXIS_ON;
+            pressed |= (1u << LED_INPUT_TILT);
+        } else if (target == DYN_TARGET_WHAMMY) {
+            if (state->right_stick_x < DIGITAL_AXIS_ON)
+                state->right_stick_x = DIGITAL_AXIS_ON;
+            pressed |= (1u << LED_INPUT_WHAMMY);
+        }
     }
 
     state->pressed_mask = pressed;

@@ -25,8 +25,10 @@
 #include "apa102_leds.h"
 
 #define CONFIG_MAGIC              0x47554954  // "GUIT"
-#define CONFIG_VERSION            16
+#define CONFIG_VERSION            17
 #define DEVICE_NAME_MAX           31          // + null terminator = 32 bytes
+#define DYNAMIC_INPUT_COUNT       10
+#define DYNAMIC_TARGET_DISABLED   0xFF
 
 // ── Device type identifier (sent as DEVTYPE: in GET_CONFIG response) ──
 // "guitar_combined" tells the configurator this firmware supports both
@@ -66,6 +68,12 @@ typedef enum {
     BTN_IDX_GUIDE,
     BTN_IDX_COUNT           // = 14
 } button_index_t;
+
+typedef enum {
+    DYN_TARGET_TILT = BTN_IDX_COUNT,
+    DYN_TARGET_WHAMMY,
+    DYN_TARGET_COUNT
+} dynamic_target_t;
 
 typedef struct __attribute__((packed)) {
     uint32_t magic;
@@ -109,6 +117,9 @@ typedef struct __attribute__((packed)) {
     uint8_t  joy_dpad_x_invert;
     uint8_t  joy_dpad_y_invert;
     uint16_t joy_deadzone;
+
+    int8_t   dynamic_pins[DYNAMIC_INPUT_COUNT];
+    uint8_t  dynamic_targets[DYNAMIC_INPUT_COUNT];
 
     // ── LED configuration (APA102 / SK9822 / Dotstar) ──
     led_config_t leds;

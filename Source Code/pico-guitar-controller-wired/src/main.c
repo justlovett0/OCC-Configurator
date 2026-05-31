@@ -61,6 +61,7 @@ typedef struct {
 static debounce_state_t g_debounce[BTN_IDX_COUNT];
 static debounce_state_t g_debounce_tilt;
 static debounce_state_t g_debounce_whammy;
+static debounce_state_t g_debounce_dynamic[DYNAMIC_INPUT_COUNT];
 static uint32_t g_start_hold_start_us = 0;  // tracks when START was first pressed
 
 // Track which inputs are currently pressed (for LED driver)
@@ -184,6 +185,8 @@ static void init_gpio_pin(int8_t pin) {
 static void init_all_gpio(void) {
     for (int i = 0; i < BTN_IDX_COUNT; i++)
         init_gpio_pin(g_config.pin_buttons[i]);
+    for (int i = 0; i < DYNAMIC_INPUT_COUNT; i++)
+        init_gpio_pin(g_config.dynamic_pins[i]);
     if (g_config.tilt_mode == INPUT_MODE_DIGITAL && g_config.pin_tilt_digital >= 0)
         init_gpio_pin(g_config.pin_tilt_digital);
     if (g_config.whammy_mode == INPUT_MODE_DIGITAL && g_config.pin_whammy_digital >= 0)
@@ -267,6 +270,43 @@ static bool debounce(debounce_state_t *state, bool current_raw,
             state->stable = current_raw;
     }
     return state->stable;
+}
+
+static bool dynamic_target_is_button(uint8_t target) {
+    return target < BTN_IDX_COUNT;
+}
+
+static uint16_t dynamic_target_button_mask(uint8_t target) {
+    return dynamic_target_is_button(target) ? button_masks[target] : 0;
+}
+
+static void apply_dynamic_inputs(xinput_report_t *report, uint16_t *pressed_mask,
+                                 uint32_t now_us, uint32_t debounce_us,
+                                 bool *tilt_active, bool *whammy_active) {
+    for (int i = 0; i < DYNAMIC_INPUT_COUNT; i++) {
+        int8_t pin = g_config.dynamic_pins[i];
+        uint8_t target = g_config.dynamic_targets[i];
+        if (pin < 0 || target == DYNAMIC_TARGET_DISABLED) continue;
+
+        bool raw = read_pin(pin);
+        bool active = debounce(&g_debounce_dynamic[i], raw, now_us, debounce_us);
+        if (!active) continue;
+
+        if (dynamic_target_is_button(target)) {
+            report->buttons |= dynamic_target_button_mask(target);
+            *pressed_mask |= (1u << target);
+        } else if (target == DYN_TARGET_TILT) {
+            if (report->right_stick_y < DIGITAL_AXIS_ON)
+                report->right_stick_y = DIGITAL_AXIS_ON;
+            *pressed_mask |= (1u << LED_INPUT_TILT);
+            *tilt_active = true;
+        } else if (target == DYN_TARGET_WHAMMY) {
+            if (report->right_stick_x < DIGITAL_AXIS_ON)
+                report->right_stick_x = DIGITAL_AXIS_ON;
+            *pressed_mask |= (1u << LED_INPUT_WHAMMY);
+            *whammy_active = true;
+        }
+    }
 }
 
 // Apply min/max sensitivity scaling to a raw ADC value.
@@ -488,6 +528,8 @@ static void build_report(xinput_report_t *report) {
                 report->buttons |= GUITAR_BTN_GUIDE;
         }
     }
+
+    apply_dynamic_inputs(report, &pressed, now_us, debounce_us, &tilt_active, &whammy_active);
 
     g_pressed_mask = pressed;
 }

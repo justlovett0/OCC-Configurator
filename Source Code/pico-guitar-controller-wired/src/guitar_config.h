@@ -12,6 +12,7 @@
  * v12: Added per-effect LED speed fields (loop_speed_ms, breathe_speed_ms, wave_speed_ms).
  * v13: Added start_hold_enabled / start_hold_ms — optional hold-to-activate for START button.
  * v14: Added configurable LED SPI data/clock pins.
+ * v15: Added 10 dynamic digital input mappings.
  */
 
 #ifndef _GUITAR_CONFIG_H_
@@ -22,8 +23,10 @@
 #include "apa102_leds.h"
 
 #define CONFIG_MAGIC              0x47554954  // "GUIT"
-#define CONFIG_VERSION            14
+#define CONFIG_VERSION            15
 #define DEVICE_NAME_MAX           31          // + null terminator = 32 bytes
+#define DYNAMIC_INPUT_COUNT       10
+#define DYNAMIC_TARGET_DISABLED   0xFF
 
 // ── Device type identifier (sent as DEVTYPE: in GET_CONFIG response) ──
 #define DEVICE_TYPE               "guitar_alternate"
@@ -59,6 +62,12 @@ typedef enum {
     BTN_IDX_GUIDE,
     BTN_IDX_COUNT           // = 14
 } button_index_t;
+
+typedef enum {
+    DYN_TARGET_TILT = BTN_IDX_COUNT,
+    DYN_TARGET_WHAMMY,
+    DYN_TARGET_COUNT
+} dynamic_target_t;
 
 typedef struct __attribute__((packed)) {
     uint32_t magic;
@@ -115,6 +124,9 @@ typedef struct __attribute__((packed)) {
     uint8_t  joy_dpad_x_invert;     // bool: invert X DPad direction
     uint8_t  joy_dpad_y_invert;     // bool: invert Y DPad direction
     uint16_t joy_deadzone;          // ADC units from centre, default 205
+
+    int8_t   dynamic_pins[DYNAMIC_INPUT_COUNT];
+    uint8_t  dynamic_targets[DYNAMIC_INPUT_COUNT];
 
     // ── LED configuration (APA102 / SK9822 / Dotstar) ──
     led_config_t leds;

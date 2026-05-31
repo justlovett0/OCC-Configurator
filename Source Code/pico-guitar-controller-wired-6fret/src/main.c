@@ -47,6 +47,7 @@ typedef struct {
 static debounce_state_t g_debounce[BTN_IDX_COUNT];
 static debounce_state_t g_debounce_tilt;
 static debounce_state_t g_debounce_whammy;
+static debounce_state_t g_debounce_dynamic[DYNAMIC_INPUT_COUNT];
 static uint32_t g_start_hold_start_us = 0;
 static uint32_t g_pressed_mask = 0;
 
@@ -115,6 +116,9 @@ static void init_gpio_pin(int8_t pin) {
 static void init_all_gpio(void) {
     for (int i = 0; i < BTN_IDX_COUNT; i++) {
         init_gpio_pin(g_config.pin_buttons[i]);
+    }
+    for (int i = 0; i < DYNAMIC_INPUT_COUNT; i++) {
+        init_gpio_pin(g_config.dynamic_pins[i]);
     }
     if (g_config.tilt_mode == INPUT_MODE_DIGITAL && g_config.pin_tilt_digital >= 0)
         init_gpio_pin(g_config.pin_tilt_digital);
@@ -248,6 +252,28 @@ static uint8_t collapse_to_single_fret(uint8_t fret_bits) {
     return 0;
 }
 
+static bool dynamic_target_is_button(uint8_t target) {
+    return target < BTN_IDX_COUNT;
+}
+
+static void apply_dynamic_button_target(ghl_hid_report_t *report, uint8_t target,
+                                        uint32_t *pressed, uint8_t *fret_bits) {
+    *pressed |= (1u << target);
+    switch (target) {
+        case BTN_IDX_WHITE_1: *fret_bits |= GHL_FRET_WHITE_1; break;
+        case BTN_IDX_BLACK_1: *fret_bits |= GHL_FRET_BLACK_1; break;
+        case BTN_IDX_BLACK_2: *fret_bits |= GHL_FRET_BLACK_2; break;
+        case BTN_IDX_BLACK_3: *fret_bits |= GHL_FRET_BLACK_3; break;
+        case BTN_IDX_WHITE_2: *fret_bits |= GHL_FRET_WHITE_2; break;
+        case BTN_IDX_WHITE_3: *fret_bits |= GHL_FRET_WHITE_3; break;
+        case BTN_IDX_START:      report->buttons |= GHL_BTN_START; break;
+        case BTN_IDX_HERO_POWER: report->buttons |= GHL_BTN_HERO_POWER; break;
+        case BTN_IDX_GHTV:       report->buttons |= GHL_BTN_GHTV; break;
+        case BTN_IDX_GUIDE:      report->buttons |= GHL_BTN_GUIDE; break;
+        default: break;
+    }
+}
+
 static void build_report(ghl_hid_report_t *report, bool multibutton_enabled) {
     uint32_t now_us = time_us_32();
     uint32_t debounce_us = (uint32_t)g_config.debounce_ms * 1000u;
@@ -260,6 +286,8 @@ static void build_report(ghl_hid_report_t *report, bool multibutton_enabled) {
 
     uint32_t pressed = 0;
     uint8_t fret_bits = 0;
+    bool dynamic_tilt_active = false;
+    bool dynamic_whammy_active = false;
 
     for (int i = 0; i < BTN_IDX_COUNT; i++) {
         bool raw = read_pin(g_config.pin_buttons[i]);
@@ -294,6 +322,24 @@ static void build_report(ghl_hid_report_t *report, bool multibutton_enabled) {
         }
     }
 
+    for (int i = 0; i < DYNAMIC_INPUT_COUNT; i++) {
+        int8_t pin = g_config.dynamic_pins[i];
+        uint8_t target = g_config.dynamic_targets[i];
+        if (pin < 0 || target == DYNAMIC_TARGET_DISABLED) continue;
+
+        bool raw = read_pin(pin);
+        bool active = debounce(&g_debounce_dynamic[i], raw, now_us, debounce_us);
+        if (!active) continue;
+
+        if (dynamic_target_is_button(target)) {
+            apply_dynamic_button_target(report, target, &pressed, &fret_bits);
+        } else if (target == DYN_TARGET_TILT) {
+            dynamic_tilt_active = true;
+        } else if (target == DYN_TARGET_WHAMMY) {
+            dynamic_whammy_active = true;
+        }
+    }
+
     report->fret_bits = multibutton_enabled ? fret_bits : collapse_to_single_fret(fret_bits);
 
     bool dpad_up = (pressed & (1u << BTN_IDX_DPAD_UP)) != 0;
@@ -322,6 +368,10 @@ static void build_report(ghl_hid_report_t *report, bool multibutton_enabled) {
         bool p = debounce(&g_debounce_whammy, raw, now_us, debounce_us);
         report->whammy = p ? 0xFF : 0x80;
         whammy_active = p;
+    }
+    if (dynamic_whammy_active) {
+        report->whammy = 0xFF;
+        whammy_active = true;
     }
     if (whammy_active) pressed |= (1u << LED_INPUT_WHAMMY);
 
@@ -356,6 +406,10 @@ static void build_report(ghl_hid_report_t *report, bool multibutton_enabled) {
         bool p = debounce(&g_debounce_tilt, raw, now_us, debounce_us);
         report->tilt = p ? 0xFF : 0x80;
         tilt_active = p;
+    }
+    if (dynamic_tilt_active) {
+        report->tilt = 0xFF;
+        tilt_active = true;
     }
     if (tilt_active) pressed |= (1u << LED_INPUT_TILT);
 

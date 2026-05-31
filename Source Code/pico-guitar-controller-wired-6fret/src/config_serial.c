@@ -143,12 +143,23 @@ static const char *whammy_mode_str(uint8_t mode) {
     return (mode == INPUT_MODE_ANALOG) ? "analog" : "digital";
 }
 
+static bool parse_dynamic_key(const char *key, int *idx_out, const char **field_out) {
+    if (strncmp(key, "dyn", 3) != 0) return false;
+    char *end = NULL;
+    long idx = strtol(key + 3, &end, 10);
+    if (end == key + 3 || idx < 0 || idx >= DYNAMIC_INPUT_COUNT) return false;
+    if (strcmp(end, "_pin") != 0 && strcmp(end, "_target") != 0) return false;
+    *idx_out = (int)idx;
+    *field_out = end + 1;
+    return true;
+}
+
 //--------------------------------------------------------------------
 // Config serialization — sends all config including LED + I2C data
 //--------------------------------------------------------------------
 
 static void send_config(const guitar_config_t *config) {
-    char buf[768];
+    char buf[1280];
     int pos;
 
     serial_writeln("DEVTYPE:" DEVICE_TYPE);
@@ -223,6 +234,12 @@ static void send_config(const guitar_config_t *config) {
                     (int)config->joy_dpad_y_invert);
     pos += snprintf(buf + pos, sizeof(buf) - pos, "joy_deadzone=%u,",
                     (unsigned)config->joy_deadzone);
+    for (int i = 0; i < DYNAMIC_INPUT_COUNT; i++) {
+        pos += snprintf(buf + pos, sizeof(buf) - pos, "dyn%d_target=%u,",
+                        i, (unsigned)config->dynamic_targets[i]);
+        pos += snprintf(buf + pos, sizeof(buf) - pos, "dyn%d_pin=%d,",
+                        i, (int)config->dynamic_pins[i]);
+    }
     pos += snprintf(buf + pos, sizeof(buf) - pos, "device_name=%s,",
                     config->device_name);
     pos += snprintf(buf + pos, sizeof(buf) - pos, "ema_alpha=%u,",
@@ -312,6 +329,25 @@ static bool handle_set(guitar_config_t *config, const char *kv_str) {
     memcpy(key, kv_str, key_len);
     strncpy(val, eq + 1, sizeof(val) - 1);
     for (int i = strlen(val) - 1; i >= 0 && (val[i] <= ' '); i--) val[i] = '\0';
+
+    int dyn_idx = -1;
+    const char *dyn_field = NULL;
+    if (parse_dynamic_key(key, &dyn_idx, &dyn_field)) {
+        if (strcmp(dyn_field, "pin") == 0) {
+            int pin = atoi(val);
+            if (pin < -1 || pin > 29) { serial_writeln("ERR:pin range"); return false; }
+            config->dynamic_pins[dyn_idx] = (int8_t)pin;
+            serial_writeln("OK"); return true;
+        }
+        if (strcmp(dyn_field, "target") == 0) {
+            int target = atoi(val);
+            if (!((target >= 0 && target < DYN_TARGET_COUNT) || target == DYNAMIC_TARGET_DISABLED)) {
+                serial_writeln("ERR:target range"); return false;
+            }
+            config->dynamic_targets[dyn_idx] = (uint8_t)target;
+            serial_writeln("OK"); return true;
+        }
+    }
 
     // Button pins
     for (int i = 0; i < BTN_IDX_COUNT; i++) {

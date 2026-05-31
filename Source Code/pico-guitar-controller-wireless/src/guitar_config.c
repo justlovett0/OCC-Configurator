@@ -77,6 +77,10 @@ void config_set_defaults(guitar_config_t *config) {
     config->joy_dpad_x_invert = 0;
     config->joy_dpad_y_invert = 0;
     config->joy_deadzone     = 205;
+    for (int i = 0; i < DYNAMIC_INPUT_COUNT; i++) {
+        config->dynamic_pins[i] = -1;
+        config->dynamic_targets[i] = DYNAMIC_TARGET_DISABLED;
+    }
 
     // LEDs disabled by default
     config->leds.enabled = 0;

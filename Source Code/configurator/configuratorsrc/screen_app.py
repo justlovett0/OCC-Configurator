@@ -31,6 +31,7 @@ MAX_GUITAR_LED_INPUT_COUNT = max(
 LED_DATA_PINS = [3, 7, 19, 23]
 LED_CLOCK_PINS = [2, 6, 18, 22]
 LED_PIN_COMBO_STYLE = "LedPin.TCombobox"
+DYNAMIC_INPUT_COUNT = 10
 class App:
     def __init__(self, root, on_back=None, guitar_profile="standard"):
         self.root = root
@@ -89,6 +90,12 @@ class App:
         self.joy_dpad_x_invert = tk.BooleanVar(value=False)
         self.joy_dpad_y_invert = tk.BooleanVar(value=False)
         self.joy_deadzone      = tk.IntVar(value=205)
+
+        self.dynamic_enable_vars = [tk.BooleanVar(value=False) for _ in range(DYNAMIC_INPUT_COUNT)]
+        self.dynamic_pin_vars = [tk.IntVar(value=DIGITAL_PINS[0]) for _ in range(DYNAMIC_INPUT_COUNT)]
+        self.dynamic_target_vars = [tk.IntVar(value=0) for _ in range(DYNAMIC_INPUT_COUNT)]
+        self._dynamic_pin_combos = {}
+        self._dynamic_target_combos = {}
 
         self._loaded_device_type = self._default_device_type  # updated by _load_config
 
@@ -185,6 +192,8 @@ class App:
         self._fret_colors = dict(profile["fret_colors"])
         self._supported_types = set(profile["supported_types"])
         self._default_device_type = "guitar_live_6fret" if profile_name == "six_fret" else "guitar_alternate"
+        self._dynamic_target_names = [key for key, _, _ in self._button_defs] + ["tilt", "whammy"]
+        self._dynamic_target_labels = [name for _, name, _ in self._button_defs] + ["Tilt", "Whammy"]
 
     def _go_back(self):
         """Save config to the device, then return to the main menu.
@@ -501,7 +510,7 @@ class App:
         # Tab bar
         tab_bar = tk.Frame(outer, bg=BG_MAIN)
         tab_bar.pack(fill="x")
-        _TAB_NAMES = ["Buttons", "Tilt & Whammy", "Joystick & Dpad", "Lighting"]
+        _TAB_NAMES = ["Buttons", "Tilt & Whammy", "Joystick & Dpad", "Lighting", "Dynamic Inputs"]
         self._tab_labels = []
         for _i, _name in enumerate(_TAB_NAMES):
             _lbl = tk.Label(tab_bar, text=_name, bg=BG_MAIN, fg=TEXT_DIM,
@@ -518,7 +527,7 @@ class App:
 
         self._tab_slots   = []
         self._tab_widgets = []   # (canvas, scrollbar, content, window_id) per tab
-        for _ in range(4):
+        for _ in range(5):
             _slot    = tk.Frame(scroll_outer, bg=BG_MAIN)
             _canvas  = tk.Canvas(_slot, bg=BG_MAIN, highlightthickness=0, bd=0)
             _sb      = ttk.Scrollbar(_slot, orient="vertical", command=self._on_yview)
@@ -564,6 +573,10 @@ class App:
         # Build Tab 3: Lighting
         self._set_active_tab_refs(3)
         self._make_led_section()
+
+        # Build Tab 4: Dynamic Inputs
+        self._set_active_tab_refs(4)
+        self._make_dynamic_inputs_section()
 
         # Activate tab 0 as default
         self._active_tab = 0
@@ -1487,6 +1500,143 @@ class App:
         self._all_widgets.append(sp)
         tk.Label(row, text="ms  (0 = none, 3-5 typical)", bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8)).pack(side="left")
+
+    def _make_dynamic_inputs_section(self):
+        card = self._make_card()
+        inner = tk.Frame(card, bg=BG_CARD)
+        inner.pack(fill="x", padx=12, pady=10)
+
+        tk.Label(inner, text="DYNAMIC INPUTS", bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=(FONT_UI, 9, "bold")).pack(anchor="w")
+        tk.Label(inner,
+                 text="Add up to 10 extra digital mappings. Each row can send any digital guitar input on any GPIO. "
+                      "Duplicate targets and duplicate GPIO pins are allowed.",
+                 bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 8), wraplength=820,
+                 justify="left", anchor="w").pack(fill="x", pady=(0, 6))
+
+        hdr = tk.Frame(inner, bg=BG_CARD)
+        hdr.pack(fill="x", pady=(0, 4))
+        self._dynamic_hdr_gutter = tk.Frame(hdr, bg=BG_CARD, height=20)
+        self._dynamic_hdr_gutter.pack(side="left", padx=(0, 10))
+        self._dynamic_hdr_gutter.pack_propagate(False)
+        tk.Label(self._dynamic_hdr_gutter, text="On?", bg=BG_CARD, fg=TEXT_DIM,
+                 anchor="w", font=(FONT_UI, 8)).pack(fill="both", padx=(2, 0), pady=(1, 0))
+
+        self._dynamic_hdr_target = tk.Frame(hdr, bg=BG_CARD, height=20)
+        self._dynamic_hdr_target.pack(side="left", padx=(0, 10))
+        self._dynamic_hdr_target.pack_propagate(False)
+        tk.Label(self._dynamic_hdr_target, text="Input Target", bg=BG_CARD, fg=TEXT_DIM,
+                 anchor="w", font=(FONT_UI, 8)).pack(fill="both", padx=(12, 0), pady=(1, 0))
+
+        self._dynamic_hdr_pin = tk.Frame(hdr, bg=BG_CARD, height=20)
+        self._dynamic_hdr_pin.pack(side="left", padx=(0, 10))
+        self._dynamic_hdr_pin.pack_propagate(False)
+        tk.Label(self._dynamic_hdr_pin, text="GPIO Pin", bg=BG_CARD, fg=TEXT_DIM,
+                 anchor="w", font=(FONT_UI, 8)).pack(fill="both", padx=(12, 0), pady=(1, 0))
+
+        for idx in range(DYNAMIC_INPUT_COUNT):
+            row = tk.Frame(inner, bg=BG_CARD)
+            row.pack(fill="x", pady=2)
+
+            idx_cell = tk.Frame(row, bg=BG_CARD, width=64)
+            idx_cell.pack(side="left", padx=(0, 10))
+
+            en_cb = ttk.Checkbutton(
+                idx_cell, text="", variable=self.dynamic_enable_vars[idx],
+                command=lambda i=idx: self._on_toggle_dynamic(i), width=0)
+            en_cb.pack(side="left")
+
+            tk.Label(
+                idx_cell, text=f"{idx + 1}", bg=BG_CARD, fg=TEXT,
+                width=2, anchor="e", font=(FONT_UI, 9)
+            ).pack(side="left", padx=(2, 0))
+            self._all_widgets.append(en_cb)
+
+            target_combo = CustomDropdown(
+                row, state="readonly", width=22, values=self._dynamic_target_labels)
+            target_combo.current(0)
+            target_combo.pack(side="left", padx=(0, 10))
+            target_combo.bind("<<ComboboxSelected>>",
+                              lambda _e, i=idx, c=target_combo: self._on_dynamic_target_combo(i, c))
+            self._all_widgets.append(target_combo)
+            self._dynamic_target_combos[idx] = target_combo
+
+            pin_combo = CustomDropdown(
+                row, state="readonly", width=20,
+                values=[DIGITAL_PIN_LABELS[p] for p in DIGITAL_PINS])
+            pin_combo.current(0)
+            pin_combo.pack(side="left", padx=(0, 10))
+            pin_combo.bind("<<ComboboxSelected>>",
+                           lambda _e, i=idx, c=pin_combo: self._on_dynamic_pin_combo(i, c))
+            self._all_widgets.append(pin_combo)
+            self._dynamic_pin_combos[idx] = pin_combo
+
+            det_btn = ttk.Button(
+                row, text="Detect", style="Det.TButton", width=7,
+                command=lambda i=idx: self._start_detect(f"dyn{i}", f"Dynamic Input {i + 1}"))
+            det_btn.pack(side="left")
+            self._det_btns[f"dyn{idx}"] = det_btn
+            self._row_w[f"dyn{idx}"] = (target_combo, pin_combo, det_btn)
+
+            if idx == 0:
+                self._dynamic_first_row_widgets = (idx_cell, target_combo, pin_combo)
+
+            self._refresh_dynamic_row(idx, restore=True)
+
+        self.root.after_idle(self._sync_dynamic_inputs_header)
+
+    def _sync_dynamic_inputs_header(self):
+        if not hasattr(self, "_dynamic_first_row_widgets"):
+            return
+        try:
+            self.root.update_idletasks()
+            idx_cell, target_combo, pin_combo = self._dynamic_first_row_widgets
+            self._dynamic_hdr_gutter.config(width=idx_cell.winfo_width())
+            self._dynamic_hdr_target.config(width=target_combo.winfo_width())
+            self._dynamic_hdr_pin.config(width=pin_combo.winfo_width())
+        except Exception:
+            pass
+
+    def _on_dynamic_target_combo(self, idx, combo):
+        cur = combo.current()
+        if cur >= 0:
+            self.dynamic_target_vars[idx].set(cur)
+
+    def _on_dynamic_pin_combo(self, idx, combo):
+        cur = combo.current()
+        if cur >= 0:
+            self.dynamic_pin_vars[idx].set(DIGITAL_PINS[cur])
+
+    def _on_toggle_dynamic(self, idx):
+        self._refresh_dynamic_row(idx, restore=True)
+
+    def _refresh_dynamic_row(self, idx, restore=False):
+        target_combo = self._dynamic_target_combos.get(idx)
+        pin_combo = self._dynamic_pin_combos.get(idx)
+        row_widgets = self._row_w.get(f"dyn{idx}")
+        det_btn = row_widgets[2] if row_widgets and len(row_widgets) > 2 else None
+        enabled = self.dynamic_enable_vars[idx].get()
+
+        if target_combo is not None:
+            state = "readonly" if enabled else "disabled"
+            target_combo.configure(state=state)
+            cur_target = self.dynamic_target_vars[idx].get()
+            if 0 <= cur_target < len(self._dynamic_target_labels):
+                target_combo.current(cur_target)
+            elif not restore:
+                target_combo.current(0)
+                self.dynamic_target_vars[idx].set(0)
+        if pin_combo is not None:
+            state = "readonly" if enabled else "disabled"
+            pin_combo.configure(state=state)
+            cur_pin = self.dynamic_pin_vars[idx].get()
+            if cur_pin in DIGITAL_PINS:
+                pin_combo.current(DIGITAL_PINS.index(cur_pin))
+            elif not restore:
+                pin_combo.current(0)
+                self.dynamic_pin_vars[idx].set(DIGITAL_PINS[0])
+        if det_btn is not None:
+            det_btn.config(state="normal")
 
     # ── Enable/Disable Logic ────────────────────────────────
 
@@ -2972,6 +3122,22 @@ class App:
         if hasattr(self, "_refresh_joy_combos"):
             self._refresh_joy_combos(restore=True)
 
+        for i in range(DYNAMIC_INPUT_COUNT):
+            self.dynamic_target_vars[i].set(0)
+            self.dynamic_enable_vars[i].set(False)
+            target_key = f"dyn{i}_target"
+            pin_key = f"dyn{i}_pin"
+            target = int(cfg.get(target_key, self.dynamic_target_vars[i].get()))
+            pin = int(cfg.get(pin_key, -1))
+            if 0 <= target < len(self._dynamic_target_labels):
+                self.dynamic_target_vars[i].set(target)
+            else:
+                self.dynamic_target_vars[i].set(0)
+            if pin in DIGITAL_PINS:
+                self.dynamic_pin_vars[i].set(pin)
+            self.dynamic_enable_vars[i].set(pin >= 0)
+            self._refresh_dynamic_row(i, restore=True)
+
         # (I2C config is loaded earlier — before tilt refresh — see above)
 
         if "device_name" in cfg:
@@ -3103,6 +3269,12 @@ class App:
         self.pico.set_value("joy_dpad_x_invert", "1" if self.joy_dpad_x_invert.get() else "0")
         self.pico.set_value("joy_dpad_y_invert", "1" if self.joy_dpad_y_invert.get() else "0")
         self.pico.set_value("joy_deadzone", str(self.joy_deadzone.get()))
+
+        for i in range(DYNAMIC_INPUT_COUNT):
+            pin = self.dynamic_pin_vars[i].get() if self.dynamic_enable_vars[i].get() else -1
+            target = self.dynamic_target_vars[i].get()
+            self.pico.set_value(f"dyn{i}_target", str(target))
+            self.pico.set_value(f"dyn{i}_pin", str(pin))
 
         # Device name — strip any invalid chars (belt-and-suspenders over the Entry vcmd)
         name = ''.join(c for c in self.device_name.get() if c in VALID_NAME_CHARS).strip()
@@ -3272,6 +3444,14 @@ class App:
         cfg["joy_dpad_x_invert"]= 1 if self.joy_dpad_x_invert.get() else 0
         cfg["joy_dpad_y_invert"]= 1 if self.joy_dpad_y_invert.get() else 0
         cfg["joy_deadzone"]     = self.joy_deadzone.get()
+        cfg["dynamic_inputs"] = [
+            {
+                "enabled": 1 if self.dynamic_enable_vars[i].get() else 0,
+                "target": self.dynamic_target_vars[i].get(),
+                "pin": self.dynamic_pin_vars[i].get() if self.dynamic_enable_vars[i].get() else -1,
+            }
+            for i in range(DYNAMIC_INPUT_COUNT)
+        ]
 
         # Device name
         cfg["device_name"] = self.device_name.get().strip() or self._default_device_name
@@ -3432,6 +3612,40 @@ class App:
                 getattr(self, attr).set(int(cfg[attr]) != 0)
         if hasattr(self, "_refresh_joy_combos"):
             self._refresh_joy_combos(restore=True)
+
+        for i in range(DYNAMIC_INPUT_COUNT):
+            self.dynamic_target_vars[i].set(0)
+            self.dynamic_enable_vars[i].set(False)
+
+        if "dynamic_inputs" in cfg and isinstance(cfg["dynamic_inputs"], list):
+            for i, item in enumerate(cfg["dynamic_inputs"][:DYNAMIC_INPUT_COUNT]):
+                if not isinstance(item, dict):
+                    continue
+                target = int(item.get("target", self.dynamic_target_vars[i].get()))
+                pin = int(item.get("pin", -1))
+                enabled = str(item.get("enabled", "")).strip().lower() in ("1", "true", "yes", "on")
+                if not enabled:
+                    enabled = pin >= 0
+                if 0 <= target < len(self._dynamic_target_labels):
+                    self.dynamic_target_vars[i].set(target)
+                if pin in DIGITAL_PINS:
+                    self.dynamic_pin_vars[i].set(pin)
+                self.dynamic_enable_vars[i].set(enabled and pin >= 0)
+                self._refresh_dynamic_row(i, restore=True)
+        else:
+            for i in range(DYNAMIC_INPUT_COUNT):
+                target_key = f"dyn{i}_target"
+                pin_key = f"dyn{i}_pin"
+                if target_key in cfg:
+                    target = int(cfg[target_key])
+                    if 0 <= target < len(self._dynamic_target_labels):
+                        self.dynamic_target_vars[i].set(target)
+                if pin_key in cfg:
+                    pin = int(cfg[pin_key])
+                    if pin in DIGITAL_PINS:
+                        self.dynamic_pin_vars[i].set(pin)
+                    self.dynamic_enable_vars[i].set(pin >= 0)
+                self._refresh_dynamic_row(i, restore=True)
 
         # Device name
         if "device_name" in cfg:
@@ -3742,6 +3956,15 @@ class App:
         elif target == "joy_sw":
             # Joystick click switch — any digital GPIO; syncs guide combo too
             self._apply_guide_pin(pin)
+        elif isinstance(target, str) and target.startswith("dyn"):
+            try:
+                idx = int(target[3:])
+            except ValueError:
+                idx = -1
+            if 0 <= idx < DYNAMIC_INPUT_COUNT:
+                self.dynamic_pin_vars[idx].set(pin)
+                self.dynamic_enable_vars[idx].set(True)
+                self._refresh_dynamic_row(idx, restore=True)
 
         self._restore_detect_buttons()
 
