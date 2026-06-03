@@ -24,6 +24,15 @@ def _json_truthy(value):
     return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _normalize_preset_firmware_types(value):
+    allowed = []
+    for item in value if isinstance(value, (list, tuple)) else []:
+        variant = str(item).strip().lower()
+        if variant in ("wired", "wireless") and variant not in allowed:
+            allowed.append(variant)
+    return allowed or ["wired", "wireless"]
+
+
 class FlashFirmwareScreen:
     """
     Shown automatically when a Pico in BOOTSEL (USB mass-storage) mode is
@@ -476,6 +485,9 @@ class FlashFirmwareScreen:
             cfg_rel  = item_info.get("preset_config")   # None = stub
             fw_name  = item_info.get("firmware", "")
             wired, wireless = uf2_groups.get(fw_name, (None, None))
+            allowed_variants = _normalize_preset_firmware_types(item_info.get("firmware_types"))
+            wired = wired if "wired" in allowed_variants else None
+            wireless = wireless if "wireless" in allowed_variants else None
             cfg_abs  = os.path.join(base_dir, cfg_rel) if cfg_rel and base_dir else None
             is_stub  = cfg_abs is None
 
@@ -807,7 +819,7 @@ class FlashFirmwareScreen:
                 return
 
             succeed(f"'{preset_name}' preset installed!",
-                    "Controller is now in play mode.")
+                    "The controller is now in play mode. You can now close OCC and start gaming!")
 
         threading.Thread(target=worker, daemon=True).start()
 

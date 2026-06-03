@@ -1,13 +1,13 @@
 {
   "POLYBAR System": {
-    "Polybar": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Polybar.json" },
-    "Polypedal (Whammy)":     { "firmware": "Pedal Accessory",  "preset_config": "PresetConfigs/PolyPedal Whammy.json" },
-	"Polypedal (Tilt)":     { "firmware": "Pedal Accessory",  "preset_config": "PresetConfigs/PolyPedal Tilt.json" }
+    "Polybar": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Polybar.json", "firmware_types": ["wired", "wireless"] },
+    "Polypedal (Whammy)":     { "firmware": "Pedal Accessory",  "preset_config": "PresetConfigs/PolyPedal Whammy.json", "firmware_types": ["wired", "wireless"] },
+	"Polypedal (Tilt)":     { "firmware": "Pedal Accessory",  "preset_config": "PresetConfigs/PolyPedal Tilt.json", "firmware_types": ["wired"] }
   },
   "RIFFSTICK Controllers": {
-    "RIFFSTICK Lite": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json" },
-    "RIFFSTICK 1.1":  { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json" },
-    "RIFFSTICK Pro":  { "firmware": "Guitar Controller", "preset_config": null }
+    "RIFFSTICK Lite": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json", "firmware_types": ["wired"] },
+    "RIFFSTICK 1.1":  { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/RIFFSTICK.json", "firmware_types": ["wired"] },
+    "RIFFSTICK Pro":  { "firmware": "Guitar Controller", "preset_config": null, "firmware_types": ["wired"] }
   },
   "Phunky Customs": {
     "Monoboard RP": { "firmware": "Guitar Controller", "preset_config": "PresetConfigs/Monoboard RP.json" }
