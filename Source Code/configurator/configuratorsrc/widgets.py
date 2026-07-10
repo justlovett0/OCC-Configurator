@@ -1,7 +1,230 @@
 import tkinter as tk
+from dataclasses import dataclass
 from .constants import (BG_CARD, BG_INPUT, BG_HOVER, BG_MAIN, BORDER,
                          TEXT, TEXT_DIM, TEXT_HEADER, ACCENT_BLUE)
 from .fonts import FONT_UI
+
+
+@dataclass(frozen=True)
+class ModernPalette:
+    window: str = "#0B0D12"
+    sidebar: str = "#10131A"
+    surface: str = "#151923"
+    surface_alt: str = "#1B202C"
+    surface_hover: str = "#222938"
+    border: str = "#2A3140"
+    text: str = "#F4F7FB"
+    text_muted: str = "#8F9AAF"
+    accent: str = "#6C8CFF"
+    accent_hover: str = "#7F9BFF"
+    accent_soft: str = "#202A4E"
+    success: str = "#52D39A"
+    warning: str = "#F0B95A"
+    danger: str = "#F06C75"
+    shadow: str = "#07080C"
+
+
+MIDNIGHT = ModernPalette()
+
+
+def _adjust_color(hex_color, amount):
+    try:
+        r = max(0, min(255, int(hex_color[1:3], 16) + amount))
+        g = max(0, min(255, int(hex_color[3:5], 16) + amount))
+        b = max(0, min(255, int(hex_color[5:7], 16) + amount))
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except Exception:
+        return hex_color
+
+
+def _rounded_rect(canvas, x1, y1, x2, y2, radius, fill, outline=""):
+    radius = max(0, min(radius, (x2 - x1) // 2, (y2 - y1) // 2))
+    arc_outline = outline or fill
+    canvas.create_arc(x1, y1, x1 + 2 * radius, y1 + 2 * radius,
+                      start=90, extent=90, fill=fill, outline=arc_outline)
+    canvas.create_arc(x2 - 2 * radius, y1, x2, y1 + 2 * radius,
+                      start=0, extent=90, fill=fill, outline=arc_outline)
+    canvas.create_arc(x1, y2 - 2 * radius, x1 + 2 * radius, y2,
+                      start=180, extent=90, fill=fill, outline=arc_outline)
+    canvas.create_arc(x2 - 2 * radius, y2 - 2 * radius, x2, y2,
+                      start=270, extent=90, fill=fill, outline=arc_outline)
+    canvas.create_rectangle(x1 + radius, y1, x2 - radius, y2,
+                            fill=fill, outline=fill)
+    canvas.create_rectangle(x1, y1 + radius, x2, y2 - radius,
+                            fill=fill, outline=fill)
+    if outline:
+        canvas.create_line(x1 + radius, y1, x2 - radius, y1, fill=outline)
+        canvas.create_line(x1 + radius, y2, x2 - radius, y2, fill=outline)
+        canvas.create_line(x1, y1 + radius, x1, y2 - radius, fill=outline)
+        canvas.create_line(x2, y1 + radius, x2, y2 - radius, fill=outline)
+
+
+class ModernButton(tk.Canvas):
+    """Theme-aware Canvas button with RoundedButton-compatible helpers."""
+
+    def __init__(self, parent, text="", command=None, palette=MIDNIGHT,
+                 bg_color=None, text_color=None, btn_width=140, btn_height=36,
+                 radius=8, btn_font=(FONT_UI, 9, "bold"), variant="primary",
+                 anchor="center", icon="", enabled=True):
+        try:
+            parent_bg = parent.cget("bg")
+        except Exception:
+            parent_bg = palette.surface
+        super().__init__(parent, width=btn_width, height=btn_height,
+                         bg=parent_bg, highlightthickness=0, bd=0)
+        self.palette = palette
+        self._command = command
+        self._label = text
+        self._icon = icon
+        self._variant = variant
+        self._anchor = anchor
+        self._btn_w = btn_width
+        self._btn_h = btn_height
+        self._radius = radius
+        self._btn_font = btn_font
+        self._text_color_override = text_color
+        self._enabled = bool(enabled)
+        self._hovered = False
+        self._pressed = False
+        self._base_bg = bg_color or self._variant_bg(variant)
+        self._hover_bg = _adjust_color(self._base_bg, 18)
+        self._press_bg = _adjust_color(self._base_bg, -18)
+        self._disabled_bg = palette.surface_alt
+        self._render(self._base_bg if self._enabled else self._disabled_bg)
+        self.bind("<Enter>", self._on_enter)
+        self.bind("<Leave>", self._on_leave)
+        self.bind("<ButtonPress-1>", self._on_press)
+        self.bind("<ButtonRelease-1>", self._on_release)
+        self.bind("<Return>", lambda _event: self._invoke())
+        self.bind("<space>", lambda _event: self._invoke())
+        self._sync_cursor()
+
+    def _variant_bg(self, variant):
+        if variant == "success":
+            return self.palette.success
+        if variant == "danger":
+            return self.palette.danger
+        if variant == "soft":
+            return self.palette.surface_alt
+        if variant == "ghost":
+            return self.master.cget("bg") if self.master else self.palette.window
+        if variant == "accent-soft":
+            return self.palette.accent_soft
+        return self.palette.accent
+
+    def _text_color(self):
+        if not self._enabled:
+            return self.palette.text_muted
+        if self._text_color_override:
+            return self._text_color_override
+        if self._variant in ("primary", "danger"):
+            return "#ffffff"
+        if self._variant == "success":
+            return "#071A13"
+        if self._variant == "accent-soft":
+            return self.palette.accent
+        return self.palette.text
+
+    def _sync_cursor(self):
+        self.config(cursor="hand2" if self._enabled and self._command else "arrow")
+
+    def _render(self, fill_color):
+        self.delete("all")
+        outline = fill_color if self._variant in ("primary", "success", "danger") else self.palette.border
+        _rounded_rect(self, 1, 1, self._btn_w - 1, self._btn_h - 1,
+                      self._radius, fill_color, outline)
+        label = f"{self._icon}  {self._label}" if self._icon else self._label
+        x = self._btn_w // 2
+        text_anchor = "center"
+        if self._anchor == "w":
+            x = 14
+            text_anchor = "w"
+        self.create_text(x, self._btn_h // 2, text=label,
+                         fill=self._text_color(), font=self._btn_font,
+                         anchor=text_anchor)
+
+    def _on_enter(self, _event):
+        if self._enabled:
+            self._hovered = True
+            self._render(self._hover_bg)
+
+    def _on_leave(self, _event):
+        self._hovered = False
+        self._pressed = False
+        self._render(self._base_bg if self._enabled else self._disabled_bg)
+
+    def _on_press(self, _event):
+        if self._enabled:
+            self._pressed = True
+            self._render(self._press_bg)
+
+    def _on_release(self, event):
+        if not self._enabled:
+            return
+        inside = 0 <= event.x <= self._btn_w and 0 <= event.y <= self._btn_h
+        self._pressed = False
+        self._render(self._hover_bg if self._hovered else self._base_bg)
+        if inside:
+            self._invoke()
+
+    def _invoke(self):
+        if self._enabled and self._command:
+            self._command()
+
+    def set_state(self, state):
+        self._enabled = (state != "disabled")
+        self._sync_cursor()
+        self._render(self._base_bg if self._enabled else self._disabled_bg)
+
+    def update_color(self, new_bg):
+        self._base_bg = new_bg
+        self._hover_bg = _adjust_color(new_bg, 18)
+        self._press_bg = _adjust_color(new_bg, -18)
+        self._render(self._base_bg if self._enabled else self._disabled_bg)
+
+    def set_text(self, text):
+        self._label = text
+        self._render(self._base_bg if self._enabled else self._disabled_bg)
+
+    def set_command(self, command):
+        self._command = command
+        self._sync_cursor()
+
+
+class ModernCard(tk.Canvas):
+    """Rounded card container with an ordinary Tk frame content area."""
+
+    def __init__(self, parent, palette=MIDNIGHT, height=180, radius=8,
+                 padding=18, background=None, border=None):
+        try:
+            parent_bg = parent.cget("bg")
+        except Exception:
+            parent_bg = palette.window
+        super().__init__(parent, height=height, bg=parent_bg,
+                         highlightthickness=0, bd=0)
+        self.palette = palette
+        self.card_height = height
+        self.radius = radius
+        self.padding = padding
+        self.fill = background or palette.surface
+        self.outline = border or palette.border
+        self.inner = tk.Frame(self, bg=self.fill)
+        self._inner_id = self.create_window(padding, padding, window=self.inner,
+                                            anchor="nw")
+        self.bind("<Configure>", self._resize)
+
+    def _resize(self, event):
+        self.delete("card-shape")
+        _rounded_rect(self, 1, 1, max(2, event.width - 2),
+                      max(2, self.card_height - 2), self.radius,
+                      self.fill, self.outline)
+        for item in self.find_all():
+            if item != self._inner_id:
+                self.addtag_withtag("card-shape", item)
+        self.tag_lower("card-shape")
+        self.itemconfigure(self._inner_id,
+                           width=max(1, event.width - self.padding * 2),
+                           height=max(1, self.card_height - self.padding * 2))
 #  ROUNDED BUTTON  (plain tk.Canvas — no Frame wrapper)
 
 class RoundedButton(tk.Canvas):

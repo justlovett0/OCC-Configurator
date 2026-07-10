@@ -1,4 +1,4 @@
-import sys, os, time, threading, json
+import sys, os, time, threading, json, webbrowser
 import tkinter as tk
 from tkinter import messagebox, filedialog
 from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
@@ -9,8 +9,10 @@ from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT
                          OCC_SUBTYPES, DONGLE_XINPUT_SUBTYPES, MAX_LEDS,
                          get_led_input_names_for_device_type,
                          _ALTERNATEFW_CMD_JUMP_BOOTLOADER, _ALTERNATEFW_BM_REQUEST_TYPE)
-from .fonts import FONT_UI, APP_VERSION
-from .widgets import RoundedButton, CustomDropdown, HelpDialog, HelpButton, _help_text, _help_placeholder
+from .fonts import FONT_UI, APP_VERSION, _resource_path
+from .widgets import (RoundedButton, CustomDropdown, HelpDialog, HelpButton,
+                      ModernButton, ModernCard, MIDNIGHT,
+                      _help_text, _help_placeholder)
 from .serial_comms import PicoSerial
 from .firmware_utils import (find_rpi_rp2_drive, find_rpi_rp2_drive_info,
                               get_bundled_fw_date, get_bundled_fw_date_str, parse_fw_date,
@@ -61,7 +63,7 @@ class MainMenu:
         self._gp2040ce_popup_shown = False
         self._help_dialog = None
 
-        self.frame = tk.Frame(root, bg=BG_MAIN)
+        self.frame = tk.Frame(root, bg=MIDNIGHT.window)
 
         self._build()
         # poll starts in show() via after(50, self._poll) — don't call here or
@@ -118,6 +120,8 @@ class MainMenu:
     # ── Layout ────────────────────────────────────────────────────
 
     def _build(self):
+        self._build_modern_dashboard()
+        return
         # ── Title bar ────────────────────────────────────────
         title_bar = tk.Frame(self.frame, bg=BG_CARD,
                              highlightbackground=BORDER, highlightthickness=1)
@@ -277,6 +281,630 @@ class MainMenu:
 
     # ── USB polling ───────────────────────────────────────────────
 
+    def _build_modern_dashboard(self):
+        p = MIDNIGHT
+        self.frame.configure(bg=p.window)
+
+        shell = tk.Frame(self.frame, bg=p.window)
+        shell.pack(fill="both", expand=True)
+
+        sidebar = tk.Frame(shell, bg=p.sidebar, width=240)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+
+        workspace = tk.Frame(shell, bg=p.window)
+        workspace.pack(side="left", fill="both", expand=True)
+
+        self._build_modern_sidebar(sidebar, p)
+        self._build_modern_topbar(workspace, p)
+
+        content = tk.Frame(workspace, bg=p.window)
+        content.pack(fill="both", expand=True, padx=30, pady=26)
+        self._build_modern_hero(content, p)
+        self._build_modern_cards(content, p)
+        self._build_modern_activity(content, p)
+
+    def _build_modern_sidebar(self, sidebar, p):
+        brand = tk.Frame(sidebar, bg=p.sidebar)
+        brand.pack(fill="x", padx=24, pady=(26, 28))
+
+        self._brand_icon_img = self._load_brand_icon(50)
+        if self._brand_icon_img:
+            tk.Label(brand, image=self._brand_icon_img, bg=p.sidebar).pack(anchor="w")
+        else:
+            logo = tk.Canvas(brand, width=50, height=50, bg=p.sidebar,
+                             highlightthickness=0, bd=0)
+            logo.create_rectangle(1, 1, 49, 49, fill=p.accent, outline=p.accent)
+            logo.create_text(25, 25, text="OCC", fill="#ffffff",
+                             font=(FONT_UI, 9, "bold"))
+            logo.pack(anchor="w")
+
+        tk.Label(sidebar, text="WORKSPACE", bg=p.sidebar, fg=p.text_muted,
+                 font=(FONT_UI, 8, "bold")).pack(anchor="w", padx=24, pady=(0, 9))
+        ModernButton(sidebar, text="Dashboard", palette=p, icon="[]",
+                     btn_width=192, btn_height=42, variant="accent-soft",
+                     anchor="w", command=None).pack(padx=24, pady=3)
+        setup_btn = ModernButton(sidebar, text="Controller setup", palette=p,
+                                 icon="o", btn_width=192, btn_height=42,
+                                 variant="ghost", anchor="w", command=None)
+        setup_btn.pack(padx=24, pady=3)
+        setup_btn.set_state("disabled")
+        ModernButton(sidebar, text="Firmware Library", palette=p, icon="v",
+                     btn_width=192, btn_height=42, variant="ghost", anchor="w",
+                     command=self._open_firmware_library).pack(padx=24, pady=3)
+
+        tk.Frame(sidebar, bg=p.border, height=1).pack(fill="x", padx=24, pady=22)
+        tk.Label(sidebar, text="TOOLS", bg=p.sidebar, fg=p.text_muted,
+                 font=(FONT_UI, 8, "bold")).pack(anchor="w", padx=24, pady=(0, 9))
+        ModernButton(sidebar, text="Help and Information", palette=p, icon="?",
+                     btn_width=192, btn_height=42, variant="ghost", anchor="w",
+                     btn_font=(FONT_UI, 8, "bold"),
+                     command=self._open_help).pack(padx=24, pady=3)
+
+        version_text = f"v{APP_VERSION}" if APP_VERSION != "dev" else "dev build"
+        tk.Label(sidebar, text=version_text, bg=p.sidebar, fg=p.text_muted,
+                 font=(FONT_UI, 8)).pack(side="bottom", anchor="w",
+                                          padx=24, pady=(0, 22))
+
+    def _build_modern_topbar(self, workspace, p):
+        topbar = tk.Frame(workspace, bg=p.window, height=96)
+        topbar.pack(fill="x", padx=30)
+        topbar.pack_propagate(False)
+
+        title_col = tk.Frame(topbar, bg=p.window)
+        title_col.pack(side="left", pady=(24, 0))
+        tk.Label(title_col, text="Dashboard", bg=p.window, fg=p.text,
+                 font=(FONT_UI, 18, "bold")).pack(anchor="w")
+        tk.Label(title_col, text="Configure, update, and flash firmware for your controller.",
+                 bg=p.window, fg=p.text_muted, font=(FONT_UI, 9)).pack(anchor="w")
+
+        action_row = tk.Frame(topbar, bg=p.window)
+        action_row.pack(side="right", pady=26)
+        ModernButton(action_row, text="Report bugs", palette=p,
+                     command=self._open_bug_report,
+                     btn_width=126, btn_height=38, variant="primary").pack(side="left", padx=(0, 10))
+        self._mode_btn = ModernButton(action_row, text="No controller detected",
+                                      palette=p, command=None,
+                                      btn_width=210, btn_height=38,
+                                      variant="soft")
+        self._mode_btn.pack(side="left")
+        self._mode_btn.set_state("disabled")
+        tk.Frame(workspace, bg=p.border, height=1).pack(fill="x")
+
+    def _build_modern_hero(self, content, p):
+        hero = ModernCard(content, palette=p, height=205, radius=8, padding=20)
+        hero.pack(fill="x")
+
+        visual = tk.Frame(hero.inner, bg=p.surface_alt, width=186, height=160,
+                          highlightbackground=p.border, highlightthickness=1)
+        visual.pack(side="left", padx=(0, 24), fill="y")
+        visual.pack_propagate(False)
+        self._hero_art_box = visual
+        self._hero_art_label = tk.Label(visual, text="OCC", bg=p.surface_alt,
+                                        fg=p.text, font=(FONT_UI, 25, "bold"))
+        self._hero_art_label.place(relx=0.5, rely=0.5, anchor="center")
+        self._hero_art_frames = []
+        self._hero_art_job = None
+        self._hero_art_key = None
+        self._set_device_art(None)
+
+        ctrl_text_col = tk.Frame(hero.inner, bg=p.surface)
+        ctrl_text_col.pack(side="left", fill="both", expand=True, pady=4)
+        status_row = tk.Frame(ctrl_text_col, bg=p.surface)
+        status_row.pack(anchor="w")
+        self._ctrl_icon = tk.Label(status_row, text="o", bg=p.surface,
+                                   fg=p.text_muted, font=(FONT_UI, 12, "bold"))
+        self._ctrl_icon.pack(side="left", padx=(0, 7))
+        self._ctrl_status = tk.Label(status_row, text="No device detected",
+                                     bg=p.surface, fg=p.text_muted,
+                                     font=(FONT_UI, 10, "bold"), anchor="w")
+        self._ctrl_status.pack(side="left")
+        tk.Label(ctrl_text_col, text="OCC Controller", bg=p.surface, fg=p.text,
+                 font=(FONT_UI, 20, "bold")).pack(anchor="w", pady=(14, 4))
+        self._ctrl_detail = tk.Label(ctrl_text_col, text="Connect a controller to begin.",
+                                     bg=p.surface, fg=p.text_muted,
+                                     font=(FONT_UI, 9), anchor="w",
+                                     wraplength=480, justify="left")
+        self._ctrl_detail.pack(anchor="w")
+
+        metric_row = tk.Frame(ctrl_text_col, bg=p.surface)
+        metric_row.pack(anchor="w", pady=(18, 0))
+        self._hero_fw_value = self._tiny_metric(metric_row, "Firmware", "--")
+        self._hero_transport_value = self._tiny_metric(metric_row, "Transport", "--")
+        self._hero_sync_value = self._tiny_metric(metric_row, "Last sync", "--")
+
+        _ctrl_btn_frame = tk.Frame(hero.inner, bg=p.surface)
+        _ctrl_btn_frame.pack(side="right", padx=(18, 0), pady=20)
+        self._easy_cfg_btn = ModernButton(
+            _ctrl_btn_frame, text="Easy Configuration",
+            command=self._open_easy_config, palette=p,
+            bg_color=p.accent, btn_width=215, btn_height=42)
+        self._easy_cfg_btn.pack(pady=(0, 10))
+        self._easy_cfg_btn.set_state("disabled")
+        self._cfg_btn = ModernButton(
+            _ctrl_btn_frame, text="Advanced Configuration",
+            command=self._open_configurator, palette=p,
+            btn_width=215, btn_height=42, variant="soft")
+        self._cfg_btn.pack()
+        self._cfg_btn.set_state("disabled")
+
+    def _build_modern_cards(self, content, p):
+        grid = tk.Frame(content, bg=p.window)
+        grid.pack(fill="x", pady=(18, 0))
+        for col in range(3):
+            grid.columnconfigure(col, weight=1, uniform="menu_cards")
+
+        fw_card = ModernCard(grid, palette=p, height=286, radius=8, padding=18)
+        fw_card.grid(row=0, column=0, sticky="nsew", padx=(0, 9))
+        fw_header = tk.Frame(fw_card.inner, bg=p.surface)
+        fw_header.pack(fill="x")
+        self._fw_icon = tk.Label(fw_header, text="v", bg=p.surface,
+                                 fg=p.text_muted, font=(FONT_UI, 13, "bold"))
+        self._fw_icon.pack(side="left", padx=(0, 10))
+        tk.Label(fw_header, text="Firmware Updates", bg=p.surface, fg=p.text,
+                 font=(FONT_UI, 12, "bold")).pack(side="left")
+        self._fw_status = tk.Label(fw_card.inner, text="No controller detected",
+                                   bg=p.surface, fg=p.text_muted,
+                                   font=(FONT_UI, 10, "bold"), anchor="w",
+                                   wraplength=300, justify="left")
+        self._fw_status.pack(anchor="w", pady=(20, 4))
+        self._fw_detail = tk.Label(fw_card.inner,
+                                   text="Connect a controller to check firmware.",
+                                   bg=p.surface, fg=p.text_muted,
+                                   font=(FONT_UI, 9), anchor="w",
+                                   wraplength=300, justify="left")
+        self._fw_detail.pack(anchor="w")
+        self._fw_btn_frame = tk.Frame(fw_card.inner, bg=p.surface)
+        self._fw_btn_frame.pack(side="bottom", anchor="w", pady=(16, 0))
+        self._flash_btn = None
+
+        profile_card = ModernCard(grid, palette=p, height=286, radius=8, padding=18)
+        profile_card.grid(row=0, column=1, sticky="nsew", padx=9)
+        prof_header = tk.Frame(profile_card.inner, bg=p.surface)
+        prof_header.pack(fill="x")
+        tk.Label(prof_header, text="o", bg=p.surface, fg=p.success,
+                 font=(FONT_UI, 13, "bold")).pack(side="left", padx=(0, 10))
+        tk.Label(prof_header, text="Installed Firmware", bg=p.surface, fg=p.text,
+                 font=(FONT_UI, 12, "bold")).pack(side="left")
+        self._profile_category = tk.Label(profile_card.inner, text="NO FIRMWARE",
+                                          bg=p.surface, fg=p.text_muted,
+                                          font=(FONT_UI, 8, "bold"), anchor="w")
+        self._profile_category.pack(anchor="w", pady=(24, 4))
+        self._profile_name = tk.Label(profile_card.inner, text="No active profile",
+                                      bg=p.surface, fg=p.text,
+                                      font=(FONT_UI, 16, "bold"), anchor="w",
+                                      wraplength=280, justify="left")
+        self._profile_name.pack(anchor="w")
+        self._profile_detail = tk.Label(profile_card.inner,
+                                        text="Connect a controller to load firmware details.",
+                                        bg=p.surface, fg=p.text_muted,
+                                        font=(FONT_UI, 9), anchor="w",
+                                        wraplength=280, justify="left")
+        self._profile_detail.pack(anchor="w", pady=(6, 0))
+
+        rst_card = ModernCard(grid, palette=p, height=286, radius=8, padding=18)
+        rst_card.grid(row=0, column=2, sticky="nsew", padx=(9, 0))
+        rst_header = tk.Frame(rst_card.inner, bg=p.surface)
+        rst_header.pack(fill="x")
+        self._rst_icon = tk.Label(rst_header, text="!", bg=p.surface,
+                                  fg=p.text_muted, font=(FONT_UI, 13, "bold"))
+        self._rst_icon.pack(side="left", padx=(0, 10))
+        tk.Label(rst_header, text="Factory Reset", bg=p.surface, fg=p.text,
+                 font=(FONT_UI, 12, "bold")).pack(side="left")
+        self._rst_status = tk.Label(rst_card.inner, text="No device detected",
+                                    bg=p.surface, fg=p.text_muted,
+                                    font=(FONT_UI, 10, "bold"), anchor="w",
+                                    wraplength=290, justify="left")
+        self._rst_status.pack(anchor="w", pady=(20, 4))
+        self._rst_detail = tk.Label(rst_card.inner,
+                                    text="Connect a controller or hold BOOTSEL while plugging in.",
+                                    bg=p.surface, fg=p.text_muted,
+                                    font=(FONT_UI, 9), anchor="w",
+                                    wraplength=290, justify="left")
+        self._rst_detail.pack(anchor="w")
+        self._rst_btn = ModernButton(rst_card.inner, text="Factory Reset",
+                                     command=self._do_factory_reset, palette=p,
+                                     bg_color=p.danger, btn_width=150, btn_height=36)
+        self._rst_btn.pack(side="bottom", anchor="w", pady=(16, 0))
+        self._rst_btn.set_state("disabled")
+
+    def _build_modern_activity(self, content, p):
+        activity = ModernCard(content, palette=p, height=324, radius=8, padding=18)
+        activity.pack(fill="x", pady=(18, 0))
+        tk.Label(activity.inner, text="Recent Activity", bg=p.surface, fg=p.text,
+                 font=(FONT_UI, 12, "bold")).pack(anchor="w")
+        self._activity_log_frame = tk.Frame(activity.inner, bg=p.surface)
+        self._activity_log_frame.pack(fill="both", expand=True, pady=(8, 0))
+        self._activity_rows = []
+        self._activity_last_values = {
+            "_activity_device": "Waiting for controller",
+            "_activity_firmware": "No check run yet",
+            "_activity_reset": "Unavailable",
+        }
+        self._activity_device = self._activity_row(
+            self._activity_log_frame, "Device", "Waiting for controller",
+            MIDNIGHT.text_muted)
+        self._activity_firmware = self._activity_row(
+            self._activity_log_frame, "Firmware", "No check run yet",
+            MIDNIGHT.text_muted)
+        self._activity_reset = self._activity_row(
+            self._activity_log_frame, "Factory Reset", "Unavailable",
+            MIDNIGHT.text_muted)
+
+    def _tiny_metric(self, parent, label, value):
+        p = MIDNIGHT
+        box = tk.Frame(parent, bg=p.surface, width=118, height=40)
+        box.pack(side="left", padx=(0, 28))
+        box.pack_propagate(False)
+        tk.Label(box, text=label.upper(), bg=p.surface, fg=p.text_muted,
+                 font=(FONT_UI, 7, "bold")).pack(anchor="w")
+        value_label = tk.Label(box, text=value, bg=p.surface, fg=p.text,
+                               font=(FONT_UI, 8, "bold"), anchor="w",
+                               wraplength=116, justify="left")
+        value_label.pack(anchor="w", pady=(2, 0))
+        return value_label
+
+    def _activity_row(self, parent, label, value, color=None, prepend=False):
+        p = MIDNIGHT
+        row = tk.Frame(parent, bg=p.surface_alt,
+                       highlightbackground=p.border, highlightthickness=1)
+        pack_args = {"fill": "x", "pady": (0, 5)}
+        siblings = [w for w in parent.winfo_children() if w is not row]
+        if prepend and siblings:
+            row.pack(**pack_args, before=siblings[0])
+        else:
+            row.pack(**pack_args)
+        stamp = time.strftime("%H:%M:%S")
+        tk.Label(row, text="*", bg=p.surface_alt, fg=color or p.text,
+                 font=(FONT_UI, 9, "bold"), width=2, anchor="center").pack(side="left", padx=(6, 0))
+        tk.Label(row, text=stamp, bg=p.surface_alt, fg=p.text_muted,
+                 font=(FONT_UI, 8), width=9, anchor="w").pack(side="left")
+        tk.Label(row, text=label, bg=p.surface_alt, fg=p.text_muted,
+                 font=(FONT_UI, 8), width=14, anchor="w").pack(side="left")
+        value_label = tk.Label(row, text=value, bg=p.surface_alt, fg=color or p.text,
+                               font=(FONT_UI, 8, "bold"), anchor="w",
+                               wraplength=760, justify="left")
+        value_label.pack(side="left", fill="x", expand=True, padx=(0, 8), pady=4)
+        self._activity_rows.append(row)
+        return value_label
+
+    def _trim_activity_rows(self):
+        rows = getattr(self, "_activity_rows", [])
+        while len(rows) > 12:
+            old = rows.pop(0)
+            try:
+                old.destroy()
+            except Exception:
+                pass
+
+    def _load_brand_icon(self, size):
+        path = self._find_occ_square_icon()
+        if not path:
+            return None
+        try:
+            from PIL import Image, ImageTk
+            img = Image.open(path).convert("RGBA").resize((size, size), Image.LANCZOS)
+            return ImageTk.PhotoImage(img)
+        except Exception:
+            return None
+
+    def _find_occ_square_icon(self):
+        search_dirs = []
+        if getattr(sys, '_MEIPASS', None):
+            search_dirs.append(sys._MEIPASS)
+        search_dirs.append(os.path.dirname(os.path.abspath(sys.argv[0])))
+        src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if src_dir not in search_dirs:
+            search_dirs.append(src_dir)
+        for d in search_dirs:
+            for name in ("OCCSquareCrop.ico", "OCCSquareCrop.ICO"):
+                path = os.path.join(d, name)
+                if os.path.isfile(path):
+                    return path
+        return None
+
+    def _resource_search_dirs(self):
+        dirs = []
+        for path in (
+            getattr(sys, "_MEIPASS", None),
+            os.path.dirname(os.path.abspath(sys.argv[0])),
+            _resource_path(),
+        ):
+            if path and path not in dirs:
+                dirs.append(path)
+        return dirs
+
+    def _find_art_file(self, *names):
+        for d in self._resource_search_dirs():
+            for name in names:
+                if not name:
+                    continue
+                path = os.path.join(d, name)
+                if os.path.isfile(path):
+                    return path
+        return None
+
+    def _device_gif_candidates(self, device_type=None, uf2_path=None, label=None):
+        candidates = []
+        if uf2_path:
+            base = os.path.splitext(os.path.basename(uf2_path))[0]
+            candidates.append(base + ".gif")
+            for prefix in ("Wired_", "Wireless_"):
+                if base.startswith(prefix):
+                    candidates.append(base[len(prefix):] + ".gif")
+
+        mapping = {
+            "guitar_alternate": ["Guitar_Controller.gif"],
+            "guitar_alternate_dongle": ["Guitar_Controller.gif"],
+            "guitar_combined": ["Guitar_Controller.gif"],
+            "guitar_live_6fret": ["Guitar_Controller_6Fret.gif"],
+            "drum_kit": ["Drum_Controller.gif"],
+            "drum_combined": ["Drum_Controller.gif"],
+            "dongle": ["Wireless_Dongle_4Channel.gif"],
+            "pedal": ["Pedal_Accessory.gif"],
+            "pico_retro": ["Retro_Controller.gif"],
+            "pico_arcadestick": ["ArcadeStick_Controller.gif"],
+            "keyboard_macro": ["Keyboard_Macro_Pad.gif"],
+        }
+        candidates.extend(mapping.get(device_type, []))
+
+        label_text = (label or "").lower()
+        if not candidates and "6" in label_text and "fret" in label_text:
+            candidates.append("Guitar_Controller_6Fret.gif")
+        elif not candidates and "drum" in label_text:
+            candidates.append("Drum_Controller.gif")
+        elif not candidates and "dongle" in label_text:
+            candidates.append("Wireless_Dongle_4Channel.gif")
+        elif not candidates and "guitar" in label_text:
+            candidates.append("Guitar_Controller.gif")
+
+        unique = []
+        for name in candidates:
+            if name not in unique:
+                unique.append(name)
+        return unique
+
+    def _cancel_hero_art_animation(self):
+        job = getattr(self, "_hero_art_job", None)
+        if job:
+            try:
+                self.root.after_cancel(job)
+            except Exception:
+                pass
+        self._hero_art_job = None
+
+    def _fit_art_frame(self, image, max_w=160, max_h=132):
+        from PIL import Image
+        frame = image.convert("RGBA")
+        frame.thumbnail((max_w, max_h), Image.LANCZOS)
+        canvas = Image.new("RGBA", (max_w, max_h), (0, 0, 0, 0))
+        x = (max_w - frame.width) // 2
+        y = (max_h - frame.height) // 2
+        canvas.alpha_composite(frame, (x, y))
+        return canvas
+
+    def _show_static_art(self, path=None):
+        self._cancel_hero_art_animation()
+        self._hero_art_frames = []
+        self._hero_art_label.config(image="", text="OCC", fg=MIDNIGHT.text)
+        if not path:
+            return
+        try:
+            from PIL import Image, ImageTk
+            image = Image.open(path)
+            fitted = self._fit_art_frame(image, 160, 132)
+            self._hero_static_art = ImageTk.PhotoImage(fitted)
+            self._hero_art_label.config(image=self._hero_static_art, text="")
+        except Exception:
+            self._hero_art_label.config(image="", text="OCC")
+
+    def _start_hero_gif(self, gif_path):
+        self._cancel_hero_art_animation()
+        try:
+            from PIL import Image, ImageSequence, ImageTk
+            source = Image.open(gif_path)
+            frames = []
+            delays = []
+            for frame in ImageSequence.Iterator(source):
+                fitted = self._fit_art_frame(frame, 160, 132)
+                frames.append(ImageTk.PhotoImage(fitted))
+                delays.append(max(40, int(frame.info.get("duration", 80) or 80)))
+            if not frames:
+                self._show_static_art()
+                return
+            self._hero_art_frames = frames
+            self._hero_art_delays = delays
+
+            def _animate(index=0):
+                if not self._hero_art_label.winfo_exists():
+                    return
+                self._hero_art_label.config(image=frames[index], text="")
+                delay = delays[index] if index < len(delays) else 80
+                self._hero_art_job = self.root.after(
+                    delay, _animate, (index + 1) % len(frames))
+
+            _animate(0)
+        except Exception:
+            self._start_hero_gif_tk(gif_path)
+
+    def _start_hero_gif_tk(self, gif_path):
+        try:
+            frames = []
+            idx = 0
+            while True:
+                try:
+                    raw = tk.PhotoImage(file=gif_path, format=f"gif -index {idx}")
+                except tk.TclError:
+                    break
+                scale = max(1, (raw.width() + 159) // 160,
+                            (raw.height() + 131) // 132)
+                frames.append(raw.subsample(scale, scale) if scale > 1 else raw)
+                idx += 1
+            if not frames:
+                self._show_static_art()
+                return
+            self._hero_art_frames = frames
+            delay = 80
+
+            def _animate(index=0):
+                if not self._hero_art_label.winfo_exists():
+                    return
+                self._hero_art_label.config(image=frames[index], text="")
+                self._hero_art_job = self.root.after(
+                    delay, _animate, (index + 1) % len(frames))
+
+            _animate(0)
+        except Exception:
+            self._show_static_art()
+
+    def _set_device_art(self, device_type=None, label=None, uf2_path=None):
+        key = (device_type, label, uf2_path)
+        if key == getattr(self, "_hero_art_key", None):
+            return
+        self._hero_art_key = key
+        gif_path = self._find_art_file(
+            *self._device_gif_candidates(device_type, uf2_path, label))
+        if gif_path:
+            self._start_hero_gif(gif_path)
+            return
+        self._show_static_art(
+            self._find_art_file("OCCSquareLogoFull.png", "OCCLogo.png"))
+
+    def _open_bug_report(self):
+        webbrowser.open("https://github.com/justlovett0/OCC-Configurator/issues")
+
+    def _open_firmware_library(self):
+        target = find_rpi_rp2_drive() or find_esp32_download_target()
+        if target and self._on_flash_screen:
+            if self._poll_job:
+                self.root.after_cancel(self._poll_job)
+                self._poll_job = None
+            self._on_flash_screen(target)
+            return
+        _centered_dialog(
+            self.root,
+            "Firmware Library",
+            "No firmware-mode device is detected.\n\n"
+            "For Raspberry Pi Pico: hold BOOTSEL while plugging in the controller.\n\n"
+            "For ESP32-S3: hold BOOT, tap RESET / EN, then release BOOT.",
+            kind="info"
+        )
+
+    def _set_mode_status(self, text, color=None, command=None, enabled=False):
+        btn = getattr(self, "_mode_btn", None)
+        if not btn:
+            return
+        btn.set_text(text)
+        btn.set_command(command)
+        if color:
+            btn.update_color(color)
+        btn.set_state("normal" if enabled else "disabled")
+
+    def _enter_play_mode_from_config(self):
+        port = getattr(self, "_pending_port", None) or PicoSerial.find_config_port()
+        if not port:
+            _centered_dialog(
+                self.root,
+                "Play Mode",
+                "No serial/COM mode controller was found.",
+                kind="warning"
+            )
+            return
+
+        self._set_mode_status("Returning to Play Mode", MIDNIGHT.warning, None, enabled=False)
+        self._ctrl_detail.config(text="Sending reboot command to enter play mode...", fg=TEXT_DIM)
+
+        def _worker(captured_port=port):
+            pico = PicoSerial()
+            try:
+                pico.connect(captured_port)
+                pico.reboot()
+                self.root.after(0, lambda: self._after_enter_play_mode(True, None))
+            except Exception as exc:
+                try:
+                    pico.disconnect()
+                except Exception:
+                    pass
+                self.root.after(0, lambda e=exc: self._after_enter_play_mode(False, e))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _after_enter_play_mode(self, ok, error):
+        self._last_fw_state = None
+        self._pending_port = None
+        if ok:
+            self._ctrl_detail.config(text="Controller is rebooting to play mode...", fg=TEXT_DIM)
+            self._set_mode_status("Waiting for Play Mode", MIDNIGHT.warning, None, enabled=False)
+        else:
+            self._ctrl_detail.config(text=f"Could not enter play mode: {error}", fg=ACCENT_RED)
+            self._set_mode_status("Click to Enter Play Mode", MIDNIGHT.accent,
+                                  self._enter_play_mode_from_config, enabled=True)
+
+    def _profile_summary(self, device_type, label=None):
+        category = "CONTROLLER"
+        name = label or "OCC Controller"
+        detail = "Configuration profile loaded."
+        if device_type in ("guitar_alternate", "guitar_alternate_dongle"):
+            category, name, detail = "STANDARD GUITAR", "5-Fret - Wired", "14 inputs - Tilt - Whammy - LEDs"
+        elif device_type == "guitar_combined":
+            category, name, detail = "STANDARD GUITAR", "5-Fret - Wireless", "14 inputs - Tilt - Whammy - LEDs"
+        elif device_type == "guitar_live_6fret":
+            category, name, detail = "6-FRET GUITAR", "6-Fret - Wired", "16 inputs - Tilt - Whammy - LEDs"
+        elif device_type in ("drum_kit", "drum_combined"):
+            category, name, detail = "DRUM KIT", "Drum Controller", "Pads - Cymbals - Kick - Navigation"
+        elif device_type == "pedal":
+            category, name, detail = "ACCESSORY", "Pedal Controller", "Auxiliary pedal inputs"
+        elif device_type == "pico_retro":
+            category, name, detail = "RETRO", "Retro Controller", "Gamepad buttons and analog triggers"
+        elif device_type == "pico_arcadestick":
+            category, name, detail = "ARCADE", "Arcade Stick", "Stick, action buttons, and navigation"
+        elif device_type == "keyboard_macro":
+            category, name, detail = "MACRO", "Keyboard Macro Pad", "Programmable keyboard shortcuts"
+        elif device_type == "dongle":
+            category, name, detail = "DONGLE", "Wireless Dongle", "Receiver device - no configurable profile"
+        return category, name, detail
+
+    def _update_profile_card(self, device_type=None, label=None, detail_suffix=None):
+        if not hasattr(self, "_profile_name"):
+            return
+        if not device_type:
+            self._profile_category.config(text="NO PROFILE", fg=MIDNIGHT.text_muted)
+            self._profile_name.config(text="No active profile")
+            self._profile_detail.config(text="Connect a controller to load profile details.")
+            return
+        category, name, detail = self._profile_summary(device_type, label)
+        if detail_suffix:
+            detail = f"{detail} - {detail_suffix}"
+        self._profile_category.config(text=category, fg=MIDNIGHT.text_muted)
+        self._profile_name.config(text=name)
+        self._profile_detail.config(text=detail)
+
+    def _set_activity_text(self, attr, text, color=None):
+        color = color or MIDNIGHT.text
+        label = getattr(self, attr, None)
+        previous = getattr(self, "_activity_last_values", {}).get(attr)
+        if previous == text:
+            if label:
+                label.config(text=text, fg=color)
+            return
+        if not hasattr(self, "_activity_last_values"):
+            self._activity_last_values = {}
+        self._activity_last_values[attr] = text
+
+        labels = {
+            "_activity_device": "Device",
+            "_activity_firmware": "Firmware",
+            "_activity_reset": "Factory Reset",
+        }
+        log_frame = getattr(self, "_activity_log_frame", None)
+        if log_frame and log_frame.winfo_exists():
+            new_label = self._activity_row(
+                log_frame, labels.get(attr, "Status"), text, color, prepend=True)
+            setattr(self, attr, new_label)
+            self._trim_activity_rows()
+        elif label:
+            label.config(text=text, fg=color)
+
     def _poll(self):
         # If a Pico is in BOOTSEL (USB mass-storage) mode, wait for it to be
         # stable for _BOOTSEL_STABLE_NEEDED consecutive polls before switching
@@ -385,6 +1013,20 @@ class MainMenu:
                         self._ctrl_detail.config(text=detail, fg=TEXT_DIM)
                         self._cfg_btn.set_state("normal")
                         self._easy_cfg_btn.set_state("normal" if has_easy else "disabled")
+                        self._set_mode_status("Controller in Play Mode",
+                                              MIDNIGHT.success, None, enabled=True)
+                        device_type = XINPUT_SUBTYPE_TO_DEVTYPE.get(subtype, "unknown")
+                        self._update_profile_card(
+                            device_type,
+                            first_label,
+                            "Play mode")
+                        self._set_device_art(device_type, first_label)
+                        self._hero_fw_value.config(text="Check needed")
+                        self._hero_transport_value.config(text="XInput")
+                        self._hero_sync_value.config(text="Just now")
+                        self._set_activity_text("_activity_device",
+                                                _format_detected_status(first_label, count),
+                                                MIDNIGHT.success)
                         self._pending_port = None
                     elif dongle_devices:
                         # Only dongle(s) present — show info but no configure option.
@@ -403,6 +1045,16 @@ class MainMenu:
                             fg=TEXT_DIM)
                         self._cfg_btn.set_state("disabled")
                         self._easy_cfg_btn.set_state("disabled")
+                        self._set_mode_status("Dongle Detected", MIDNIGHT.surface_alt,
+                                              None, enabled=False)
+                        self._update_profile_card("dongle", "Dongle", "Play mode")
+                        self._set_device_art("dongle", "Dongle")
+                        self._hero_fw_value.config(text="BOOTSEL only")
+                        self._hero_transport_value.config(text="XInput")
+                        self._hero_sync_value.config(text="Just now")
+                        self._set_activity_text("_activity_device",
+                                                _format_detected_status("Dongle", count),
+                                                MIDNIGHT.warning)
                         self._pending_port = None
                 except Exception:
                     pass
@@ -416,6 +1068,15 @@ class MainMenu:
                 self._pending_port = None
                 self._xinput_first_subtype = None
                 self._xinput_dongle_count  = 0
+                self._set_mode_status("No controller detected", MIDNIGHT.surface_alt,
+                                      None, enabled=False)
+                self._update_profile_card()
+                self._set_device_art(None)
+                self._hero_fw_value.config(text="--")
+                self._hero_transport_value.config(text="--")
+                self._hero_sync_value.config(text="--")
+                self._set_activity_text("_activity_device", "Waiting for controller",
+                                        MIDNIGHT.text_muted)
 
     def _apply_ctrl_status(self, name, dtype, port):
         """Apply serial probe result to the controller card. Runs on main thread."""
@@ -476,6 +1137,20 @@ class MainMenu:
         self._pending_port = port
         self._xinput_count = 0
         self._xinput_dongle_count = 0
+        self._set_device_art(dtype, name)
+        self._hero_fw_value.config(text="Check needed")
+        self._hero_transport_value.config(text="USB Serial")
+        self._hero_sync_value.config(text="Just now")
+        self._set_activity_text("_activity_device", f"{name} on {port}",
+                                MIDNIGHT.success)
+        if dtype == "dongle":
+            self._set_mode_status("Dongle Detected", MIDNIGHT.surface_alt,
+                                  None, enabled=False)
+            self._update_profile_card("dongle", name, "Config mode")
+        else:
+            self._set_mode_status("Click to Enter Play Mode", MIDNIGHT.accent,
+                                  self._enter_play_mode_from_config, enabled=True)
+            self._update_profile_card(dtype, name, f"Config mode - {port}")
 
     def _refresh_firmware_status(self):
         """Update the FIRMWARE card on the main menu each poll cycle."""
@@ -531,6 +1206,15 @@ class MainMenu:
                 text=f"Pico in USB mode  ·  {value}", fg=ACCENT_GREEN)
             self._fw_detail.config(
                 text="Ready to flash firmware.", fg=TEXT_DIM)
+            self._set_mode_status("Firmware Mode", MIDNIGHT.surface_alt,
+                                  None, enabled=False)
+            self._set_device_art(getattr(self, "_pending_fw_type", None))
+            self._hero_fw_value.config(text="Flash mode")
+            self._hero_transport_value.config(text="BOOTSEL")
+            self._hero_sync_value.config(text="Just now")
+            self._set_activity_text("_activity_firmware",
+                                    "Ready to open Firmware Library",
+                                    MIDNIGHT.success)
             self._build_flash_button(value)
 
         elif state == "esp_download":
@@ -540,6 +1224,15 @@ class MainMenu:
                 text=f"ESP32-S3 in download mode  Â·  {value['device']}", fg=ACCENT_GREEN)
             self._fw_detail.config(
                 text="Ready to flash ESP32 firmware.", fg=TEXT_DIM)
+            self._set_mode_status("Firmware Mode", MIDNIGHT.surface_alt,
+                                  None, enabled=False)
+            self._set_device_art(getattr(self, "_pending_fw_type", None))
+            self._hero_fw_value.config(text="ESP32")
+            self._hero_transport_value.config(text="ESP32 download")
+            self._hero_sync_value.config(text="Just now")
+            self._set_activity_text("_activity_firmware",
+                                    "Ready to flash ESP32 firmware",
+                                    MIDNIGHT.success)
             self._build_flash_button(value)
 
         elif state == "config":
@@ -555,6 +1248,7 @@ class MainMenu:
                 device_type = cfg.get("device_type", "unknown")
             except Exception:
                 pass
+            self._set_device_art(device_type, device_name)
 
             port_record = PicoSerial.find_port_record(value) or {}
             if port_record.get("platform") == "esp32s3":
@@ -565,76 +1259,114 @@ class MainMenu:
                 self._fw_detail.config(
                     text="ESP32 reflashing requires download mode: hold BOOT, tap RESET / EN, then return here.",
                     fg=TEXT_DIM)
+                self._set_mode_status("Click to Enter Play Mode", MIDNIGHT.accent,
+                                      self._enter_play_mode_from_config, enabled=True)
+                self._hero_fw_value.config(text="ESP32")
+                self._hero_transport_value.config(text="USB Serial")
+                self._hero_sync_value.config(text="Just now")
                 return
 
             uf2 = find_uf2_for_device_type(device_type)
             self._fw_icon.config(text="●", fg=ACCENT_GREEN)
             self._fw_status.config(
                 text=f"{device_name}  —  Config mode  ·  {value}", fg=ACCENT_GREEN)
+            self._set_mode_status("Click to Enter Play Mode", MIDNIGHT.accent,
+                                  self._enter_play_mode_from_config, enabled=True)
             if uf2:
                 bundled_date_str = get_bundled_fw_date_str(uf2)
+                self._hero_fw_value.config(text=bundled_date_str)
+                self._hero_transport_value.config(text="USB Serial")
+                self._hero_sync_value.config(text="Just now")
                 # Store for use by the backup worker
                 self._pending_fw_uf2  = uf2
                 self._pending_fw_type = device_type
                 self._pending_fw_via  = "config"
                 self._pending_fw_port = value
                 fw_target = self._make_fw_target_key(uf2, device_type, "config", value)
-                check_btn = RoundedButton(
+                check_btn = ModernButton(
                     self._fw_btn_frame, text="Check for Updates",
+                    palette=MIDNIGHT,
                     command=self._check_for_updates,
-                    bg_color=ACCENT_BLUE, btn_width=160, btn_height=36)
+                    bg_color=MIDNIGHT.accent, btn_width=148, btn_height=34,
+                    btn_font=(FONT_UI, 8, "bold"))
                 check_btn.pack(side="left", padx=(0, 8))
-                bk_btn = RoundedButton(
+                bk_btn = ModernButton(
                     self._fw_btn_frame, text="Backup & Update",
+                    palette=MIDNIGHT,
                     command=self._backup_and_update_prompt,
-                    bg_color="#555560", btn_width=160, btn_height=36)
+                    bg_color=MIDNIGHT.surface_alt, btn_width=132, btn_height=34,
+                    btn_font=(FONT_UI, 8, "bold"), variant="soft")
                 bk_btn.pack(side="left")
                 self._apply_fw_check_result_to_card(
                     fw_target,
                     bk_btn,
                     default_text=f"Firmware: {os.path.basename(uf2)}  (built {bundled_date_str})  —  click Check for Updates.")
                 self._backup_update_btn = bk_btn
+                self._set_fw_activity_for_target(fw_target)
             else:
                 self._clear_fw_check_result()
+                self._hero_fw_value.config(text="Missing UF2")
+                self._hero_transport_value.config(text="USB Serial")
+                self._hero_sync_value.config(text="Just now")
                 self._fw_detail.config(
                     text="No matching UF2 firmware file found alongside this exe.",
                     fg=ACCENT_ORANGE)
+                self._set_activity_text("_activity_firmware",
+                                        "No matching firmware file found",
+                                        MIDNIGHT.warning)
 
         elif state == "xinput":
             # Infer device type from the XInput subtype we already read
             device_type = XINPUT_SUBTYPE_TO_DEVTYPE.get(xinput_subtype, "unknown")
             uf2 = find_uf2_for_device_type(device_type)
+            self._set_device_art(device_type, value)
             self._fw_icon.config(text="●", fg=ACCENT_GREEN)
             self._fw_status.config(
                 text=_format_detected_status(value, xinput_count),
                 fg=ACCENT_GREEN)
+            self._set_mode_status("Controller in Play Mode", MIDNIGHT.success,
+                                  None, enabled=True)
             if uf2:
                 bundled_date_str = get_bundled_fw_date_str(uf2)
+                self._hero_fw_value.config(text=bundled_date_str)
+                self._hero_transport_value.config(text="XInput")
+                self._hero_sync_value.config(text="Just now")
                 self._pending_fw_uf2  = uf2
                 self._pending_fw_type = device_type
                 self._pending_fw_via  = "xinput"
                 self._pending_fw_port = None
                 fw_target = self._make_fw_target_key(uf2, device_type, "xinput", None)
-                check_btn = RoundedButton(
+                check_btn = ModernButton(
                     self._fw_btn_frame, text="Check for Updates",
+                    palette=MIDNIGHT,
                     command=self._check_for_updates,
-                    bg_color=ACCENT_BLUE, btn_width=160, btn_height=36)
+                    bg_color=MIDNIGHT.accent, btn_width=148, btn_height=34,
+                    btn_font=(FONT_UI, 8, "bold"))
                 check_btn.pack(side="left", padx=(0, 8))
-                bk_btn = RoundedButton(
+                bk_btn = ModernButton(
                     self._fw_btn_frame, text="Backup & Update",
+                    palette=MIDNIGHT,
                     command=self._backup_and_update_prompt,
-                    bg_color="#555560", btn_width=160, btn_height=36)
+                    bg_color=MIDNIGHT.surface_alt, btn_width=132, btn_height=34,
+                    btn_font=(FONT_UI, 8, "bold"), variant="soft")
                 bk_btn.pack(side="left")
                 self._apply_fw_check_result_to_card(
                     fw_target,
                     bk_btn,
                     default_text=f"Firmware: {os.path.basename(uf2)}  (built {bundled_date_str})  —  click Check for Updates.")
                 self._backup_update_btn = bk_btn
+                self._set_fw_activity_for_target(fw_target)
             else:
                 self._clear_fw_check_result()
+                self._hero_fw_value.config(text="Missing UF2")
+                self._hero_transport_value.config(text="XInput")
+                self._hero_sync_value.config(text="Just now")
                 self._fw_detail.config(
                     text="No matching UF2 firmware file found alongside this exe.",
                     fg=ACCENT_ORANGE)
+                self._set_activity_text("_activity_firmware",
+                                        "No matching firmware file found",
+                                        MIDNIGHT.warning)
 
         elif state == "dongle_xinput":
             self._clear_fw_check_result()
@@ -648,6 +1380,15 @@ class MainMenu:
             self._fw_detail.config(
                 text="To flash dongle firmware: hold BOOTSEL while plugging in the dongle.",
                 fg=TEXT_DIM)
+            self._set_mode_status("Dongle Detected", MIDNIGHT.surface_alt,
+                                  None, enabled=False)
+            self._set_device_art("dongle", "Dongle")
+            self._hero_fw_value.config(text="BOOTSEL only")
+            self._hero_transport_value.config(text="XInput")
+            self._hero_sync_value.config(text="Just now")
+            self._set_activity_text("_activity_firmware",
+                                    "Dongle requires BOOTSEL to flash",
+                                    MIDNIGHT.warning)
 
         else:  # none
             self._clear_fw_check_result()
@@ -656,6 +1397,13 @@ class MainMenu:
             self._fw_detail.config(
                 text="Connect a controller, hold BOOTSEL for a Pico, or enter ESP32-S3 download mode with BOOT + RESET.",
                 fg=TEXT_DIM)
+            self._set_device_art(None)
+            self._hero_fw_value.config(text="--")
+            self._hero_transport_value.config(text="--")
+            self._hero_sync_value.config(text="--")
+            self._set_activity_text("_activity_firmware",
+                                    "No firmware target available",
+                                    MIDNIGHT.text_muted)
 
     def _make_fw_target_key(self, uf2_path, device_type, via, cfg_port):
         return (uf2_path, device_type, via, cfg_port if via == "config" else None)
@@ -679,13 +1427,34 @@ class MainMenu:
                 fg=result.get("detail_color", TEXT_DIM))
             if result.get("status") == "update":
                 backup_btn.set_state("normal")
-                backup_btn.update_color(ACCENT_BLUE)
+                backup_btn.update_color(MIDNIGHT.accent)
+                if hasattr(self, "_hero_fw_value"):
+                    self._hero_fw_value.config(text="Update ready")
             else:
                 backup_btn.set_state("disabled")
+                if hasattr(self, "_hero_fw_value"):
+                    self._hero_fw_value.config(text="Up to date")
             return
 
         self._fw_detail.config(text=default_text, fg=TEXT_DIM)
         backup_btn.set_state("disabled")
+
+    def _set_fw_activity_for_target(self, fw_target):
+        result = self._fw_check_result
+        if result and result.get("target") == fw_target:
+            if result.get("status") == "update":
+                msg = "Update recommended" if "recommended" in result.get("detail_text", "").lower() else "Update available"
+                self._set_activity_text("_activity_firmware",
+                                        msg,
+                                        MIDNIGHT.warning)
+            else:
+                self._set_activity_text("_activity_firmware",
+                                        "Firmware is up to date",
+                                        MIDNIGHT.success)
+            return
+        self._set_activity_text("_activity_firmware",
+                                "Click Check for Updates",
+                                MIDNIGHT.text_muted)
 
 
     def _refresh_reset_card(self):
@@ -713,11 +1482,15 @@ class MainMenu:
                 self._rst_btn.set_state("normal")
                 self._rst_btn._drive = drive
                 self._rst_btn._via   = "bootsel"
+                self._set_activity_text("_activity_reset", "Ready from BOOTSEL",
+                                        MIDNIGHT.success)
             else:
                 self._rst_detail.config(
                     text="resetFW.uf2 not found — place it alongside this exe.",
                     fg=ACCENT_ORANGE)
                 self._rst_btn.set_state("disabled")
+                self._set_activity_text("_activity_reset", "resetFW.uf2 missing",
+                                        MIDNIGHT.warning)
 
         elif config_port:
             device_label = getattr(self, '_xinput_device_label', 'Controller')
@@ -735,11 +1508,15 @@ class MainMenu:
                 self._rst_btn._drive       = None
                 self._rst_btn._via         = "config"
                 self._rst_btn._config_port = config_port
+                self._set_activity_text("_activity_reset", "Available from config mode",
+                                        MIDNIGHT.success)
             else:
                 self._rst_detail.config(
                     text="resetFW.uf2 not found — place it alongside this exe.",
                     fg=ACCENT_ORANGE)
                 self._rst_btn.set_state("disabled")
+                self._set_activity_text("_activity_reset", "resetFW.uf2 missing",
+                                        MIDNIGHT.warning)
 
         elif xinput_count:
             count = xinput_count
@@ -754,11 +1531,15 @@ class MainMenu:
                 self._rst_btn.set_state("normal")
                 self._rst_btn._drive = None
                 self._rst_btn._via   = "xinput"
+                self._set_activity_text("_activity_reset", "Available from play mode",
+                                        MIDNIGHT.success)
             else:
                 self._rst_detail.config(
                     text="resetFW.uf2 not found — place it alongside this exe.",
                     fg=ACCENT_ORANGE)
                 self._rst_btn.set_state("disabled")
+                self._set_activity_text("_activity_reset", "resetFW.uf2 missing",
+                                        MIDNIGHT.warning)
 
         elif getattr(self, '_xinput_dongle_count', 0):
             # Dongle has no config mode — can't send magic sequence to reach BOOTSEL.
@@ -772,6 +1553,8 @@ class MainMenu:
                 text="Hold BOOTSEL while plugging in the dongle to enable factory reset.",
                 fg=TEXT_DIM)
             self._rst_btn.set_state("disabled")
+            self._set_activity_text("_activity_reset", "Dongle requires BOOTSEL",
+                                    MIDNIGHT.warning)
 
         else:
             self._rst_icon.config(text="○", fg=TEXT_DIM)
@@ -780,6 +1563,8 @@ class MainMenu:
                 text="Connect a controller or hold BOOTSEL while plugging in.",
                 fg=TEXT_DIM)
             self._rst_btn.set_state("disabled")
+            self._set_activity_text("_activity_reset", "Unavailable",
+                                    MIDNIGHT.text_muted)
 
 
     # ── Alternatefw detection & de-Alternatefwify ───────────────────
@@ -1574,6 +2359,15 @@ class MainMenu:
             text="Factory Reset is unavailable until the device is converted to OCC firmware.",
             fg=TEXT_DIM)
         self._rst_btn.set_state("disabled")
+        self._set_mode_status("Incompatible Firmware", MIDNIGHT.surface_alt,
+                              None, enabled=False)
+        self._update_profile_card()
+        self._set_activity_text("_activity_device", "Incompatible firmware detected",
+                                MIDNIGHT.warning)
+        self._set_activity_text("_activity_firmware", "Firmware switch required",
+                                MIDNIGHT.warning)
+        self._set_activity_text("_activity_reset", "Unavailable",
+                                MIDNIGHT.warning)
 
     def _check_alternatefw_popup(self):
         """Check for a Alternatefw device and show a one-time popup per session.
@@ -1845,6 +2639,15 @@ class MainMenu:
             text="Factory Reset is unavailable until the device is converted to OCC firmware.",
             fg=TEXT_DIM)
         self._rst_btn.set_state("disabled")
+        self._set_mode_status("GP2040-CE Detected", MIDNIGHT.surface_alt,
+                              None, enabled=False)
+        self._update_profile_card()
+        self._set_activity_text("_activity_device", "GP2040-CE firmware detected",
+                                MIDNIGHT.warning)
+        self._set_activity_text("_activity_firmware", "Firmware switch required",
+                                MIDNIGHT.warning)
+        self._set_activity_text("_activity_reset", "Unavailable",
+                                MIDNIGHT.warning)
 
     def _check_gp2040ce_popup(self):
         """Check for a GP2040-CE device in web config mode and show a
@@ -2043,6 +2846,8 @@ class MainMenu:
 
         self._clear_fw_check_result()
         self._check_in_progress = True
+        self._set_activity_text("_activity_firmware", "Checking for updates",
+                                MIDNIGHT.warning)
 
         def worker():
             pico = PicoSerial()
@@ -2166,10 +2971,14 @@ class MainMenu:
                         self._fw_detail.config(
                             text=f"Update recommended  —  Bundled: {bundled_date_str}",
                             fg=ACCENT_ORANGE)
+                        self._hero_fw_value.config(text="Update ready")
+                        self._set_activity_text("_activity_firmware",
+                                                "Update recommended",
+                                                MIDNIGHT.warning)
                         btn = getattr(self, '_backup_update_btn', None)
                         if btn:
                             btn.set_state("normal")
-                            btn.update_color(ACCENT_BLUE)
+                            btn.update_color(MIDNIGHT.accent)
                     self.root.after(0, _enable)
                     settle_after_xinput_reboot()
                     finish()
@@ -2198,10 +3007,14 @@ class MainMenu:
                         self._fw_detail.config(
                             text=f"Update available!  Controller: {fw_date_str}  →  Bundled: {bundled_date_str}",
                             fg=ACCENT_ORANGE)
+                        self._hero_fw_value.config(text="Update ready")
+                        self._set_activity_text("_activity_firmware",
+                                                "Update available",
+                                                MIDNIGHT.warning)
                         btn = getattr(self, '_backup_update_btn', None)
                         if btn:
                             btn.set_state("normal")
-                            btn.update_color(ACCENT_BLUE)
+                            btn.update_color(MIDNIGHT.accent)
                     self.root.after(0, _enable)
                 else:
                     self._store_fw_check_result(
@@ -2219,6 +3032,10 @@ class MainMenu:
                         self._fw_detail.config(
                             text=f"Firmware is up to date  —  {fw_date_str}",
                             fg=ACCENT_GREEN)
+                        self._hero_fw_value.config(text=fw_date_str)
+                        self._set_activity_text("_activity_firmware",
+                                                "Firmware is up to date",
+                                                MIDNIGHT.success)
                     self.root.after(0, _up_to_date)
 
                 settle_after_xinput_reboot()

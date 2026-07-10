@@ -15,6 +15,11 @@ def _find_icon():
     if src_dir not in search_dirs:
         search_dirs.append(src_dir)
     for d in search_dirs:
+        for name in ("OCCSquareCrop.ico", "OCCSquareCrop.ICO"):
+            p = os.path.join(d, name)
+            if os.path.isfile(p):
+                return p
+    for d in search_dirs:
         for f in os.listdir(d):
             if f.lower().endswith('.ico'):
                 return os.path.join(d, f)

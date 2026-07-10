@@ -159,22 +159,17 @@ if exist "PresetConfigs\" (
             set "PRESET_ARGS=!PRESET_ARGS! --add-data="%%P;PresetConfigs""
         )
     )
-    if not defined PRESET_ARGS (
-        echo   PresetConfigs\ folder exists but contains no .json files.
-    )
-) else (
-    echo   No PresetConfigs\ folder found - presets will not be bundled.
-)
-
-    REM ---- GIF files ----
     for %%G in (PresetConfigs\*.gif PresetConfigs\*.GIF) do (
         if exist "%%G" (
-            echo Bundling preset GIF: %%G
+            echo   Bundling preset GIF: %%G
             set "PRESET_ARGS=!PRESET_ARGS! --add-data="%%G;PresetConfigs""
         )
     )
+    if not defined PRESET_ARGS (
+        echo   PresetConfigs\ folder exists but contains no preset assets.
+    )
 ) else (
-    echo No PresetConfigs\ folder found - presets will not be bundled.
+    echo   No PresetConfigs\ folder found - presets will not be bundled.
 )
 
 REM Splash image
@@ -196,10 +191,15 @@ for %%A in (startup.wav startup.mp3 startup.ogg startup.flac startup.aac startup
 REM Icon
 set "ICON_ARG="
 set "ICON_DATA_ARG="
-for %%I in (*.ico) do (
-    if not defined ICON_ARG (
-        set "ICON_ARG=--icon=%%I"
-        set "ICON_DATA_ARG=--add-data=%%I;."
+if exist "OCCSquareCrop.ico" (
+    set "ICON_ARG=--icon=OCCSquareCrop.ico"
+    set "ICON_DATA_ARG=--add-data=OCCSquareCrop.ico;."
+) else (
+    for %%I in (*.ico) do (
+        if not defined ICON_ARG (
+            set "ICON_ARG=--icon=%%I"
+            set "ICON_DATA_ARG=--add-data=%%I;."
+        )
     )
 )
 
