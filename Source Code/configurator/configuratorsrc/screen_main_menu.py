@@ -13,6 +13,7 @@ from .fonts import FONT_UI, APP_VERSION, _resource_path
 from .widgets import (RoundedButton, CustomDropdown, HelpDialog, HelpButton,
                       ModernButton, ModernCard, MIDNIGHT,
                       _help_text, _help_placeholder)
+from .screen_splash import apply_window_icon
 from .serial_comms import PicoSerial
 from .firmware_utils import (find_rpi_rp2_drive, find_rpi_rp2_drive_info,
                               get_bundled_fw_date, get_bundled_fw_date_str, parse_fw_date,
@@ -578,17 +579,24 @@ class MainMenu:
                 pass
 
     def _load_brand_icon(self, size):
-        path = self._find_occ_square_icon()
+        path = self._find_occ_logo_image()
         if not path:
             return None
         try:
             from PIL import Image, ImageTk
-            img = Image.open(path).convert("RGBA").resize((size, size), Image.LANCZOS)
+            img = Image.open(path).convert("RGBA")
+            img.thumbnail((112, size), Image.LANCZOS)
             return ImageTk.PhotoImage(img)
         except Exception:
-            return None
+            try:
+                img = tk.PhotoImage(file=path)
+                scale = max(1, (img.width() + 111) // 112,
+                            (img.height() + size - 1) // size)
+                return img.subsample(scale, scale) if scale > 1 else img
+            except Exception:
+                return None
 
-    def _find_occ_square_icon(self):
+    def _find_occ_logo_image(self):
         search_dirs = []
         if getattr(sys, '_MEIPASS', None):
             search_dirs.append(sys._MEIPASS)
@@ -597,7 +605,8 @@ class MainMenu:
         if src_dir not in search_dirs:
             search_dirs.append(src_dir)
         for d in search_dirs:
-            for name in ("OCCSquareCrop.ico", "OCCSquareCrop.ICO"):
+            for name in ("OCCLogo.png", "OCCLogo.PNG",
+                         "OCCSquareLogoFull.png", "OCCSquareLogoFull.PNG"):
                 path = os.path.join(d, name)
                 if os.path.isfile(path):
                     return path
@@ -773,6 +782,14 @@ class MainMenu:
     def _open_bug_report(self):
         webbrowser.open("https://github.com/justlovett0/OCC-Configurator/issues")
 
+    def _open_controller_input_test(self):
+        _centered_dialog(
+            self.root,
+            "Test Controller Inputs",
+            "Controller input testing will be added here.",
+            kind="info"
+        )
+
     def _open_firmware_library(self):
         target = find_rpi_rp2_drive() or find_esp32_download_target()
         if target and self._on_flash_screen:
@@ -781,6 +798,19 @@ class MainMenu:
                 self._poll_job = None
             self._on_flash_screen(target)
             return
+
+        entry = self._firmware_library_bootsel_entry()
+        if entry:
+            if _centered_dialog(
+                self.root,
+                "Firmware Library",
+                "To view firmwares, you'll need to change your controller into "
+                "BOOTSEL mode.\n\nWant to do this now?",
+                kind="yesno"
+            ):
+                self._enter_bootsel_for_firmware_library(entry)
+            return
+
         _centered_dialog(
             self.root,
             "Firmware Library",
@@ -789,6 +819,106 @@ class MainMenu:
             "For ESP32-S3: hold BOOT, tap RESET / EN, then release BOOT.",
             kind="info"
         )
+
+    def _firmware_library_bootsel_entry(self):
+        port = PicoSerial.find_config_port()
+        if port:
+            return ("config", port)
+
+        if not XINPUT_AVAILABLE:
+            return None
+        try:
+            controllers = xinput_get_connected()
+        except Exception:
+            return None
+        occ_devices = [
+            c for c in controllers
+            if c[1] in OCC_SUBTYPES and c[1] not in DONGLE_XINPUT_SUBTYPES
+        ]
+        if not occ_devices:
+            return None
+        return ("xinput", occ_devices[0][0])
+
+    def _enter_bootsel_for_firmware_library(self, entry):
+        mode, value = entry
+        self._set_mode_status("Entering BOOTSEL", MIDNIGHT.warning,
+                              None, enabled=False)
+        self._set_activity_text("_activity_firmware",
+                                "Entering BOOTSEL mode",
+                                MIDNIGHT.warning)
+
+        def _finish_ok():
+            self._last_fw_state = None
+            self._set_mode_status("Waiting for Firmware Mode",
+                                  MIDNIGHT.warning, None, enabled=False)
+            self._set_activity_text("_activity_firmware",
+                                    "BOOTSEL command sent",
+                                    MIDNIGHT.success)
+
+        def _finish_error(error):
+            self._last_fw_state = None
+            self._set_mode_status("BOOTSEL failed", MIDNIGHT.surface_alt,
+                                  None, enabled=False)
+            self._set_activity_text("_activity_firmware",
+                                    "Could not enter BOOTSEL",
+                                    MIDNIGHT.warning)
+            _centered_dialog(
+                self.root,
+                "Firmware Library",
+                "Could not change the controller into BOOTSEL mode.\n\n"
+                f"{error}\n\n"
+                "Try unplugging and re-plugging while holding BOOTSEL.",
+                kind="error"
+            )
+
+        def _worker():
+            port = value if mode == "config" else None
+            if mode == "xinput":
+                try:
+                    for left, right in MAGIC_STEPS:
+                        result = xinput_send_vibration(value, left, right)
+                        if result != ERROR_SUCCESS:
+                            raise RuntimeError(
+                                "Failed to send the controller config signal.")
+                        time.sleep(0.08)
+                    xinput_send_vibration(value, 0, 0)
+                except Exception as exc:
+                    self.root.after(0, lambda e=exc: _finish_error(e))
+                    return
+
+                deadline = time.time() + 10.0
+                while time.time() < deadline:
+                    port = PicoSerial.find_config_port()
+                    if port:
+                        time.sleep(0.5)
+                        break
+                    time.sleep(0.3)
+                if not port:
+                    self.root.after(0, lambda: _finish_error(
+                        "The controller did not enter serial/config mode."))
+                    return
+
+            pico = PicoSerial()
+            try:
+                pico.connect(port)
+                for _ in range(3):
+                    if pico.ping():
+                        break
+                    time.sleep(0.3)
+                else:
+                    raise RuntimeError("The controller did not respond on the config port.")
+                pico.bootsel()
+            except Exception as exc:
+                try:
+                    pico.disconnect()
+                except Exception:
+                    pass
+                self.root.after(0, lambda e=exc: _finish_error(e))
+                return
+
+            self.root.after(0, _finish_ok)
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _set_mode_status(self, text, color=None, command=None, enabled=False):
         btn = getattr(self, "_mode_btn", None)
@@ -1013,8 +1143,10 @@ class MainMenu:
                         self._ctrl_detail.config(text=detail, fg=TEXT_DIM)
                         self._cfg_btn.set_state("normal")
                         self._easy_cfg_btn.set_state("normal" if has_easy else "disabled")
-                        self._set_mode_status("Controller in Play Mode",
-                                              MIDNIGHT.success, None, enabled=True)
+                        self._set_mode_status("Test Controller Inputs",
+                                              MIDNIGHT.success,
+                                              self._open_controller_input_test,
+                                              enabled=True)
                         device_type = XINPUT_SUBTYPE_TO_DEVTYPE.get(subtype, "unknown")
                         self._update_profile_card(
                             device_type,
@@ -1324,8 +1456,9 @@ class MainMenu:
             self._fw_status.config(
                 text=_format_detected_status(value, xinput_count),
                 fg=ACCENT_GREEN)
-            self._set_mode_status("Controller in Play Mode", MIDNIGHT.success,
-                                  None, enabled=True)
+            self._set_mode_status("Test Controller Inputs", MIDNIGHT.success,
+                                  self._open_controller_input_test,
+                                  enabled=True)
             if uf2:
                 bundled_date_str = get_bundled_fw_date_str(uf2)
                 self._hero_fw_value.config(text=bundled_date_str)
@@ -1455,6 +1588,79 @@ class MainMenu:
         self._set_activity_text("_activity_firmware",
                                 "Click Check for Updates",
                                 MIDNIGHT.text_muted)
+
+    def _backup_and_update_when_ready(self):
+        if getattr(self, "_check_in_progress", False):
+            self.root.after(250, self._backup_and_update_when_ready)
+            return
+        self._backup_and_update_prompt()
+
+    def _show_firmware_update_available_dialog(self, controller_fw, bundled_fw,
+                                               recommended=False):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Update Available")
+        dlg.configure(bg=BG_CARD)
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+        apply_window_icon(dlg)
+
+        body = tk.Frame(dlg, bg=BG_CARD, padx=26, pady=22)
+        body.pack(fill="both", expand=True)
+
+        headline = "A firmware update is available."
+        if recommended:
+            headline = "A firmware update is recommended."
+        tk.Label(body, text=headline, bg=BG_CARD, fg=TEXT,
+                 font=(FONT_UI, 11, "bold"), anchor="w",
+                 justify="left").pack(anchor="w", pady=(0, 16))
+
+        controller_text = controller_fw or "Older build / unknown"
+        tk.Label(
+            body,
+            text=(
+                f"Controller firmware:  {controller_text}\n"
+                f"Bundled firmware:     {bundled_fw}"
+            ),
+            bg=BG_CARD, fg=TEXT, font=(FONT_UI, 10),
+            anchor="w", justify="left"
+        ).pack(anchor="w", pady=(0, 18))
+
+        tk.Label(
+            body,
+            text=(
+                "Click Backup and Update now to back up your current "
+                "configuration and install the update."
+            ),
+            bg=BG_CARD, fg=TEXT_DIM, font=(FONT_UI, 9),
+            anchor="w", justify="left", wraplength=420
+        ).pack(anchor="w", pady=(0, 18))
+
+        choice = {"backup": False}
+        btn_frame = tk.Frame(body, bg=BG_CARD)
+        btn_frame.pack(anchor="e")
+
+        def _backup():
+            choice["backup"] = True
+            dlg.destroy()
+
+        def _not_now():
+            dlg.destroy()
+
+        RoundedButton(btn_frame, text="Backup and Update",
+                      command=_backup, bg_color=ACCENT_BLUE,
+                      btn_width=170, btn_height=34,
+                      btn_font=(FONT_UI, 8, "bold")).pack(side="left", padx=(0, 8))
+        RoundedButton(btn_frame, text="Not now",
+                      command=_not_now, bg_color=BG_INPUT,
+                      btn_width=100, btn_height=34,
+                      btn_font=(FONT_UI, 8, "bold")).pack(side="left")
+
+        dlg.protocol("WM_DELETE_WINDOW", _not_now)
+        _center_window(dlg, self.root)
+        dlg.grab_set()
+        self.root.wait_window(dlg)
+        if choice["backup"]:
+            self.root.after(100, self._backup_and_update_when_ready)
 
 
     def _refresh_reset_card(self):
@@ -2962,12 +3168,8 @@ class MainMenu:
                         f"Update recommended  —  Bundled: {bundled_date_str}",
                         ACCENT_ORANGE)
                     def _enable():
-                        _centered_dialog(
-                            self.root, "Check for Updates",
-                            f"Controller firmware does not report a build date (older build).\n\n"
-                            f"Bundled firmware: {bundled_date_str}\n\n"
-                            f"An update is recommended.",
-                            kind="info")
+                        self._show_firmware_update_available_dialog(
+                            None, bundled_date_str, recommended=True)
                         self._fw_detail.config(
                             text=f"Update recommended  —  Bundled: {bundled_date_str}",
                             fg=ACCENT_ORANGE)
@@ -2997,13 +3199,8 @@ class MainMenu:
                         f"Update available!  Controller: {fw_date_str}  →  Bundled: {bundled_date_str}",
                         ACCENT_ORANGE)
                     def _enable():
-                        _centered_dialog(
-                            self.root, "Update Available",
-                            f"A firmware update is available.\n\n"
-                            f"Controller firmware:  {fw_date_str}\n"
-                            f"Bundled firmware:     {bundled_date_str}\n\n"
-                            f"Click  Backup & Update  to install.",
-                            kind="info")
+                        self._show_firmware_update_available_dialog(
+                            fw_date_str, bundled_date_str)
                         self._fw_detail.config(
                             text=f"Update available!  Controller: {fw_date_str}  →  Bundled: {bundled_date_str}",
                             fg=ACCENT_ORANGE)
@@ -3097,6 +3294,7 @@ class MainMenu:
         dlg.configure(bg=BG_CARD)
         dlg.resizable(False, False)
         dlg.transient(self.root)
+        apply_window_icon(dlg)
         dlg.protocol("WM_DELETE_WINDOW", lambda: None)
 
         dlg_frame = tk.Frame(dlg, bg=BG_CARD)
@@ -3656,6 +3854,7 @@ class MainMenu:
         dlg.configure(bg=BG_CARD)
         dlg.resizable(False, False)
         dlg.transient(self.root)
+        apply_window_icon(dlg)
         dlg.grab_set()
         dlg.update_idletasks()
         dw, dh = 460, 220

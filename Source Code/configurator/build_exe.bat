@@ -191,7 +191,18 @@ for %%A in (startup.wav startup.mp3 startup.ogg startup.flac startup.aac startup
 REM Icon
 set "ICON_ARG="
 set "ICON_DATA_ARG="
-if exist "OCCSquareCrop.ico" (
+set "LOGO_DATA_ARG="
+if exist "OCCLogo.png" (
+    set "LOGO_DATA_ARG=--add-data=OCCLogo.png;."
+    if exist "OCCLogo_build.ico" del /f /q "OCCLogo_build.ico"
+    py -c "from PIL import Image; img=Image.open('OCCLogo.png').convert('RGBA'); img.save('OCCLogo_build.ico', sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(16,16)])" >nul 2>&1
+    if exist "OCCLogo_build.ico" (
+        set "ICON_ARG=--icon=OCCLogo_build.ico"
+    ) else if exist "OCCSquareCrop.ico" (
+        set "ICON_ARG=--icon=OCCSquareCrop.ico"
+        set "ICON_DATA_ARG=--add-data=OCCSquareCrop.ico;."
+    )
+) else if exist "OCCSquareCrop.ico" (
     set "ICON_ARG=--icon=OCCSquareCrop.ico"
     set "ICON_DATA_ARG=--add-data=OCCSquareCrop.ico;."
 ) else (
@@ -207,7 +218,7 @@ echo.
 echo Running PyInstaller...
 pyinstaller --clean --onefile --windowed ^
     --name "OCC Configurator" ^
-    %ICON_ARG% %ICON_DATA_ARG% ^
+    %ICON_ARG% %ICON_DATA_ARG% %LOGO_DATA_ARG% ^
     %SPLASH_ARG% %SOUND_ARG% ^
     %FONT_ARGS% ^
     !BUTTONS_ARGS! ^

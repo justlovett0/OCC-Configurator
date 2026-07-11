@@ -3,7 +3,8 @@ import tkinter as tk
 from .constants import (BG_CARD, BG_INPUT, TEXT, TEXT_DIM, ACCENT_BLUE,
                          ACCENT_RED, GITHUB_REPO, RELEASES_PAGE)
 from .fonts import FONT_UI, APP_VERSION
-from .widgets import RoundedButton
+from .screen_splash import apply_window_icon
+from .widgets import ModernButton, RoundedButton
 
 IS_WINDOWS = sys.platform == "win32"
 CONTROLLER_SIGNAL_LABEL = "XInput" if IS_WINDOWS else "Controller Signal"
@@ -104,21 +105,24 @@ def _center_window(dlg, root):
 
 
 # Modal dialog (info, yesno, error); returns True/False or None
-def _centered_dialog(parent, title, message, kind="info"):
+def _centered_dialog(parent, title, message, kind="info", palette=None):
+    card_bg = palette.surface if palette else BG_CARD
+    text_fg = palette.text if palette else TEXT
     dlg = tk.Toplevel(parent)
     dlg.title(title)
-    dlg.configure(bg=BG_CARD)
+    dlg.configure(bg=card_bg)
     dlg.resizable(False, False)
     dlg.transient(parent)
+    apply_window_icon(dlg)
 
     # Build content
-    tk.Label(dlg, text=message, bg=BG_CARD, fg=TEXT,
+    tk.Label(dlg, text=message, bg=card_bg, fg=text_fg,
              font=(FONT_UI, 10), justify="left",
              wraplength=360, padx=24, pady=20).pack()
 
     result = [None]
 
-    btn_frame = tk.Frame(dlg, bg=BG_CARD, pady=12)
+    btn_frame = tk.Frame(dlg, bg=card_bg, pady=12)
     btn_frame.pack()
 
     def _yes():
@@ -133,19 +137,26 @@ def _centered_dialog(parent, title, message, kind="info"):
         result[0] = None
         dlg.destroy()
 
+    def _button(text, command, variant="primary", enabled=True):
+        if palette:
+            return ModernButton(
+                btn_frame, text=text, command=command, palette=palette,
+                variant=variant, enabled=enabled, btn_width=90, btn_height=30)
+        color = ACCENT_RED if variant == "danger" else (
+            BG_INPUT if variant == "soft" else ACCENT_BLUE)
+        btn = RoundedButton(btn_frame, text=text, command=command,
+                            bg_color=color, btn_width=90, btn_height=30)
+        if not enabled:
+            btn.set_state("disabled")
+        return btn
+
     if kind == "yesno":
-        RoundedButton(btn_frame, text="Yes", command=_yes,
-                      bg_color=ACCENT_BLUE, btn_width=90, btn_height=30).pack(
-                          side="left", padx=(0, 8))
-        RoundedButton(btn_frame, text="No", command=_no,
-                      bg_color=BG_INPUT, btn_width=90, btn_height=30).pack(
-                          side="left")
+        _button("Yes", _yes).pack(side="left", padx=(0, 8))
+        _button("No", _no, "soft").pack(side="left")
     elif kind == "error":
-        RoundedButton(btn_frame, text="OK", command=_ok,
-                      bg_color=ACCENT_RED, btn_width=90, btn_height=30).pack()
-    else:  
-        RoundedButton(btn_frame, text="OK", command=_ok,
-                      bg_color=ACCENT_BLUE, btn_width=90, btn_height=30).pack()
+        _button("OK", _ok, "danger").pack()
+    else:
+        _button("OK", _ok).pack()
 
     # Center over parent window once the dialog has been laid out
     dlg.update_idletasks()
@@ -165,20 +176,24 @@ def _centered_dialog(parent, title, message, kind="info"):
 
 
 # Pick wired vs wireless firmware; greys out unavailable types
-def _ask_wired_or_wireless(parent, has_wired=True, has_wireless=True):
+def _ask_wired_or_wireless(parent, has_wired=True, has_wireless=True,
+                           palette=None):
+    card_bg = palette.surface if palette else BG_CARD
+    text_fg = palette.text if palette else TEXT
     dlg = tk.Toplevel(parent)
     dlg.title("Select Firmware Type")
-    dlg.configure(bg=BG_CARD)
+    dlg.configure(bg=card_bg)
     dlg.resizable(False, False)
     dlg.transient(parent)
+    apply_window_icon(dlg)
 
     tk.Label(dlg, text="Select firmware to install:",
-             bg=BG_CARD, fg=TEXT, font=(FONT_UI, 10),
+             bg=card_bg, fg=text_fg, font=(FONT_UI, 10),
              justify="center", padx=24, pady=16).pack()
 
     result = [None]
 
-    btn_frame = tk.Frame(dlg, bg=BG_CARD, pady=12)
+    btn_frame = tk.Frame(dlg, bg=card_bg, pady=12)
     btn_frame.pack()
 
     def _pick(val):
@@ -188,6 +203,12 @@ def _ask_wired_or_wireless(parent, has_wired=True, has_wireless=True):
     ACCENT_BLUE_HOVER = "#2e7fd4"
 
     def _make_fw_btn(frame, text, enabled, command):
+        if palette:
+            btn = ModernButton(
+                frame, text=text, command=command, palette=palette,
+                enabled=enabled, btn_width=110, btn_height=34)
+            btn.pack(side="left", padx=8)
+            return btn
         bg_normal = ACCENT_BLUE if enabled else BG_CARD
         bg_hover  = ACCENT_BLUE_HOVER if enabled else BG_CARD
         fg_color  = "white" if enabled else TEXT_DIM
@@ -334,6 +355,7 @@ def _show_update_dialog(root, release_info):
     dlg.configure(bg=BG_CARD)
     dlg.resizable(False, False)
     dlg.transient(root)
+    apply_window_icon(dlg)
 
     body = tk.Frame(dlg, bg=BG_CARD, padx=24, pady=20)
     body.pack(fill="both", expand=True)
@@ -597,6 +619,7 @@ def _make_flash_popup(root):
     dlg.resizable(False, False)
     dlg.transient(root)
     dlg.protocol("WM_DELETE_WINDOW", lambda: None)   # user can't close mid-flash
+    apply_window_icon(dlg)
     tk.Label(dlg, text="⚡  Flashing firmware…\nplease wait",
              bg=BG_CARD, fg=TEXT, font=(FONT_UI, 11),
              justify="center", padx=32, pady=28).pack()

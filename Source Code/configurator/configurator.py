@@ -32,7 +32,7 @@ from configuratorsrc.screen_pedal import PedalApp
 from configuratorsrc.screen_retro import RetroApp
 from configuratorsrc.screen_arcadestick import ArcadeStickApp
 from configuratorsrc.screen_keymacro import KeyMacroApp
-from configuratorsrc.screen_splash import SplashOverlay, _find_icon, play_startup_sound
+from configuratorsrc.screen_splash import SplashOverlay, apply_window_icon, play_startup_sound
 import configuratorsrc.widgets as _widgets_mod
 import configuratorsrc.screen_easy_config as _easy_config_mod
 
@@ -441,13 +441,8 @@ def main():
   root.geometry(f"{w}x{h}+{x}+{y}")
   root.resizable(False, False)   # fixed size on all axes
 
-  # Apply custom .ico if one exists alongside the exe / script
-  _ico = _find_icon()
-  if _ico:
-      try:
-          root.iconbitmap(_ico)
-      except Exception:
-          pass
+  # Apply the OCC app logo to the root and all default child dialogs.
+  apply_window_icon(root, default=True)
 
   # Play startup sound immediately (async, non-blocking)
   play_startup_sound()

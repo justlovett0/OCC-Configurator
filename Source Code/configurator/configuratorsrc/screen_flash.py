@@ -1,11 +1,12 @@
 import sys, os, time, threading, json
 import tkinter as tk
 from tkinter import messagebox, filedialog
-from .constants import (BG_MAIN, BG_CARD, BG_INPUT, BG_HOVER, BORDER, TEXT, TEXT_DIM,
-                         TEXT_HEADER, ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_ORANGE,
-                         NUKE_UF2_FILENAME, OCC_SUBTYPES, DEVICE_TYPE_TO_GUITAR_PROFILE)
+from .constants import (NUKE_UF2_FILENAME, OCC_SUBTYPES,
+                         DEVICE_TYPE_TO_GUITAR_PROFILE)
 from .fonts import FONT_UI, _resource_path
-from .widgets import RoundedButton, CustomDropdown, HelpDialog, HelpButton, _help_text
+from .widgets import (CustomDropdown, HelpDialog, ModernButton, MIDNIGHT,
+                      _help_text)
+from .screen_splash import apply_window_icon, _find_logo_image
 from .firmware_utils import (find_uf2_files, _group_uf2_files, find_esp32_firmware_bundles,
                               _group_esp32_firmware_bundles, load_fw_presets,
                               _apply_preset_config, flash_uf2, flash_uf2_with_reboot,
@@ -18,6 +19,24 @@ from .xinput_utils import xinput_get_connected, MAGIC_STEPS, xinput_send_vibrati
 from .utils import (_ask_wired_or_wireless, _bind_mousewheel, _center_window,
                      _centered_dialog, _find_preset_configs,
                      _make_flash_popup, _mousewheel_units)
+
+
+# Keep the firmware screen on the same shared palette as the dashboard while
+# retaining the existing widget structure and behavior.
+BG_MAIN = MIDNIGHT.window
+BG_CARD = MIDNIGHT.surface
+BG_INPUT = MIDNIGHT.surface_alt
+BG_HOVER = MIDNIGHT.surface_hover
+BORDER = MIDNIGHT.border
+TEXT = MIDNIGHT.text
+TEXT_DIM = MIDNIGHT.text_muted
+TEXT_HEADER = MIDNIGHT.text
+ACCENT_BLUE = MIDNIGHT.accent
+ACCENT_GREEN = MIDNIGHT.success
+ACCENT_RED = MIDNIGHT.danger
+ACCENT_ORANGE = MIDNIGHT.warning
+TILE_LABEL_BG = MIDNIGHT.surface_alt
+TILE_LABEL_HOVER = MIDNIGHT.accent_soft
 
 
 def _json_truthy(value):
@@ -82,6 +101,7 @@ class FlashFirmwareScreen:
         dlg.configure(bg=BG_CARD)
         dlg.resizable(True, False)
         dlg.transient(self.root)
+        apply_window_icon(dlg)
 
         # Header
         hdr_frame = tk.Frame(dlg, bg=BG_CARD)
@@ -120,7 +140,7 @@ class FlashFirmwareScreen:
 
         # Data rows
         for ri, (fw_name, buttons, joysticks, axes, variants, desc) in enumerate(self._FW_INFO, 1):
-            row_bg = BG_CARD if ri % 2 == 1 else "#232327"
+            row_bg = BG_CARD if ri % 2 == 1 else BG_INPUT
             vals = [fw_name, variants, str(buttons) if buttons else "--",
                     str(joysticks) if joysticks else "--",
                     str(axes) if axes else "--", desc]
@@ -134,9 +154,9 @@ class FlashFirmwareScreen:
 
         # Separator + close button
         tk.Frame(dlg, bg=BORDER, height=1).pack(fill="x", pady=(4, 0))
-        RoundedButton(dlg, text="Close", command=dlg.destroy,
-                      bg_color="#555560", btn_width=80, btn_height=28,
-                      btn_font=(FONT_UI, 8, "bold")).pack(pady=12)
+        ModernButton(dlg, text="Close", command=dlg.destroy, palette=MIDNIGHT,
+                     variant="soft", btn_width=80, btn_height=30,
+                     btn_font=(FONT_UI, 8, "bold")).pack(pady=12)
 
         dlg.update_idletasks()
         pw, ph = self.root.winfo_width(), self.root.winfo_height()
@@ -178,6 +198,34 @@ class FlashFirmwareScreen:
             ])
         self._help_dialog.open()
 
+    def _load_header_logo(self):
+        """Load the packaged rectangular OCC logo without distorting it."""
+        path = _find_logo_image()
+        if not path:
+            return None
+        try:
+            from PIL import Image, ImageTk
+            image = Image.open(path).convert("RGBA")
+            image.thumbnail((116, 48), Image.LANCZOS)
+            return ImageTk.PhotoImage(image)
+        except Exception:
+            try:
+                image = tk.PhotoImage(file=path)
+                scale = max(image.width() / 116, image.height() / 48, 1)
+                factor = max(1, int(scale + 0.999))
+                return image.subsample(factor, factor)
+            except Exception:
+                return None
+
+    def _make_scrollbar(self, parent, command):
+        return tk.Scrollbar(
+            parent, orient="vertical", command=command,
+            bg=MIDNIGHT.surface_alt, troughcolor=MIDNIGHT.window,
+            activebackground=MIDNIGHT.surface_hover,
+            highlightbackground=MIDNIGHT.border,
+            highlightcolor=MIDNIGHT.border, bd=0, relief="flat",
+        )
+
     def _build(self):
         # Title bar - identical to MainMenu
         title_bar = tk.Frame(self.frame, bg=BG_CARD,
@@ -187,13 +235,17 @@ class FlashFirmwareScreen:
         inner_title = tk.Frame(title_bar, bg=BG_CARD)
         inner_title.pack(fill="x", padx=24, pady=16)
 
-        HelpButton(inner_title, command=self._open_help).pack(side="right", anchor="n", pady=4)
-        tk.Label(inner_title, text="OCC",
-                 bg=BG_CARD, fg=TEXT_HEADER,
-                 font=(FONT_UI, 18, "bold")).pack(anchor="w")
-        tk.Label(inner_title, text="Open Controller Configurator",
-                 bg=BG_CARD, fg=ACCENT_BLUE,
-                 font=(FONT_UI, 13)).pack(anchor="w")
+        ModernButton(inner_title, text="?", command=self._open_help,
+                     palette=MIDNIGHT, variant="soft", btn_width=40,
+                     btn_height=36, btn_font=(FONT_UI, 11, "bold")).pack(
+                         side="right", anchor="n", pady=2)
+        self._header_logo_img = self._load_header_logo()
+        if self._header_logo_img:
+            tk.Label(inner_title, image=self._header_logo_img,
+                     bg=BG_CARD).pack(anchor="w")
+        else:
+            tk.Label(inner_title, text="OCC", bg=BG_CARD, fg=TEXT_HEADER,
+                     font=(FONT_UI, 18, "bold")).pack(anchor="w")
 
         # Page heading (button left | title+subtitle+combo centered right)
         heading_frame = tk.Frame(self.frame, bg=BG_MAIN)
@@ -204,11 +256,11 @@ class FlashFirmwareScreen:
         tk.Frame(heading_frame, bg=BG_MAIN, width=240).pack(side="right")
 
         # Left: large info button, vertically centered
-        RoundedButton(heading_frame, text="Tell me about\nOCC Firmwares",
-                      command=self._open_firmware_info,
-                      bg_color=ACCENT_BLUE,
-                      btn_width=200, btn_height=66,
-                      btn_font=(FONT_UI, 10, "bold")).pack(side="left", padx=(40, 0), pady=8)
+        ModernButton(heading_frame, text="Tell me about\nOCC Firmwares",
+                     command=self._open_firmware_info, palette=MIDNIGHT,
+                     btn_width=200, btn_height=66,
+                     btn_font=(FONT_UI, 10, "bold")).pack(
+                         side="left", padx=(40, 0), pady=8)
 
         # Center: title + subtitle + dropdown, truly centered in remaining space
         right_frame = tk.Frame(heading_frame, bg=BG_MAIN)
@@ -228,7 +280,7 @@ class FlashFirmwareScreen:
         self._device_var = tk.StringVar(value="Scanning for USB devices...")
         self._device_combo = CustomDropdown(right_frame, state="readonly",
                                             textvariable=self._device_var,
-                                            width=32, values=[])
+                                            width=32, values=[], palette=MIDNIGHT)
         self._device_combo.pack(pady=(6, 10))
         self._refresh_device_combo()
 
@@ -256,7 +308,7 @@ class FlashFirmwareScreen:
             for w in (f, lbl):
                 w.bind("<Button-1>", lambda e, c=cmd: c())
                 w.bind("<Enter>", lambda e, l=lbl: l.config(fg=TEXT_HEADER))
-                w.bind("<Leave>", lambda e, l=lbl, c=cmd: None)  # reset handled by _switch_tab
+                w.bind("<Leave>", lambda e: self._refresh_tab_colors())
             return f, lbl, line
 
         self._fw_tab_f,   self._fw_tab_lbl,   self._fw_tab_line   = _make_tab(tab_bar, "OCC Firmware",       0, lambda: self._switch_tab("firmware"))
@@ -306,10 +358,10 @@ class FlashFirmwareScreen:
                  bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8), anchor="w").pack(anchor="w")
 
-        self._rst_btn = RoundedButton(rst_body, text="Factory Reset",
-                                      command=self._do_factory_reset,
-                                      bg_color=ACCENT_BLUE,
-                                      btn_width=160, btn_height=36)
+        self._rst_btn = ModernButton(rst_body, text="Factory Reset",
+                                     command=self._do_factory_reset,
+                                     palette=MIDNIGHT, variant="danger",
+                                     btn_width=160, btn_height=36)
         self._rst_btn.pack(side="right")
 
         # Alpha hint
@@ -344,15 +396,21 @@ class FlashFirmwareScreen:
 
     # Tab management
 
+    def _refresh_tab_colors(self):
+        active = getattr(self, "_active_tab", "firmware")
+        self._fw_tab_lbl.config(
+            fg=TEXT_HEADER if active == "firmware" else TEXT_DIM)
+        self._pres_tab_lbl.config(
+            fg=TEXT_HEADER if active == "presets" else TEXT_DIM)
+
     def _switch_tab(self, name):
         """Show the named tab ('firmware' or 'presets'), hide the other.
         Resets the target tab to its original state each time it is shown."""
+        self._active_tab = name
         if name == "firmware":
             self._presets_content.pack_forget()
             self._fw_content.pack(fill="both", expand=True)
-            self._fw_tab_lbl.config(fg=TEXT_HEADER)
             self._fw_tab_line.pack(fill="x")
-            self._pres_tab_lbl.config(fg=TEXT_DIM)
             self._pres_tab_line.pack_forget()
             # Reset firmware tab: scroll back to top
             if hasattr(self, "_canvas"):
@@ -360,9 +418,7 @@ class FlashFirmwareScreen:
         else:
             self._fw_content.pack_forget()
             self._presets_content.pack(fill="both", expand=True)
-            self._pres_tab_lbl.config(fg=TEXT_HEADER)
             self._pres_tab_line.pack(fill="x")
-            self._fw_tab_lbl.config(fg=TEXT_DIM)
             self._fw_tab_line.pack_forget()
             # Reset presets tab: close all accordion sections and scroll to top
             if hasattr(self, "_accordion_closers"):
@@ -370,13 +426,13 @@ class FlashFirmwareScreen:
                     close_fn()
             if hasattr(self, "_presets_canvas"):
                 self._presets_canvas.yview_moveto(0)
+        self._refresh_tab_colors()
 
     def _build_fw_tab(self, parent):
         """Build the scrollable firmware tile grid into parent."""
         self._canvas = tk.Canvas(parent, bg=BG_MAIN,
                                  highlightthickness=0, bd=0)
-        scrollbar = tk.Scrollbar(parent, orient="vertical",
-                                 command=self._canvas.yview)
+        scrollbar = self._make_scrollbar(parent, self._canvas.yview)
         self._canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         self._canvas.pack(side="left", fill="both", expand=True)
@@ -396,7 +452,7 @@ class FlashFirmwareScreen:
     def _build_presets_tab(self, parent):
         """Scrollable accordion of controller preset sections."""
         canvas = tk.Canvas(parent, bg=BG_MAIN, highlightthickness=0, bd=0)
-        scrollbar = tk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollbar = self._make_scrollbar(parent, canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
@@ -570,7 +626,8 @@ class FlashFirmwareScreen:
 
         choice = _ask_wired_or_wireless(self.root,
                                         has_wired=bool(wired_path),
-                                        has_wireless=bool(wireless_path))
+                                        has_wireless=bool(wireless_path),
+                                        palette=MIDNIGHT)
         if not choice:
             return
         uf2_path = wired_path if choice == "wired" else wireless_path
@@ -599,6 +656,7 @@ class FlashFirmwareScreen:
         dlg.configure(bg=BG_CARD)
         dlg.resizable(False, False)
         dlg.transient(self.root)
+        apply_window_icon(dlg)
         dlg.protocol("WM_DELETE_WINDOW", lambda: None)   # block close during install
 
         dlg_frame = tk.Frame(dlg, bg=BG_CARD)
@@ -619,9 +677,10 @@ class FlashFirmwareScreen:
                  bg=BG_CARD, fg=TEXT_DIM,
                  font=(FONT_UI, 8), anchor="w", wraplength=1100, justify="left").pack(anchor="w")
 
-        close_btn = RoundedButton(dlg_frame, text="Close", command=dlg.destroy,
-                                  bg_color="#555560", btn_width=100, btn_height=30,
-                                  btn_font=(FONT_UI, 8, "bold"))
+        close_btn = ModernButton(dlg_frame, text="Close", command=dlg.destroy,
+                                 palette=MIDNIGHT, variant="soft",
+                                 btn_width=100, btn_height=30,
+                                 btn_font=(FONT_UI, 8, "bold"))
         close_btn.pack(side="right", pady=(16, 0))
         close_btn.set_state("disabled")
 
@@ -866,7 +925,7 @@ class FlashFirmwareScreen:
             img_area.pack_propagate(False)
 
             # Label area (bottom strip)
-            lbl_area = tk.Frame(tile_outer, bg="#222226",
+            lbl_area = tk.Frame(tile_outer, bg=TILE_LABEL_BG,
                                 width=198, height=self.TILE_LBL_H)
             lbl_area.place(x=1, y=self.TILE_IMG_H,
                            width=198, height=self.TILE_LBL_H)
@@ -883,8 +942,8 @@ class FlashFirmwareScreen:
             for (cx, cy, ox, oy, oval_color) in [
                 (0,        0,        0,    0,    BG_CARD),    # top-left:     image area color
                 (200-_cr,  0,        -_cr, 0,    BG_CARD),    # top-right:    image area color
-                (0,        _th-_cr,  0,    -_cr, "#222226"),  # bottom-left:  label area color
-                (200-_cr,  _th-_cr,  -_cr, -_cr, "#222226"),  # bottom-right: label area color
+                (0,        _th-_cr,  0,    -_cr, TILE_LABEL_BG),  # bottom-left
+                (200-_cr,  _th-_cr,  -_cr, -_cr, TILE_LABEL_BG),  # bottom-right
             ]:
                 cm = tk.Canvas(tile_outer, width=_cr, height=_cr,
                                bg=BG_MAIN, highlightthickness=0, bd=0)
@@ -918,14 +977,14 @@ class FlashFirmwareScreen:
 
                 # Name label below the image
                 name_lbl = tk.Label(lbl_area, text=display_name,
-                                    bg="#222226", fg=TEXT_HEADER,
+                                    bg=TILE_LABEL_BG, fg=TEXT_HEADER,
                                     font=(FONT_UI, 8, "bold"),
                                     anchor="center", justify="center")
                 name_lbl.place(relx=0.5, rely=0.5, anchor="center")
 
                 # Hover + click on the whole tile
-                hover_bg   = "#3a3a3f"
-                lbl_hover  = "#2a2a2e"
+                hover_bg = BG_HOVER
+                lbl_hover = TILE_LABEL_HOVER
 
                 def _enter(e, ia=img_area, la=lbl_area, il=img_label, nl=name_lbl):
                     ia.config(bg=hover_bg)
@@ -935,13 +994,15 @@ class FlashFirmwareScreen:
                 def _leave(e, ia=img_area, la=lbl_area, il=img_label, nl=name_lbl):
                     ia.config(bg=BG_CARD)
                     il.config(bg=BG_CARD)
-                    la.config(bg="#222226")
-                    nl.config(bg="#222226")
+                    la.config(bg=TILE_LABEL_BG)
+                    nl.config(bg=TILE_LABEL_BG)
                 def _click(e, wired=wired_path, wireless=wireless_path, dname=display_name):
                     target = self._current_target()
                     if not target:
                         return
-                    choice = _ask_wired_or_wireless(self.root, has_wired=bool(wired), has_wireless=bool(wireless))
+                    choice = _ask_wired_or_wireless(
+                        self.root, has_wired=bool(wired),
+                        has_wireless=bool(wireless), palette=MIDNIGHT)
                     if choice == "wireless":
                         self._do_flash(wireless, target, "Wireless")
                     elif choice == "wired":
@@ -1104,6 +1165,7 @@ class FlashFirmwareScreen:
         wait_dlg.configure(bg=BG_CARD)
         wait_dlg.resizable(False, False)
         wait_dlg.transient(self.root)
+        apply_window_icon(wait_dlg)
         wait_dlg.protocol("WM_DELETE_WINDOW", lambda: None)  # prevent closing
 
         if no_wireless_note:
@@ -1144,7 +1206,8 @@ class FlashFirmwareScreen:
 
             if error:
                 _centered_dialog(self.root, "Flash Error",
-                                 f"Failed to flash firmware:\n{error}", kind="error")
+                                 f"Failed to flash firmware:\n{error}",
+                                 kind="error", palette=MIDNIGHT)
                 return
 
             # 3. Success dialog - auto-closes after 3 seconds
@@ -1153,6 +1216,7 @@ class FlashFirmwareScreen:
             done_dlg.configure(bg=BG_CARD)
             done_dlg.resizable(False, False)
             done_dlg.transient(self.root)
+            apply_window_icon(done_dlg)
             done_dlg.protocol("WM_DELETE_WINDOW", done_dlg.destroy)
 
             tk.Label(done_dlg, text="Firmware flashed successfully!\n",
@@ -1250,6 +1314,7 @@ class FlashFirmwareScreen:
             self._pres_tab_f.grid_remove()
             self._fw_tab_f.grid_configure(column=0, columnspan=2, sticky="nsew")
             self._rst_title.config(text="ESP32-S3 Flash Mode", fg=ACCENT_BLUE)
+            self._rst_icon.config(fg=ACCENT_BLUE)
             self._rst_btn.set_state("disabled")
             self._rst_drive_label.config(
                 text=f"ESP32-S3 Detected: {self._flash_target.get('label', self._flash_target.get('device', '--'))}"
@@ -1261,6 +1326,8 @@ class FlashFirmwareScreen:
             self._pres_tab_f.grid()
             self._fw_tab_f.grid_configure(column=0, columnspan=1, sticky="nsew")
             self._rst_title.config(text="Reset Pico", fg=ACCENT_RED)
+            self._rst_icon.config(fg=ACCENT_RED)
+            self._rst_btn.set_state("normal")
         self._refresh_device_combo()
         if self._transport == "rp2040":
             info = find_rpi_rp2_drive_info()

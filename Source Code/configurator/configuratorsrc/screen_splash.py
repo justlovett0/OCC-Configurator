@@ -2,11 +2,10 @@ import sys, os, threading, ctypes
 import tkinter as tk
 from .constants import BG_CARD, TEXT, ACCENT_BLUE, BG_MAIN, TEXT_HEADER
 from .fonts import FONT_UI
-#  SPLASH IMAGE FINDER
+#  SPLASH IMAGE / APP ICON FINDERS
 
 
-def _find_icon():
-    """Find a .ico file alongside the exe or script for the window icon."""
+def _asset_search_dirs():
     search_dirs = []
     if getattr(sys, '_MEIPASS', None):
         search_dirs.append(sys._MEIPASS)
@@ -14,16 +13,76 @@ def _find_icon():
     src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if src_dir not in search_dirs:
         search_dirs.append(src_dir)
-    for d in search_dirs:
-        for name in ("OCCSquareCrop.ico", "OCCSquareCrop.ICO"):
+    return search_dirs
+
+
+def _find_logo_image():
+    """Find the preferred OCC PNG logo alongside the exe or script."""
+    for d in _asset_search_dirs():
+        for name in ("OCCLogo.png", "OCCLogo.PNG",
+                     "OCCSquareLogoFull.png", "OCCSquareLogoFull.PNG"):
             p = os.path.join(d, name)
             if os.path.isfile(p):
                 return p
-    for d in search_dirs:
-        for f in os.listdir(d):
-            if f.lower().endswith('.ico'):
-                return os.path.join(d, f)
     return None
+
+
+def _find_icon():
+    """Find a .ico file alongside the exe or script for fallback window icon use."""
+    for d in _asset_search_dirs():
+        for name in ("OCCLogo.ico", "OCCLogo.ICO"):
+            p = os.path.join(d, name)
+            if os.path.isfile(p):
+                return p
+    for d in _asset_search_dirs():
+        try:
+            for f in os.listdir(d):
+                if f.lower().endswith('.ico'):
+                    return os.path.join(d, f)
+        except Exception:
+            pass
+    return None
+
+
+def apply_window_icon(window, default=False):
+    """
+    Apply the OCC app logo to a Tk root or Toplevel.
+
+    Runtime windows prefer OCCLogo.png so compiled dialogs do not fall back to
+    the Python feather icon.  .ico files remain only as a compatibility fallback.
+    """
+    try:
+        owner = window.winfo_toplevel()
+    except Exception:
+        owner = window
+    photo = getattr(owner, "_occ_window_icon", None)
+    if photo is None:
+        logo = _find_logo_image()
+        if logo:
+            try:
+                photo = tk.PhotoImage(file=logo)
+            except Exception:
+                photo = None
+            if photo is not None:
+                try:
+                    owner._occ_window_icon = photo
+                except Exception:
+                    pass
+    if photo is not None:
+        try:
+            window.iconphoto(default, photo)
+            return True
+        except Exception:
+            pass
+
+    ico = _find_icon()
+    if ico:
+        try:
+            window.iconbitmap(ico)
+            return True
+        except Exception:
+            pass
+    return False
 
 
 def find_splash_image():

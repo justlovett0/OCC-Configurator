@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from .constants import (BG_CARD, BG_INPUT, BG_HOVER, BG_MAIN, BORDER,
                          TEXT, TEXT_DIM, TEXT_HEADER, ACCENT_BLUE)
 from .fonts import FONT_UI
+from .screen_splash import apply_window_icon
 
 
 @dataclass(frozen=True)
@@ -415,6 +416,7 @@ class HelpDialog:
         win.configure(bg=BG_CARD)
         win.resizable(False, False)
         win.transient(self.root)
+        apply_window_icon(win)
 
         # Center over root
         self.root.update_idletasks()
@@ -613,7 +615,7 @@ class CustomDropdown(tk.Frame):
     """
 
     def __init__(self, parent, values=None, width=18, state="readonly",
-                 textvariable=None, **kw):
+                 textvariable=None, palette=None, **kw):
         # Ignore unsupported ttk kwargs
         for _k in ("font", "style", "exportselection", "postcommand"):
             kw.pop(_k, None)
@@ -631,6 +633,18 @@ class CustomDropdown(tk.Frame):
         self._textvar     = textvariable
         self._callbacks   = []             # <<ComboboxSelected>> listeners
         self._popup       = None           # active Toplevel, or None
+        self._dd = {
+            "bg": palette.surface_alt if palette else _DD_BG,
+            "arrow_bg": palette.surface if palette else _DD_ARROW_BG,
+            "disabled_bg": palette.surface if palette else _DD_DISABLED_BG,
+            "text": palette.text if palette else _DD_TEXT,
+            "text_dim": palette.text_muted if palette else _DD_TEXT_DIM,
+            "popup_bg": palette.surface if palette else _DD_POPUP_BG,
+            "selected_bg": palette.accent_soft if palette else _DD_SELECTED_BG,
+            "hover_bg": palette.surface_hover if palette else _DD_HOVER_BG,
+            "border": palette.border if palette else _DD_BORDER,
+            "thumb": palette.text_muted if palette else "#666672",
+        }
 
         # Pixel width of the main bar area
         self._bar_w = width * _DD_CHAR_PX + _DD_PAD * 2
@@ -673,9 +687,10 @@ class CustomDropdown(tk.Frame):
         r   = 4   # corner radius
 
         val_disabled = (self._display_text() == "Disabled")
-        bar_fill  = _DD_DISABLED_BG if val_disabled else (_DD_HOVER_BG if hover else _DD_BG)
-        arr_fill  = _DD_DISABLED_BG if val_disabled else _DD_ARROW_BG
-        text_col  = _DD_TEXT_DIM if val_disabled else _DD_TEXT
+        bar_fill = self._dd["disabled_bg"] if val_disabled else (
+            self._dd["hover_bg"] if hover else self._dd["bg"])
+        arr_fill = self._dd["disabled_bg"] if val_disabled else self._dd["arrow_bg"]
+        text_col = self._dd["text_dim"] if val_disabled else self._dd["text"]
 
         # Main bar (left side, rounded left corners only)
         # Full rounded rect for bar+arrow together first
@@ -691,17 +706,17 @@ class CustomDropdown(tk.Frame):
         c.create_rectangle(w-aw, r,    w,   h-r,       fill=arr_fill, outline=arr_fill)
 
         # Thin divider line between bar and arrow box
-        c.create_line(bw, 3, bw, h-3, fill=_DD_BORDER, width=1)
+        c.create_line(bw, 3, bw, h-3, fill=self._dd["border"], width=1)
 
         # Outer border
-        c.create_arc(0,   0,   2*r, 2*r, start=90,  extent=90, outline=_DD_BORDER, style="arc")
-        c.create_arc(w-2*r, 0, w,   2*r, start=0,   extent=90, outline=_DD_BORDER, style="arc")
-        c.create_arc(0,   h-2*r, 2*r, h, start=180, extent=90, outline=_DD_BORDER, style="arc")
-        c.create_arc(w-2*r, h-2*r, w, h, start=270, extent=90, outline=_DD_BORDER, style="arc")
-        c.create_line(r, 0,   w-r, 0,   fill=_DD_BORDER)
-        c.create_line(r, h-1, w-r, h-1, fill=_DD_BORDER)
-        c.create_line(0, r,   0,   h-r, fill=_DD_BORDER)
-        c.create_line(w-1, r, w-1, h-r, fill=_DD_BORDER)
+        c.create_arc(0,   0,   2*r, 2*r, start=90,  extent=90, outline=self._dd["border"], style="arc")
+        c.create_arc(w-2*r, 0, w,   2*r, start=0,   extent=90, outline=self._dd["border"], style="arc")
+        c.create_arc(0,   h-2*r, 2*r, h, start=180, extent=90, outline=self._dd["border"], style="arc")
+        c.create_arc(w-2*r, h-2*r, w, h, start=270, extent=90, outline=self._dd["border"], style="arc")
+        c.create_line(r, 0,   w-r, 0,   fill=self._dd["border"])
+        c.create_line(r, h-1, w-r, h-1, fill=self._dd["border"])
+        c.create_line(0, r,   0,   h-r, fill=self._dd["border"])
+        c.create_line(w-1, r, w-1, h-r, fill=self._dd["border"])
 
         # Label text (truncated to fit)
         txt = self._display_text()
@@ -715,7 +730,7 @@ class CustomDropdown(tk.Frame):
         # Down-arrow (▼) centred in arrow box
         ax = bw + aw // 2
         ay = h // 2
-        arr_col = _DD_TEXT_DIM if val_disabled else "#ffffff"
+        arr_col = self._dd["text_dim"] if val_disabled else "#ffffff"
         # Draw a filled triangle
         s = 5   # half-base size
         c.create_polygon(ax-s, ay-3, ax+s, ay-3, ax, ay+4,
@@ -756,20 +771,20 @@ class CustomDropdown(tk.Frame):
         pop = tk.Toplevel(self)
         pop.wm_overrideredirect(True)
         pop.geometry(f"{pw}x{ph}+{x}+{y}")
-        pop.configure(bg=_DD_BORDER)           # border colour as window bg
+        pop.configure(bg=self._dd["border"])  # border colour as window bg
         # No transparency — plain opaque popup
 
         # 1px border provided by the window bg showing through
-        inner = tk.Frame(pop, bg=_DD_POPUP_BG, bd=0)
+        inner = tk.Frame(pop, bg=self._dd["popup_bg"], bd=0)
         inner.place(x=1, y=1, width=pw-2, height=ph-2)
 
         # Scrollable canvas for items
-        canvas = tk.Canvas(inner, bg=_DD_POPUP_BG, highlightthickness=0,
+        canvas = tk.Canvas(inner, bg=self._dd["popup_bg"], highlightthickness=0,
                            bd=0, width=canvas_w, height=ph-2)
         canvas.place(x=0, y=0, width=canvas_w, height=ph-2)
 
         # Thin custom scrollbar (canvas-drawn)
-        sb_canvas = tk.Canvas(inner, bg=_DD_ARROW_BG, highlightthickness=0,
+        sb_canvas = tk.Canvas(inner, bg=self._dd["arrow_bg"], highlightthickness=0,
                               bd=0, width=sb_w, height=ph-2)
         sb_canvas.place(x=canvas_w+1, y=0, width=sb_w, height=ph-2)
 
@@ -788,7 +803,7 @@ class CustomDropdown(tk.Frame):
             thumb_y = int(scroll_offset[0] / total_h * track_h)
             sb_canvas.create_rectangle(
                 0, thumb_y, sb_w, thumb_y + thumb_h,
-                fill="#666672", outline="#666672"
+                fill=self._dd["thumb"], outline=self._dd["thumb"]
             )
 
         def _clamp_offset(v):
@@ -808,12 +823,12 @@ class CustomDropdown(tk.Frame):
                 is_sel = (i == self._current_idx)
                 is_hov = (i == hover_idx[0])
                 if is_sel:
-                    bg = _DD_SELECTED_BG
+                    bg = self._dd["selected_bg"]
                 elif is_hov:
-                    bg = _DD_HOVER_BG
+                    bg = self._dd["hover_bg"]
                 else:
-                    bg = _DD_POPUP_BG
-                tc = "#ffffff" if (is_sel or is_hov) else _DD_TEXT
+                    bg = self._dd["popup_bg"]
+                tc = "#ffffff" if (is_sel or is_hov) else self._dd["text"]
                 canvas.create_rectangle(0, iy, canvas_w, iy + item_h,
                                         fill=bg, outline=bg, tags=f"item{i}")
                 canvas.create_text(_DD_PAD, iy + item_h // 2, text=val,
