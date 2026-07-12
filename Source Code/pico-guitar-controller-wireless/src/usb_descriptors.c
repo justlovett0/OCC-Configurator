@@ -303,7 +303,7 @@ uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     (void)langid;
     switch (index) {
         case 0:  return string_desc_language;
-        case 1:  return _make_string_desc(g_device_name);
+        case 1:  return _make_string_desc("OCC");
         case 2:  return _make_string_desc(g_config_mode
                         ? "Guitar Controller Config Mode"
                         : g_device_name);

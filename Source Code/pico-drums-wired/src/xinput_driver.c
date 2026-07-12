@@ -153,8 +153,17 @@ static uint16_t xinput_open(uint8_t rhport, tusb_desc_interface_t const *desc_in
 }
 
 static bool xinput_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const *request) {
-    (void)rhport; (void)stage; (void)request;
+    if (request->bmRequestType == 0x40 && request->bRequest == 0x5A &&
+        request->wValue == 0x4F43 && request->wIndex == 1 && request->wLength == 0) {
+        if (stage == CONTROL_STAGE_SETUP) return tud_control_status(rhport, request);
+        if (stage == CONTROL_STAGE_ACK) _magic.triggered = true;
+    }
     return true;
+}
+
+bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
+                                tusb_control_request_t const *request) {
+    return xinput_control_xfer_cb(rhport, stage, request);
 }
 
 static bool xinput_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_t xferred_len) {

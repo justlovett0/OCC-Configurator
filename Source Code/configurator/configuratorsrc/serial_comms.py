@@ -1,6 +1,7 @@
 import serial
 import serial.tools.list_ports
 import time
+import sys
 
 from .constants import BAUD_RATE, TIMEOUT, get_occ_port_metadata, get_esp_download_metadata
 
@@ -21,11 +22,15 @@ class PicoSerial:
         return get_esp_download_metadata(port_info.vid, port_info.pid)
 
     @classmethod
-    def find_port_record(cls, device=None):
+    def find_port_record(cls, device=None, serial_number=None):
         """Return metadata for the first OCC config port, or the named device."""
         for p in serial.tools.list_ports.comports():
             meta = cls._port_metadata(p)
             if not meta:
+                continue
+            if device is not None and p.device != device:
+                continue
+            if serial_number and p.serial_number != serial_number:
                 continue
             if device is None or p.device == device:
                 return {
@@ -34,6 +39,8 @@ class PicoSerial:
                     "platform": meta.get("platform", "rp2040"),
                     "vid": p.vid,
                     "pid": p.pid,
+                    "serial_number": p.serial_number,
+                    "location": p.location,
                 }
         return None
 
@@ -61,9 +68,17 @@ class PicoSerial:
         return record["device"] if record else None
 
     @staticmethod
-    def find_config_port():
+    def find_config_port(serial_number=None):
         """Return the first COM port that belongs to any known OCC firmware variant."""
-        record = PicoSerial.find_port_record()
+        if serial_number is None:
+            # Linux play-mode control remembers the physical Pico it just
+            # rebooted. Do not attach to another identical OCC controller.
+            try:
+                from ._xinput_backend_linux import pending_config_serial
+                serial_number = pending_config_serial()
+            except Exception:
+                serial_number = None
+        record = PicoSerial.find_port_record(serial_number=serial_number)
         return record["device"] if record else None
 
     @staticmethod
@@ -87,7 +102,19 @@ class PicoSerial:
         last_exc = None
         for attempt in range(5):
             try:
-                self.ser = serial.Serial(port, BAUD_RATE, timeout=TIMEOUT)
+                try:
+                    options = {
+                        "timeout": TIMEOUT,
+                        "write_timeout": TIMEOUT,
+                    }
+                    if sys.platform.startswith("linux"):
+                        options["exclusive"] = True
+                    self.ser = serial.Serial(port, BAUD_RATE, **options)
+                except TypeError:
+                    # pySerial before exclusive= support; retain compatibility
+                    # with the legacy Windows package.
+                    self.ser = serial.Serial(port, BAUD_RATE, timeout=TIMEOUT,
+                                             write_timeout=TIMEOUT)
                 time.sleep(0.2)
                 self.ser.reset_input_buffer()
                 return
@@ -343,17 +370,19 @@ class PicoSerial:
 
     def reboot(self):
         try:
-            self.send("REBOOT")
-        except Exception:
-            pass
-        self.disconnect()
+            response = self.send("REBOOT")
+            if response != "OK":
+                raise ValueError(f"REBOOT failed: {response or 'no response'}")
+        finally:
+            self.disconnect()
 
     def bootsel(self):
         try:
-            self.send("BOOTSEL")
-        except Exception:
-            pass
-        self.disconnect()
+            response = self.send("BOOTSEL")
+            if response != "OK":
+                raise ValueError(f"BOOTSEL failed: {response or 'no response'}")
+        finally:
+            self.disconnect()
 
     def led_flash(self, idx):
         r = self.send(f"LED_FLASH:{idx}")

@@ -258,7 +258,7 @@ uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
         case 0:
             return string_desc_language;
         case 1:
-            return _make_string_desc(g_play_mode == DRUM_PLAY_MODE_FORTNITE ? "Harmonix" : g_device_name);
+            return _make_string_desc(g_play_mode == DRUM_PLAY_MODE_FORTNITE ? "Harmonix" : "OCC");
         case 2:
             if (g_config_mode) return _make_string_desc("Drum Controller Config Mode");
             if (g_play_mode == DRUM_PLAY_MODE_FORTNITE) return _make_string_desc("Rock Band Drums");

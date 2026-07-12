@@ -513,7 +513,7 @@ def find_rpi_rp2_drive():
     return info[0] if info else None
 
 
-def find_rpi_rp2_drive_info():
+def find_rpi_rp2_drive_info(_allow_udisks_mount=True):
     """
     Return (drive_path, display_label) for the first RPI-RP2 bootloader drive,
     or None if none is found.
@@ -541,7 +541,10 @@ def find_rpi_rp2_drive_info():
                 except Exception:
                     pass
     else:
-        for base in ["/media", "/mnt", "/Volumes"]:
+        # Desktop automounters differ: Ubuntu commonly uses /media/$USER,
+        # Fedora uses /run/media/$USER, and lightweight Pi installs may use
+        # /mnt. Check all of them before asking the user to mount manually.
+        for base in ["/media", "/run/media", "/mnt", "/Volumes"]:
             if not os.path.exists(base):
                 continue
             for root, dirs, files in os.walk(base):
@@ -562,13 +565,67 @@ def find_rpi_rp2_drive_info():
                     return (root, label)
                 if root.count(os.sep) - base.count(os.sep) > 2:
                     break
+        mounted = _allow_udisks_mount and _mount_rpi_rp2_with_udisks()
+        if mounted:
+            return find_rpi_rp2_drive_info(_allow_udisks_mount=False)
     return None
+
+
+def _mount_rpi_rp2_with_udisks():
+    """Ask the active desktop's UDisks service to mount an unmounted Pico.
+
+    This is intentionally best-effort. Minimal/headless Linux installs retain
+    the existing manual-mount fallback rather than invoking privileged mounts.
+    """
+    if sys.platform == "win32" or not shutil.which("udisksctl") or not shutil.which("lsblk"):
+        return False
+    try:
+        output = subprocess.check_output(
+            ["lsblk", "--json", "--output", "PATH,LABEL,MOUNTPOINTS"],
+            text=True, stderr=subprocess.DEVNULL, timeout=3,
+        )
+        data = json.loads(output)
+    except Exception:
+        return False
+
+    def _walk(items):
+        for item in items or []:
+            yield item
+            yield from _walk(item.get("children"))
+
+    for item in _walk(data.get("blockdevices")):
+        if item.get("label") != "RPI-RP2" or item.get("mountpoints"):
+            continue
+        path = item.get("path")
+        if not path:
+            continue
+        try:
+            result = subprocess.run(
+                ["udisksctl", "mount", "-b", path], text=True,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=10, check=False,
+            )
+            if result.returncode == 0:
+                return True
+        except Exception:
+            pass
+    return False
 
 
 
 def flash_uf2(uf2_path, drive_path):
     dest = os.path.join(drive_path, os.path.basename(uf2_path))
-    shutil.copy2(uf2_path, dest)
+    # copy2() applies source timestamps after copying. A Pico intentionally
+    # disconnects immediately after a valid UF2 completes, which can make that
+    # metadata operation report a false flashing failure.
+    with open(uf2_path, "rb") as source, open(dest, "wb") as target:
+        shutil.copyfileobj(source, target, length=1024 * 256)
+        target.flush()
+        try:
+            os.fsync(target.fileno())
+        except OSError:
+            # A completed UF2 can reset the bootloader before fsync returns.
+            pass
 
 
 def flash_resetfw_and_wait(resetFW_path, drive_path, status_cb=None):

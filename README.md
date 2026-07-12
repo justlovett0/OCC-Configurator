@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  OCC Configurator is compatible with Windows, (Linux/MacOS in progress), and most controllers are designed for XInput / Bluetooth HID first. A few of the firmwares also work as generic HID controllers for PS3, MacOS, and other cross-platform compatability. For Rythm controllers, Clone Hero, Rock Band, and any game that supports Xbox 360-style guitar or drum controllers should work natively.
+OCC Configurator is compatible with Windows and Linux. Most controllers are designed for XInput / Bluetooth HID first. A few of the firmwares also work as generic HID controllers for PS3, macOS, and other cross-platform compatibility. For rhythm controllers, Clone Hero, Rock Band, and any game that supports Xbox 360-style guitar or drum controllers should work natively.
 </p>
 
 <p>
@@ -117,6 +117,24 @@ To build the standalone EXE:
 ```
 Source Code\configurator\build_exe.bat
 ```
+
+### Linux configurator
+
+The Linux build uses the normal kernel Xbox driver for gameplay, but current
+OCC firmware switches to configuration mode through a guarded OCC USB command
+instead of force-feedback. This works on Ubuntu, Raspberry Pi OS, and other
+udev-based distributions without relying on an XInput userspace library.
+
+After unpacking a portable Linux release, install the included rules once:
+
+```
+sudo bash linux/install-linux-udev.sh
+```
+
+The rules grant OCC USB/CDC access and prevent ModemManager from probing the
+config serial port. Reconnect the controller after installation. Controllers
+running firmware from before this Linux transport must be updated once by
+holding BOOTSEL while plugging them in, then flashing current OCC firmware.
 
 ## Support
 
